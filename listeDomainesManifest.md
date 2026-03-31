@@ -7,38 +7,46 @@
 --- genre
 --- date de naissance
 --- âge
--- Matricules et Login 1 <> 1 Collaborateur
+-- Matricules et Login
+  1 <> 1 Collaborateur
 --- userId
 --- login
 --- matricule de paie
--- Adresse de résidence 1 <> 1 Collaborateur
+-- Adresse de résidence
+  1 <> 1 Collaborateur
 --- rue (magicSel)
 --- complément
 --- code postal (magicSel)
 --- ville (magicSel)
 --- pays
--- Informations contact 1 <> 1 Collaborateur
+-- Informations contact
+  1 <> 1 Collaborateur
 --- email personnel
 --- téléphone personnel (magicSel)
--- Contact d'urgence 1 <> 1 Collaborateur
+-- Contact d'urgence
+  1 <> 1 Collaborateur
 --- nom (magicSel)
 --- relation
 --- téléphone (magicSel)
--- Documents d'identité 1..n <> 1 Collaborateur
+-- Documents d'identité
+  1..n <> 1 Collaborateur
 --- type de document
 --- document (magicSel)
 --- date émission
 --- date expiration (magicSel)
--- Enfants à charge 0..n <> 1 Collaborateur
+-- Enfants à charge
+  0..n <> 1 Collaborateur
 --- nom
 --- prénom (magicSel)
 --- genre
 --- date de naissance (magicSel)
--- Taille goodies  1 <> 1 Collaborateur
+-- Taille goodies 
+  1 <> 1 Collaborateur
 --- taille en cm
 --- taille tshirt (magicSel)
 - Les contrats
--- Contrats [applicationDate] 1..n <> 1 Collaborateur (RécursiveMagicSel)
+-- Contrats [applicationDate]
+  1..n <> 1 Collaborateur (RécursiveMagicSel)
 --- type de contrat (magicSel)
 --- document
 --- date signature

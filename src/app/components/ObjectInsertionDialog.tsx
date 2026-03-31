@@ -21,12 +21,40 @@ interface ObjectInsertionDialogProps {
   objectName: string;
   cardinality: string;
   objectSupportsApplicable?: boolean;
-  availableAttributes: Array<{ id: string; name: string; type: AttributeType; magicSel?: boolean; smartSel?: boolean }>;
+  availableAttributes: Array<{
+    id: string;
+    name: string;
+    rawName?: string;
+    type: AttributeType;
+    magicSel?: boolean;
+    smartSel?: boolean;
+    sourceObjectName?: string;
+    relativeNavigationPath?: Array<{ objectName: string }>;
+  }>;
   availableDateAttributes: Array<{ id: string; name: string }>;
   initialMode: ObjectInsertionMode;
   initialConfig?: Partial<ObjectInsertionConfig>;
   onConfirm: (config: ObjectInsertionConfig) => void;
 }
+
+type GroupedAttribute = {
+  id: string;
+  name: string;
+  displayName: string;
+  type: AttributeType;
+  magicSel?: boolean;
+  smartSel?: boolean;
+  groupKey: string;
+  groupName: string;
+  groupPathTokens: string[];
+};
+
+type AttributeGroup = {
+  key: string;
+  name: string;
+  pathTokens: string[];
+  attributes: GroupedAttribute[];
+};
 
 const allAggregations: AggregationType[] = ['COUNT', 'CONCAT', 'SUM', 'MIN', 'MAX', 'AVG'];
 
@@ -66,6 +94,7 @@ export function ObjectInsertionDialog({
   const [referenceType, setReferenceType] = useState<DateReference['type']>('today');
   const [customDate, setCustomDate] = useState<string>('');
   const [referenceAttributeId, setReferenceAttributeId] = useState<string>('');
+  const [attributeSearchTerm, setAttributeSearchTerm] = useState<string>('');
 
   useEffect(() => {
     if (!isOpen) return;
@@ -84,6 +113,7 @@ export function ObjectInsertionDialog({
     setReferenceType(initialConfig?.dateReference?.type ?? 'today');
     setCustomDate(initialConfig?.dateReference?.customDate ?? '');
     setReferenceAttributeId(initialConfig?.dateReference?.attributeId ?? '');
+    setAttributeSearchTerm('');
   }, [isOpen, availableAttributes, initialConfig, objectSupportsApplicable, cardinality]);
 
   const hasMultipleCardinality = cardinality.includes('n');
@@ -109,6 +139,103 @@ export function ObjectInsertionDialog({
     return ['COUNT', 'CONCAT'] as AggregationType[];
   }, [selectedAggregationAttribute]);
 
+  const normalizedAttributes = useMemo<GroupedAttribute[]>(() => {
+    return availableAttributes.map((attr) => {
+      const navTokens = (attr.relativeNavigationPath ?? [])
+        .map((step) => step.objectName?.trim())
+        .filter((value): value is string => !!value);
+      const pathTokens = navTokens.length > 0 ? [objectName, ...navTokens] : [objectName];
+      const groupName = pathTokens[pathTokens.length - 1] || objectName;
+
+      return {
+        id: attr.id,
+        name: attr.name,
+        displayName: attr.rawName?.trim() || attr.name,
+        type: attr.type,
+        magicSel: attr.magicSel,
+        smartSel: attr.smartSel,
+        groupKey: pathTokens.join(' > '),
+        groupName,
+        groupPathTokens: pathTokens,
+      };
+    });
+  }, [availableAttributes, objectName]);
+
+  const groupedAttributesByKey = useMemo(() => {
+    const groups = new Map<string, AttributeGroup>();
+
+    for (const attr of normalizedAttributes) {
+      const existing = groups.get(attr.groupKey);
+      if (existing) {
+        existing.attributes.push(attr);
+        continue;
+      }
+
+      groups.set(attr.groupKey, {
+        key: attr.groupKey,
+        name: attr.groupName,
+        pathTokens: attr.groupPathTokens,
+        attributes: [attr],
+      });
+    }
+
+    for (const group of groups.values()) {
+      group.attributes.sort((a, b) => a.displayName.localeCompare(b.displayName, 'fr', { sensitivity: 'base' }));
+    }
+
+    return groups;
+  }, [normalizedAttributes]);
+
+  const filteredAttributes = useMemo(() => {
+    const normalizedSearch = attributeSearchTerm.trim().toLocaleLowerCase();
+    return normalizedAttributes
+      .filter((attr) => {
+        if (!normalizedSearch) return true;
+        return attr.displayName.toLocaleLowerCase().includes(normalizedSearch);
+      })
+      .sort((a, b) => {
+        const groupCompare = a.groupName.localeCompare(b.groupName, 'fr', { sensitivity: 'base' });
+        if (groupCompare !== 0) return groupCompare;
+        return a.displayName.localeCompare(b.displayName, 'fr', { sensitivity: 'base' });
+      });
+  }, [normalizedAttributes, attributeSearchTerm]);
+
+  const groupedFilteredAttributes = useMemo<AttributeGroup[]>(() => {
+    const groups = new Map<string, AttributeGroup>();
+
+    for (const attr of filteredAttributes) {
+      const existing = groups.get(attr.groupKey);
+      if (existing) {
+        existing.attributes.push(attr);
+        continue;
+      }
+
+      groups.set(attr.groupKey, {
+        key: attr.groupKey,
+        name: attr.groupName,
+        pathTokens: attr.groupPathTokens,
+        attributes: [attr],
+      });
+    }
+
+    const orderedGroups = Array.from(groups.values());
+    orderedGroups.sort((a, b) => {
+      const aIsRoot = a.pathTokens.length === 1 && a.pathTokens[0] === objectName;
+      const bIsRoot = b.pathTokens.length === 1 && b.pathTokens[0] === objectName;
+
+      if (aIsRoot && !bIsRoot) return -1;
+      if (!aIsRoot && bIsRoot) return 1;
+
+      return a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
+    });
+
+    for (const group of orderedGroups) {
+      group.attributes.sort((a, b) => a.displayName.localeCompare(b.displayName, 'fr', { sensitivity: 'base' }));
+    }
+
+    return orderedGroups;
+  }, [filteredAttributes]);
+
   if (!isOpen) return null;
 
   const toggleAttribute = (attributeId: string) => {
@@ -117,18 +244,46 @@ export function ObjectInsertionDialog({
     );
   };
 
-  const selectAllAttributes = () => {
-    setSelectedAttributeIds(availableAttributes.map((attr) => attr.id));
+  const isPathSameOrDescendant = (candidatePath: string[], groupPath: string[]) => {
+    if (candidatePath.length < groupPath.length) return false;
+    for (let index = 0; index < groupPath.length; index += 1) {
+      if (candidatePath[index] !== groupPath[index]) return false;
+    }
+    return true;
   };
 
-  const selectSmartAttributes = () => {
-    setSelectedAttributeIds(
-      availableAttributes.filter((attr) => !!attr.smartSel).map((attr) => attr.id)
+  const selectGroupAllAttributes = (groupKey: string) => {
+    const group = groupedAttributesByKey.get(groupKey);
+    if (!group) return;
+
+    const groupIds = group.attributes.map((attr) => attr.id);
+    setSelectedAttributeIds((prev) => Array.from(new Set([...prev, ...groupIds])));
+  };
+
+  const clearGroupAttributes = (groupKey: string) => {
+    const group = groupedAttributesByKey.get(groupKey);
+    if (!group) return;
+
+    const groupIds = new Set(group.attributes.map((attr) => attr.id));
+    setSelectedAttributeIds((prev) => prev.filter((id) => !groupIds.has(id)));
+  };
+
+  const selectGroupSmartAttributesRecursively = (groupKey: string) => {
+    const group = groupedAttributesByKey.get(groupKey);
+    if (!group) return;
+
+    const recursiveAttributes = normalizedAttributes.filter((attr) =>
+      isPathSameOrDescendant(attr.groupPathTokens, group.pathTokens)
     );
-  };
+    const recursiveIds = new Set(recursiveAttributes.map((attr) => attr.id));
+    const recursiveSmartIds = recursiveAttributes
+      .filter((attr) => !!attr.magicSel)
+      .map((attr) => attr.id);
 
-  const clearAllAttributes = () => {
-    setSelectedAttributeIds([]);
+    setSelectedAttributeIds((prev) => {
+      const outsideSelection = prev.filter((id) => !recursiveIds.has(id));
+      return Array.from(new Set([...outsideSelection, ...recursiveSmartIds]));
+    });
   };
 
   const handleConfirm = () => {
@@ -211,67 +366,94 @@ export function ObjectInsertionDialog({
     onClose();
   };
 
+  const renderGroupedAttributesList = (tone: 'blue' | 'indigo') => {
+    const textClass = tone === 'blue' ? 'text-blue-700' : 'text-indigo-700';
+    const borderClass = tone === 'blue' ? 'border-blue-100' : 'border-indigo-100';
+    const sectionClass = tone === 'blue' ? 'border-blue-200 bg-blue-50' : 'border-indigo-200 bg-indigo-50';
+    const inputClass = tone === 'blue' ? 'border-blue-200' : 'border-indigo-200';
+
+    return (
+      <div className={`rounded border p-3 ${sectionClass}`}>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <label className="text-sm font-medium text-gray-700">
+            Attributs à insérer dans le rapport
+          </label>
+        </div>
+        <input
+          type="text"
+          value={attributeSearchTerm}
+          onChange={(e) => setAttributeSearchTerm(e.target.value)}
+          placeholder="Rechercher un attribut..."
+          className={`mb-2 w-full rounded bg-white px-3 py-2 text-sm ${inputClass}`}
+        />
+        <div className={`max-h-[58vh] space-y-2 overflow-auto rounded border bg-white p-2 ${borderClass}`}>
+          {groupedFilteredAttributes.length === 0 ? (
+            <p className="px-1 py-2 text-sm text-gray-500">Aucun attribut ne correspond à la recherche.</p>
+          ) : (
+            groupedFilteredAttributes.map((group) => (
+              <div key={group.key} className="rounded border border-gray-100 p-2">
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-gray-600">{group.name}</span>
+                  <div className="flex items-center gap-3 text-xs">
+                    {group.attributes.some((attr) => !!attr.magicSel) && (
+                      <button
+                        type="button"
+                        onClick={() => selectGroupSmartAttributesRecursively(group.key)}
+                        className={`${textClass} hover:underline`}
+                      >
+                        Sélection intelligente
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => selectGroupAllAttributes(group.key)}
+                      className={`${textClass} hover:underline`}
+                    >
+                      Sélectionner tout
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => clearGroupAttributes(group.key)}
+                      className={`${textClass} hover:underline`}
+                    >
+                      Désélectionner tout
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  {group.attributes.map((attr) => (
+                    <label key={attr.id} className="flex items-center gap-2 text-sm text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={selectedAttributeIds.includes(attr.id)}
+                        onChange={() => toggleAttribute(attr.id)}
+                        className="size-4"
+                      />
+                      <span>{attr.displayName}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl">
+      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-lg bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="font-semibold text-gray-900">Insertion depuis l'objet</h3>
+          <h3 className="font-semibold text-gray-900">Objet : {objectName}</h3>
           <button onClick={onClose} className="rounded p-1 hover:bg-gray-100">
             <X className="size-5 text-gray-600" />
           </button>
         </div>
 
-        <div className="mb-4 space-y-1">
-          <p className="text-sm text-gray-600">
-            Objet : <span className="font-medium">{objectName}</span>
-          </p>
-        </div>
-
-        <div className="space-y-4">
+        <div className="space-y-4 overflow-y-auto pr-1">
           {mode === 'detailed' && (
-            <div className="rounded border border-blue-200 bg-blue-50 p-3">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <label className="text-sm font-medium text-gray-700">
-                  Attributs à insérer dans le rapport
-                </label>
-                <div className="flex items-center gap-3 text-xs">
-                  <button
-                    type="button"
-                    onClick={selectSmartAttributes}
-                    className="text-blue-700 hover:underline"
-                  >
-                    Sélection intelligente
-                  </button>
-                  <button
-                    type="button"
-                    onClick={selectAllAttributes}
-                    className="text-blue-700 hover:underline"
-                  >
-                    Sélectionner tout
-                  </button>
-                  <button
-                    type="button"
-                    onClick={clearAllAttributes}
-                    className="text-blue-700 hover:underline"
-                  >
-                    Désélectionner tout
-                  </button>
-                </div>
-              </div>
-              <div className="grid max-h-52 grid-cols-1 gap-2 overflow-auto rounded border border-blue-100 bg-white p-2 sm:grid-cols-2">
-                {availableAttributes.map((attr) => (
-                  <label key={attr.id} className="flex items-center gap-2 text-sm text-gray-700">
-                    <input
-                      type="checkbox"
-                      checked={selectedAttributeIds.includes(attr.id)}
-                      onChange={() => toggleAttribute(attr.id)}
-                      className="size-4"
-                    />
-                    <span>{attr.name}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
+            <>{renderGroupedAttributesList('blue')}</>
           )}
 
           {mode === 'aggregation' && (
@@ -491,53 +673,19 @@ export function ObjectInsertionDialog({
               )}
 
               <div>
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <label className="text-sm font-medium text-gray-700">
-                    Attributs à insérer dans le rapport
-                  </label>
-                  <div className="flex items-center gap-3 text-xs">
-                    <button
-                      type="button"
-                      onClick={selectSmartAttributes}
-                      className="text-indigo-700 hover:underline"
-                    >
-                      Sélection intelligente
-                    </button>
-                    <button
-                      type="button"
-                      onClick={selectAllAttributes}
-                      className="text-indigo-700 hover:underline"
-                    >
-                      Sélectionner tout
-                    </button>
-                    <button
-                      type="button"
-                      onClick={clearAllAttributes}
-                      className="text-indigo-700 hover:underline"
-                    >
-                      Désélectionner tout
-                    </button>
-                  </div>
-                </div>
-                <div className="grid max-h-52 grid-cols-1 gap-2 overflow-auto rounded border border-indigo-100 bg-white p-2 sm:grid-cols-2">
-                  {availableAttributes.map((attr) => (
-                    <label key={attr.id} className="flex items-center gap-2 text-sm text-gray-700">
-                      <input
-                        type="checkbox"
-                        checked={selectedAttributeIds.includes(attr.id)}
-                        onChange={() => toggleAttribute(attr.id)}
-                        className="size-4"
-                      />
-                      <span>{attr.name}</span>
-                    </label>
-                  ))}
-                </div>
+                {renderGroupedAttributesList('indigo')}
               </div>
             </div>
           )}
         </div>
 
-        <div className="mt-6 flex justify-end gap-2">
+        {mode !== 'aggregation' && (
+          <div className="mt-4 text-sm text-gray-600">
+            {selectedAttributeIds.length} attribut{selectedAttributeIds.length > 1 ? 's' : ''} sélectionné{selectedAttributeIds.length > 1 ? 's' : ''}
+          </div>
+        )}
+
+        <div className="mt-3 flex justify-end gap-2">
           <button
             onClick={onClose}
             className="rounded border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"

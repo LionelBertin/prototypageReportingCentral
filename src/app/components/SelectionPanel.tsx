@@ -1,6 +1,7 @@
 import { X, Filter, Calendar, Edit2, Layers } from 'lucide-react';
 import { SelectedAttribute } from '../types/selection';
 import { useMemo, useState } from 'react';
+import { dataStructure } from '../data';
 
 const aggregationLabels: Record<string, string> = {
   COUNT: 'Nombre',
@@ -102,19 +103,45 @@ export function SelectionPanel({
     return attr.attributeName;
   };
 
-  const getInsertionLabel = (attr: SelectedAttribute) => {
-    switch (attr.insertionType) {
-      case 'first':
-        return `Première (tri: ${attr.sortAttributeId})`;
-      case 'last':
-        return `Dernière (tri: ${attr.sortAttributeId})`;
-      case 'aggregation':
-        return attr.aggregationType ? aggregationLabels[attr.aggregationType] : 'Agrégation';
-      case 'applicable':
-        return 'Instance applicable';
-      default:
-        return 'Normal';
+  const getAttributeNameFromId = (attributeId?: string): string => {
+    if (!attributeId) return '';
+
+    const parts = attributeId.split('::');
+    if (parts.length === 3) {
+      const [themeId, objectId, localAttributeId] = parts;
+      const theme = dataStructure.find((candidate) => candidate.id === themeId);
+      const dataObject = theme?.objects.find((candidate) => candidate.id === objectId);
+      const attribute = dataObject?.attributes.find((candidate) => candidate.id === localAttributeId);
+      if (attribute) {
+        return attribute.name;
+      }
     }
+
+    for (const theme of dataStructure) {
+      for (const dataObject of theme.objects) {
+        const attribute = dataObject.attributes.find((candidate) => candidate.id === attributeId);
+        if (attribute) {
+          return attribute.name;
+        }
+      }
+    }
+
+    return attributeId;
+  };
+
+  const getAggregationDetailLabel = (attr: SelectedAttribute): string => {
+    const aggregationLabel = attr.aggregationType ? aggregationLabels[attr.aggregationType] : 'Agrégation';
+
+    if (!attr.attributeName) {
+      return aggregationLabel;
+    }
+
+    if (attr.aggregationType === 'CONCAT' && attr.sortAttributeId) {
+      const sortAttributeName = getAttributeNameFromId(attr.sortAttributeId);
+      return `${aggregationLabel} de "${attr.attributeName}" trié par "${sortAttributeName}"`;
+    }
+
+    return `${aggregationLabel} de "${attr.attributeName}"`;
   };
 
   const getAttributeTypeLabel = (attr: SelectedAttribute) => {
@@ -222,13 +249,13 @@ export function SelectionPanel({
       return getDisplayColumnName(attr);
     }
 
-    const relationLabel = attr.navigationPath
-      ?.map((item) => item.relationLabel?.trim())
+    const linkedObjectName = attr.navigationPath
+      ?.map((item) => item.objectName?.trim())
       .filter((value): value is string => !!value)
       .at(-1);
 
-    if (relationLabel) {
-      return relationLabel;
+    if (linkedObjectName) {
+      return linkedObjectName;
     }
 
     return attr.objectName;
@@ -314,7 +341,7 @@ export function SelectionPanel({
                               : group.representative.insertionType === 'last'
                               ? 'Dernière instance'
                               : group.representative.insertionType === 'aggregation'
-                              ? (group.representative.aggregationType ? aggregationLabels[group.representative.aggregationType] : 'Agrégation')
+                              ? getAggregationDetailLabel(group.representative)
                               : group.representative.insertionType === 'applicable'
                               ? 'Instance applicable'
                               : group.representative.insertionType === 'conditional'
@@ -408,48 +435,44 @@ export function SelectionPanel({
                               </div>
 
                               <div className="mt-1 flex flex-wrap items-center gap-2">
-                                <span className={`rounded px-2 py-0.5 text-xs ${
-                                  attr.insertionType === 'normal'
-                                    ? 'bg-gray-100 text-gray-700'
-                                    : attr.insertionType === 'first'
-                                    ? 'bg-green-100 text-green-700'
-                                    : attr.insertionType === 'last'
-                                    ? 'bg-yellow-100 text-yellow-700'
-                                    : attr.insertionType === 'aggregation'
-                                    ? 'bg-purple-100 text-purple-700'
-                                    : attr.insertionType === 'applicable'
-                                    ? 'bg-indigo-100 text-indigo-700'
-                                    : attr.insertionType === 'conditional'
-                                    ? 'bg-purple-100 text-purple-700'
-                                    : attr.insertionType === 'calculated'
-                                    ? 'bg-teal-100 text-teal-700'
-                                    : 'bg-gray-100 text-gray-700'
-                                }`}>
-                                  {attr.insertionType === 'normal'
-                                    ? getAttributeTypeLabel(attr)
-                                    : attr.insertionType === 'first'
-                                    ? 'Première instance'
-                                    : attr.insertionType === 'last'
-                                    ? 'Dernière instance'
-                                    : attr.insertionType === 'aggregation'
-                                    ? (attr.aggregationType ? aggregationLabels[attr.aggregationType] : 'Agrégation')
-                                    : attr.insertionType === 'applicable'
-                                    ? 'Instance applicable'
-                                    : attr.insertionType === 'conditional'
-                                    ? '📊 Colonne conditionnelle'
-                                    : attr.insertionType === 'calculated'
-                                    ? '🧮 Colonne calculée'
-                                    : attr.insertionType}
-                                </span>
-
-                                {attr.insertionType === 'aggregation' && (
+                                {attr.insertionType === 'aggregation' ? (
                                   <button
                                     onClick={() => onEditAggregation(attr.id)}
-                                    className="flex items-center gap-1 rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-700 hover:bg-purple-200"
+                                    className="rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-700 hover:bg-purple-200"
                                     title="Consulter et modifier la configuration d'agrégation"
                                   >
-                                    Configurer agrégation
+                                    {getAggregationDetailLabel(attr)}
                                   </button>
+                                ) : (
+                                  <span className={`rounded px-2 py-0.5 text-xs ${
+                                    attr.insertionType === 'normal'
+                                      ? 'bg-gray-100 text-gray-700'
+                                      : attr.insertionType === 'first'
+                                      ? 'bg-green-100 text-green-700'
+                                      : attr.insertionType === 'last'
+                                      ? 'bg-yellow-100 text-yellow-700'
+                                      : attr.insertionType === 'applicable'
+                                      ? 'bg-indigo-100 text-indigo-700'
+                                      : attr.insertionType === 'conditional'
+                                      ? 'bg-purple-100 text-purple-700'
+                                      : attr.insertionType === 'calculated'
+                                      ? 'bg-teal-100 text-teal-700'
+                                      : 'bg-gray-100 text-gray-700'
+                                  }`}>
+                                    {attr.insertionType === 'normal'
+                                      ? getAttributeTypeLabel(attr)
+                                      : attr.insertionType === 'first'
+                                      ? 'Première instance'
+                                      : attr.insertionType === 'last'
+                                      ? 'Dernière instance'
+                                      : attr.insertionType === 'applicable'
+                                      ? 'Instance applicable'
+                                      : attr.insertionType === 'conditional'
+                                      ? '📊 Colonne conditionnelle'
+                                      : attr.insertionType === 'calculated'
+                                      ? '🧮 Colonne calculée'
+                                      : attr.insertionType}
+                                  </span>
                                 )}
 
                                 {attr.isApplicable && (

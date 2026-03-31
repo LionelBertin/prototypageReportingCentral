@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import type { ReactElement } from 'react';
-import { ChevronDown, ChevronRight, Link2 } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { dataStructure } from '../data/dataStructure';
 import type { SelectedAttribute } from '../types/selection';
 
@@ -454,10 +454,6 @@ export function NavigationPanel({
 
                       {expandedObjects.has(obj.id) && (
                         <div className="ml-6 mt-1 space-y-0.5">
-                          {obj.relations && obj.relations.length > 0 && (
-                            <div className="mb-1 text-xs text-gray-500">{obj.cardinality}</div>
-                          )}
-
                           {renderRelations(
                             obj.id,
                             theme.id,
@@ -598,7 +594,8 @@ export function NavigationPanel({
     pathLabel: string = '',
     depth: number = 0,
     visitedObjects: Set<string> = new Set(),
-    navigationPath: NavigationPath = []
+    navigationPath: NavigationPath = [],
+    parentObject?: { themeId: string; objectId: string }
   ): ReactElement | null => {
     const obj = findObject(themeId, objectId);
     if (!obj || !obj.relations || obj.relations.length === 0) return null;
@@ -607,34 +604,150 @@ export function NavigationPanel({
     if (visitedObjects.has(objectKey)) return null;
     const newVisitedObjects = new Set(visitedObjects);
     newVisitedObjects.add(objectKey);
+    const isCurrentObject = (candidateThemeId: string, candidateObjectId: string) =>
+      candidateThemeId === themeId && candidateObjectId === objectId;
+    const isParentObject = (candidateThemeId: string, candidateObjectId: string) =>
+      !!parentObject &&
+      candidateThemeId === parentObject.themeId &&
+      candidateObjectId === parentObject.objectId;
+    const isAlreadyInPath = (candidateThemeId: string, candidateObjectId: string) =>
+      newVisitedObjects.has(`${candidateThemeId}-${candidateObjectId}`);
+
+    type InboundSource = {
+      themeId: string;
+      themeName: string;
+      objectId: string;
+      objectName: string;
+      sourceLabel?: string;
+    };
+
+    const getFilteredInboundSources = (
+      currentThemeId: string,
+      currentObjectId: string,
+      currentVisitedObjects: Set<string>,
+      currentParentObject?: { themeId: string; objectId: string }
+    ): InboundSource[] => {
+      const inboundSources: InboundSource[] = [];
+
+      for (const t of dataStructure) {
+        for (const o of t.objects) {
+          if (!o.relations) continue;
+          for (const r of o.relations) {
+            if (r.targetThemeId === currentThemeId && r.targetObjectId === currentObjectId) {
+              inboundSources.push({
+                themeId: t.id,
+                themeName: t.name,
+                objectId: o.id,
+                objectName: o.name,
+                sourceLabel: r.label,
+              });
+              break;
+            }
+          }
+        }
+      }
+
+      return inboundSources.filter((src) => {
+        const srcKey = `${src.themeId}-${src.objectId}`;
+        if (currentVisitedObjects.has(srcKey)) return false;
+        if (src.themeId === currentThemeId && src.objectId === currentObjectId) return false;
+        if (
+          currentParentObject &&
+          src.themeId === currentParentObject.themeId &&
+          src.objectId === currentParentObject.objectId
+        ) {
+          return false;
+        }
+        return true;
+      });
+    };
+
+    const hasVisibleChildren = (
+      currentThemeId: string,
+      currentObjectId: string,
+      currentVisitedObjects: Set<string>,
+      currentParentObject?: { themeId: string; objectId: string }
+    ) => {
+      const currentObj = findObject(currentThemeId, currentObjectId);
+      if (!currentObj) return false;
+
+      const hasDirectChildren = (currentObj.relations ?? []).some((rel) => {
+        const targetKey = `${rel.targetThemeId}-${rel.targetObjectId}`;
+        if (currentVisitedObjects.has(targetKey)) return false;
+        if (
+          currentParentObject &&
+          rel.targetThemeId === currentParentObject.themeId &&
+          rel.targetObjectId === currentParentObject.objectId
+        ) {
+          return false;
+        }
+        return !!findObject(rel.targetThemeId, rel.targetObjectId);
+      });
+
+      if (hasDirectChildren) return true;
+
+      return (
+        getFilteredInboundSources(
+          currentThemeId,
+          currentObjectId,
+          currentVisitedObjects,
+          currentParentObject
+        ).length > 0
+      );
+    };
 
     return (
       <div className="mt-2 space-y-1 border-t border-gray-300 pt-2">
         {obj.relations.map((relation, idx) => {
           const relationKey = `${parentKey}-${relation.targetObjectId}-${idx}`;
+          if (isParentObject(relation.targetThemeId, relation.targetObjectId)) return null;
+          if (isAlreadyInPath(relation.targetThemeId, relation.targetObjectId)) return null;
+
           const relatedObj = findObject(relation.targetThemeId, relation.targetObjectId);
           if (!relatedObj) return null;
 
           const currentPath = pathLabel ? `${pathLabel} - ${relation.label}` : relation.label;
+          const relatedVisitedObjects = new Set(newVisitedObjects);
+          relatedVisitedObjects.add(`${relation.targetThemeId}-${relation.targetObjectId}`);
+          const relationHasChildren = hasVisibleChildren(
+            relation.targetThemeId,
+            relation.targetObjectId,
+            relatedVisitedObjects,
+            {
+              themeId,
+              objectId,
+            }
+          );
+          const filteredInboundSources = getFilteredInboundSources(
+            relation.targetThemeId,
+            relation.targetObjectId,
+            relatedVisitedObjects,
+            {
+              themeId,
+              objectId,
+            }
+          );
 
           return (
             <div key={relationKey} className="ml-2">
               <div className="flex items-center gap-1">
                 <button
-                  onClick={() => toggleRelation(relationKey)}
+                  onClick={() => {
+                    if (!relationHasChildren) return;
+                    toggleRelation(relationKey);
+                  }}
                   className="flex flex-1 items-center gap-1.5 rounded bg-blue-50 px-2 py-1 text-left text-xs hover:bg-blue-100"
                 >
-                  {expandedRelations.has(relationKey) ? (
-                    <ChevronDown className="size-3 text-blue-600" />
-                  ) : (
-                    <ChevronRight className="size-3 text-blue-600" />
-                  )}
-                  <Link2 className="size-3 text-blue-600" />
+                  {relationHasChildren &&
+                    (expandedRelations.has(relationKey) ? (
+                      <ChevronDown className="size-3 text-blue-600" />
+                    ) : (
+                      <ChevronRight className="size-3 text-blue-600" />
+                    ))}
                   <span className="text-blue-700">{relatedObj.name}</span>
                   {relation.label !== relatedObj.name && (
                     <span className="text-blue-500">- {relation.label}</span>
                   )}
-                  <span className="text-blue-500">({relation.cardinality})</span>
                 </button>
                 {renderObjectInsertButtons(
                   relation.targetThemeId,
@@ -655,57 +768,52 @@ export function NavigationPanel({
                 )}
               </div>
 
-              {expandedRelations.has(relationKey) && (
+              {relationHasChildren && expandedRelations.has(relationKey) && (
                 <div className="ml-4 mt-1 space-y-0.5">
-                  {relatedObj.relations && relatedObj.relations.length > 0 && (
-                    <div className="mb-1 text-xs text-gray-500">{relation.cardinality}</div>
-                  )}
-
                   {(() => {
-                    const inboundSources: Array<{ themeId: string; themeName: string; objectId: string; objectName: string; sourceLabel?: string }> = [];
-
-                    for (const t of dataStructure) {
-                      for (const o of t.objects) {
-                        if (!o.relations) continue;
-                        for (const r of o.relations) {
-                          if (r.targetThemeId === relation.targetThemeId && r.targetObjectId === relation.targetObjectId) {
-                            inboundSources.push({ themeId: t.id, themeName: t.name, objectId: o.id, objectName: o.name, sourceLabel: r.label });
-                            break;
-                          }
-                        }
-                      }
-                    }
-
-                    if (inboundSources.length === 0) return null;
+                    if (filteredInboundSources.length === 0) return null;
 
                     return (
                       <div className="mt-2 space-y-1 border-t border-dashed border-gray-200 pt-2">
-                        {inboundSources.map((src) => (
+                        {filteredInboundSources.map((src) => (
                           <div key={`${src.themeId}-${src.objectId}`} className="ml-2">
                             {(() => {
                               const inboundKey = `${relationKey}-inbound-${src.themeId}-${src.objectId}`;
                               const theme = dataStructure.find((tt) => tt.id === src.themeId);
                               const obj = theme?.objects.find((oo) => oo.id === src.objectId);
                               if (!obj) return null;
+                              const inboundVisitedObjects = new Set(relatedVisitedObjects);
+                              inboundVisitedObjects.add(`${src.themeId}-${src.objectId}`);
+                              const inboundHasChildren = hasVisibleChildren(
+                                src.themeId,
+                                src.objectId,
+                                inboundVisitedObjects,
+                                {
+                                  themeId: relation.targetThemeId,
+                                  objectId: relation.targetObjectId,
+                                }
+                              );
 
                               return (
                                 <>
                                   <div className="flex items-center gap-1">
                                     <button
-                                      onClick={() => toggleRelation(inboundKey)}
+                                      onClick={() => {
+                                        if (!inboundHasChildren) return;
+                                        toggleRelation(inboundKey);
+                                      }}
                                       className="flex w-full flex-1 items-center gap-1.5 rounded bg-blue-50 px-2 py-1 text-left text-xs hover:bg-blue-100"
                                     >
-                                    {expandedRelations.has(inboundKey) ? (
-                                      <ChevronDown className="size-3 text-blue-600" />
-                                    ) : (
-                                      <ChevronRight className="size-3 text-blue-600" />
-                                    )}
-                                    <Link2 className="size-3 text-blue-600" />
+                                    {inboundHasChildren &&
+                                      (expandedRelations.has(inboundKey) ? (
+                                        <ChevronDown className="size-3 text-blue-600" />
+                                      ) : (
+                                        <ChevronRight className="size-3 text-blue-600" />
+                                      ))}
                                     <span className="text-blue-700">{src.objectName}</span>
                                     {src.sourceLabel && src.sourceLabel !== src.objectName && (
                                       <span className="text-blue-500">- {src.sourceLabel}</span>
                                     )}
-                                    <span className="text-blue-500">({obj.cardinality})</span>
                                     </button>
                                     {renderObjectInsertButtons(
                                       src.themeId,
@@ -726,7 +834,7 @@ export function NavigationPanel({
                                     )}
                                   </div>
 
-                                  {expandedRelations.has(inboundKey) && (
+                                  {inboundHasChildren && expandedRelations.has(inboundKey) && (
                                     <div className="ml-2 mt-1 space-y-0.5">
                                       {renderRelations(
                                         inboundKey,
@@ -746,7 +854,11 @@ export function NavigationPanel({
                                             relationLabel: src.sourceLabel,
                                             sourceObjectName: relatedObj.name,
                                           },
-                                        ]
+                                        ],
+                                        {
+                                          themeId: relation.targetThemeId,
+                                          objectId: relation.targetObjectId,
+                                        }
                                       )}
                                     </div>
                                   )}
@@ -777,7 +889,11 @@ export function NavigationPanel({
                         relationLabel: relation.label,
                         sourceObjectName: objectName,
                       },
-                    ]
+                    ],
+                    {
+                      themeId,
+                      objectId,
+                    }
                   )}
                 </div>
               )}
@@ -835,9 +951,6 @@ export function NavigationPanel({
 
                 {expandedObjects.has(mainObjectContext.object.id) && (
                   <div className="ml-6 mt-1 space-y-0.5">
-                    {mainObjectContext.object.relations && mainObjectContext.object.relations.length > 0 && (
-                      <div className="mb-1 text-xs text-gray-500">{mainObjectContext.object.cardinality}</div>
-                    )}
                     {renderRelations(
                       `main-${mainObjectContext.object.id}`,
                       mainObjectContext.theme.id,

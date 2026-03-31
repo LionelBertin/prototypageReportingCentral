@@ -288,6 +288,42 @@ export function AttributeSelector() {
     setObjectInsertionDialogOpen(true);
   };
 
+  const getSelectedAttributeUniquenessKey = (attr: SelectedAttribute) => {
+    const path = attr.navigationPath
+      ?.map((p) => `${p.objectName}:${p.cardinalityName ?? ''}:${p.relationLabel ?? ''}:${p.sourceObjectName ?? ''}`)
+      .join('>') ?? '';
+
+    const dateReferencePart = attr.dateReference
+      ? [
+          attr.dateReference.type,
+          attr.dateReference.customDate ?? '',
+          attr.dateReference.attributeId ?? '',
+        ].join(':')
+      : '';
+
+    return [
+      attr.themeId,
+      attr.objectId,
+      attr.attributeId,
+      path,
+      attr.insertionType,
+      attr.sortAttributeId ?? '',
+      attr.sortDirection ?? '',
+      attr.aggregationType ?? '',
+      dateReferencePart,
+    ].join('|');
+  };
+
+  const appendUniqueAttributes = (existing: SelectedAttribute[], candidates: SelectedAttribute[]) => {
+    const existingKeys = new Set(existing.map(getSelectedAttributeUniquenessKey));
+    const uniqueToAdd = candidates.filter((attr) => !existingKeys.has(getSelectedAttributeUniquenessKey(attr)));
+    if (uniqueToAdd.length === 0) {
+      return existing;
+    }
+
+    return [...existing, ...uniqueToAdd];
+  };
+
   const handleObjectInsertionConfirm = (config: ObjectInsertionConfig) => {
     if (!pendingObjectInsertion) return;
 
@@ -361,7 +397,7 @@ export function AttributeSelector() {
         setPendingMainObject(null);
         setSelectedAttributes([newAttr]);
       } else {
-        setSelectedAttributes((prev) => [...prev, newAttr]);
+        setSelectedAttributes((prev) => appendUniqueAttributes(prev, [newAttr]));
       }
 
       setPendingObjectInsertion(null);
@@ -402,9 +438,9 @@ export function AttributeSelector() {
         setMainObjectConfig(config);
         setSelectingMainObject(false);
         setPendingMainObject(null);
-        setSelectedAttributes(newAttributes);
+        setSelectedAttributes((prev) => appendUniqueAttributes(prev, newAttributes));
       } else {
-        setSelectedAttributes((prev) => [...prev, ...newAttributes]);
+        setSelectedAttributes((prev) => appendUniqueAttributes(prev, newAttributes));
       }
     }
 
