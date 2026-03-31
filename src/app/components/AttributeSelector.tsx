@@ -40,6 +40,7 @@ type AvailableObjectAttribute = {
   type: AttributeType;
   magicSel?: boolean;
   smartSel?: boolean;
+  sourceObjectSupportsApplicable: boolean;
   sourceThemeId: string;
   sourceThemeName: string;
   sourceObjectId: string;
@@ -133,8 +134,8 @@ export function AttributeSelector() {
     if (!rootObject) return [];
 
     const collected: AvailableObjectAttribute[] = [];
-    const visitedObjects = new Set<string>();
-    const seenAttributeIds = new Set<string>();
+    const collectedById = new Map<string, AvailableObjectAttribute>();
+    const visitedSmartByObject = new Map<string, boolean>();
 
     const collect = (
       currentThemeId: string,
@@ -144,23 +145,30 @@ export function AttributeSelector() {
       shouldSmartSelect: boolean
     ) => {
       const currentKey = `${currentThemeId}::${currentObjectId}`;
-      if (visitedObjects.has(currentKey)) return;
+      const wasSmartVisited = visitedSmartByObject.get(currentKey);
+      if (wasSmartVisited === true) return;
+      if (wasSmartVisited === false && !shouldSmartSelect) return;
 
       const currentObject = objectByKey.get(currentKey);
       const currentTheme = themeById.get(currentThemeId);
       if (!currentObject) return;
 
-      visitedObjects.add(currentKey);
+      visitedSmartByObject.set(currentKey, shouldSmartSelect || wasSmartVisited === true);
 
       for (const attr of currentObject.attributes) {
         const compositeId = relationPath.length > 0
           ? `${currentKey}::${attr.id}`
           : attr.id;
 
-        if (seenAttributeIds.has(compositeId)) continue;
-        seenAttributeIds.add(compositeId);
+        const existing = collectedById.get(compositeId);
+        if (existing) {
+          if (shouldSmartSelect && !!attr.magicSel && !existing.smartSel) {
+            existing.smartSel = true;
+          }
+          continue;
+        }
 
-        collected.push({
+        const nextAttribute: AvailableObjectAttribute = {
           id: compositeId,
           name: relationPath.length > 0
             ? `${relationPath.join(' > ')} > ${attr.name}`
@@ -169,12 +177,16 @@ export function AttributeSelector() {
           type: attr.type,
           magicSel: attr.magicSel,
           smartSel: shouldSmartSelect && !!attr.magicSel,
+          sourceObjectSupportsApplicable: !!(currentObject.applicationDate || currentObject.isApplicable),
           sourceThemeId: currentThemeId,
           sourceThemeName: currentTheme?.name ?? currentThemeId,
           sourceObjectId: currentObjectId,
           sourceObjectName: currentObject.name,
           relativeNavigationPath,
-        });
+        };
+
+        collected.push(nextAttribute);
+        collectedById.set(compositeId, nextAttribute);
       }
 
       for (const relation of currentObject.relations ?? []) {
@@ -243,6 +255,58 @@ export function AttributeSelector() {
     const theme = dataStructure.find((t) => t.id === themeId);
     const obj = theme?.objects.find((o) => o.id === objectId);
     if (!obj) return;
+
+    if (mode === 'special') {
+      const objectAttributes = getObjectAttributes(themeId, objectId);
+      const smartAttributes = objectAttributes.filter((attr) => !!attr.smartSel);
+
+      if (smartAttributes.length === 0) {
+        alert('Aucun attribut de sélection intelligente disponible pour cet objet.');
+        return;
+      }
+
+      const today = new Date();
+      const customDate = [
+        today.getFullYear(),
+        String(today.getMonth() + 1).padStart(2, '0'),
+        String(today.getDate()).padStart(2, '0'),
+      ].join('-');
+
+      const autoSelected = smartAttributes.map((attr) =>
+        buildSelectedAttribute({
+          themeId: attr.sourceThemeId,
+          themeName: attr.sourceThemeName,
+          objectId: attr.sourceObjectId,
+          objectName: attr.sourceObjectName,
+          attributeId: attr.id,
+          attributeName: attr.rawName,
+          attributeType: attr.type,
+          insertionType: attr.sourceObjectSupportsApplicable ? 'applicable' : 'normal',
+          isApplicable: attr.sourceObjectSupportsApplicable,
+          dateReference: attr.sourceObjectSupportsApplicable
+            ? { type: 'custom', customDate }
+            : undefined,
+          navigationPath: attr.relativeNavigationPath,
+        })
+      );
+
+      setMainObject({
+        themeId,
+        themeName,
+        objectId,
+        objectName,
+      });
+      setMainObjectConfig({
+        insertionType: 'applicable',
+        dateReference: { type: 'custom', customDate },
+      });
+      setSelectedAttributes((prev) => appendUniqueAttributes(prev, autoSelected));
+      setSelectingMainObject(false);
+      setPendingMainObject(null);
+      setPendingObjectInsertion(null);
+      setObjectInsertionDialogOpen(false);
+      return;
+    }
 
     setPendingMainObject({
       themeId,
@@ -408,23 +472,27 @@ export function AttributeSelector() {
     const newAttributes = objectAttributes
       .filter((attr) => selectedIds.includes(attr.id))
       .map((attr) =>
-        buildSelectedAttribute({
-          themeId: attr.sourceThemeId,
-          themeName: attr.sourceThemeName,
-          objectId: attr.sourceObjectId,
-          objectName: attr.sourceObjectName,
-          attributeId: attr.id,
-          attributeName: attr.rawName,
-          attributeType: attr.type,
-          insertionType: config.insertionType,
-          sortAttributeId: config.sortAttributeId,
-          isApplicable: config.insertionType === 'applicable',
-          dateReference: config.dateReference,
-          navigationPath: [
-            ...(pendingObjectInsertion.navigationPath ?? []),
-            ...attr.relativeNavigationPath,
-          ],
-        })
+        {
+          const shouldApplyDateReference = config.insertionType === 'applicable' && attr.sourceObjectSupportsApplicable;
+
+          return buildSelectedAttribute({
+            themeId: attr.sourceThemeId,
+            themeName: attr.sourceThemeName,
+            objectId: attr.sourceObjectId,
+            objectName: attr.sourceObjectName,
+            attributeId: attr.id,
+            attributeName: attr.rawName,
+            attributeType: attr.type,
+            insertionType: shouldApplyDateReference ? 'applicable' : 'normal',
+            sortAttributeId: config.sortAttributeId,
+            isApplicable: shouldApplyDateReference,
+            dateReference: shouldApplyDateReference ? config.dateReference : undefined,
+            navigationPath: [
+              ...(pendingObjectInsertion.navigationPath ?? []),
+              ...attr.relativeNavigationPath,
+            ],
+          });
+        }
       );
 
     if (newAttributes.length > 0) {
@@ -510,19 +578,26 @@ export function AttributeSelector() {
   };
 
   const handleEditDateReference = (id: string) => {
+    const currentAttr = selectedAttributes.find((attr) => attr.id === id);
     setEditingAttributeId(id);
+    setEditingObjectInstanceKey(currentAttr ? getObjectInstanceKey(currentAttr) : null);
     setDateReferenceDialogOpen(true);
   };
 
   const handleDateReferenceConfirm = (dateReference: DateReference) => {
     if (!editingAttributeId) return;
 
+    const key = editingObjectInstanceKey;
+
     setSelectedAttributes((prev) =>
       prev.map((attr) =>
-        attr.id === editingAttributeId ? { ...attr, dateReference } : attr
+        key
+          ? (getObjectInstanceKey(attr) === key ? { ...attr, dateReference } : attr)
+          : (attr.id === editingAttributeId ? { ...attr, dateReference } : attr)
       )
     );
     setEditingAttributeId(null);
+    setEditingObjectInstanceKey(null);
   };
 
   const handleEditConditionalColumn = (id: string) => {
@@ -688,7 +763,15 @@ export function AttributeSelector() {
   const getDateAttributeName = (attributeId: string): string => {
     const attr = selectedAttributes.find((a) => a.id === attributeId);
     if (attr) {
-      return attr.attributeName;
+      const navigationObjects = attr.navigationPath
+        ?.map((item) => item.objectName?.trim())
+        .filter((value): value is string => !!value) ?? [];
+
+      const objectContext = navigationObjects.length > 0
+        ? navigationObjects.join(' > ')
+        : attr.objectName;
+
+      return `${attr.attributeName} (${objectContext})`;
     }
     return '';
   };

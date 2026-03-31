@@ -495,12 +495,14 @@ export function NavigationPanel({
   ) => {
     const allowDetailedInsertion = canUseDetailedInsertion(themeId, objectId);
     const allowAddFieldsInsertion = canAddFieldsInsertion(themeId, objectId);
-    const showDetailedButton = allowDetailedInsertion;
-    const showAddFieldsButton = !allowDetailedInsertion && allowAddFieldsInsertion;
+    const showSelectionButton = allowDetailedInsertion || allowAddFieldsInsertion;
+    const isLinkedObject = Boolean(navigationPath && navigationPath.length > 0);
+    const showAggregationButton = !(isLinkedObject && isSingleCardinality(cardinality));
+    const showSpecialValueButton = Boolean(objectIsApplicable);
 
     return (
       <div className="flex shrink-0 items-center gap-1">
-        {showDetailedButton && (
+        {showSelectionButton && (
           <button
             onClick={(event) => {
               event.stopPropagation();
@@ -515,13 +517,13 @@ export function NavigationPanel({
                 navigationPath
               );
             }}
-            className="rounded border border-blue-300 bg-blue-50 px-2 py-1 text-xs text-blue-700 hover:bg-blue-100"
-            title="Insérer une liste détaillée"
+            className="w-36 rounded border border-blue-300 bg-blue-50 px-2 py-1 text-center text-xs text-blue-700 hover:bg-blue-100"
+            title="Sélectionner des attributs de cet objet"
           >
-            Liste détaillée
+            Sélectionner des attributs
           </button>
         )}
-        {showAddFieldsButton && (
+        {showAggregationButton && (
           <button
             onClick={(event) => {
               event.stopPropagation();
@@ -531,55 +533,38 @@ export function NavigationPanel({
                 objectId,
                 objectName,
                 cardinality,
-                'detailed',
+                'aggregation',
                 objectIsApplicable,
                 navigationPath
               );
             }}
-            className="rounded border border-blue-300 bg-blue-50 px-2 py-1 text-xs text-blue-700 hover:bg-blue-100"
-            title="Ajouter des champs de cet objet"
+            className="w-24 rounded border border-purple-300 bg-purple-50 px-2 py-1 text-center text-xs text-purple-700 hover:bg-purple-100"
+            title="Insérer une agrégation"
           >
-            Ajouter des champs
+            Agrégation
           </button>
         )}
-        <button
-          onClick={(event) => {
-            event.stopPropagation();
-            onObjectInsert(
-              themeId,
-              themeName,
-              objectId,
-              objectName,
-              cardinality,
-              'aggregation',
-              objectIsApplicable,
-              navigationPath
-            );
-          }}
-          className="rounded border border-purple-300 bg-purple-50 px-2 py-1 text-xs text-purple-700 hover:bg-purple-100"
-          title="Insérer une agrégation"
-        >
-          Agrégation
-        </button>
-        <button
-          onClick={(event) => {
-            event.stopPropagation();
-            onObjectInsert(
-              themeId,
-              themeName,
-              objectId,
-              objectName,
-              cardinality,
-              'special',
-              objectIsApplicable,
-              navigationPath
-            );
-          }}
-          className="rounded border border-indigo-300 bg-indigo-50 px-2 py-1 text-xs text-indigo-700 hover:bg-indigo-100"
-          title="Insérer une valeur spéciale"
-        >
-          Valeur spéciale
-        </button>
+        {showSpecialValueButton && (
+          <button
+            onClick={(event) => {
+              event.stopPropagation();
+              onObjectInsert(
+                themeId,
+                themeName,
+                objectId,
+                objectName,
+                cardinality,
+                'special',
+                objectIsApplicable,
+                navigationPath
+              );
+            }}
+            className="w-28 rounded border border-indigo-300 bg-indigo-50 px-2 py-1 text-center text-xs text-indigo-700 hover:bg-indigo-100"
+            title="Insérer une valeur spéciale"
+          >
+            Valeur spéciale
+          </button>
+        )}
       </div>
     );
   };

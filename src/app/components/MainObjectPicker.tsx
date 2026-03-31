@@ -13,7 +13,7 @@ type Props = {
 
 export function MainObjectPicker({ onSelect }: Props) {
   const [search, setSearch] = useState('');
-  const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
+  const [expandedDomains, setExpandedDomains] = useState<Record<string, boolean>>({});
 
   const lower = search.trim().toLowerCase();
 
@@ -68,37 +68,17 @@ export function MainObjectPicker({ onSelect }: Props) {
       .filter((t) => t.objects.length > 0);
   }, [lower]);
 
-  // If a domain is selected and there's no search, show only its objects
-  if (selectedDomain && !lower) {
-    const theme = dataStructure.find((t) => t.id === selectedDomain);
-    const selectableObjects = theme ? getSelectableObjects(theme) : [];
-    return (
-      <div className="p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <div className="text-lg font-semibold">{theme?.name}</div>
-          <div>
-            <button
-              onClick={() => setSelectedDomain(null)}
-              className="rounded border px-3 py-1 text-sm"
-            >
-              ← Retour
-            </button>
-          </div>
-        </div>
+  const visibleThemes = lower
+    ? filtered
+    : dataStructure.map((theme) => ({
+        ...theme,
+        objects: getSelectableObjects(theme),
+      }));
 
-        <div className="space-y-3">
-          {selectableObjects.map((obj) => (
-            <div key={obj.id} className="flex items-center justify-between gap-3 rounded border bg-white px-4 py-3">
-              <div className="text-sm font-medium text-gray-800">{obj.name}</div>
-              {renderObjectInsertionButtons(theme.id, theme.name, obj.id, obj.name)}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
+  const toggleDomain = (themeId: string) => {
+    setExpandedDomains((prev) => ({ ...prev, [themeId]: !prev[themeId] }));
+  };
 
-  // Default view: if search is empty, show domains grid; if searching, show filtered domains with their matching objects
   return (
     <div className="p-6">
       <div className="mb-4">
@@ -110,39 +90,43 @@ export function MainObjectPicker({ onSelect }: Props) {
         />
       </div>
 
-      {!lower ? (
-        <div className="grid grid-cols-3 gap-4">
-          {dataStructure.map((theme) => (
-            <div key={theme.id} className="rounded border bg-white p-6 shadow-sm">
+      <div className="space-y-3">
+        {visibleThemes.map((theme) => {
+          const isExpanded = !!expandedDomains[theme.id];
+          return (
+            <div key={theme.id} className="rounded border bg-white">
               <button
-                onClick={() => setSelectedDomain(theme.id)}
-                className="w-full text-left text-lg font-medium"
+                onClick={() => toggleDomain(theme.id)}
+                className="flex w-full items-center justify-between px-4 py-3 text-left"
               >
-                {theme.name}
+                <span className="text-sm font-semibold text-gray-900">{theme.name}</span>
+                <span className="text-xs text-gray-500">{isExpanded ? 'v' : '>'}</span>
               </button>
+
+              {isExpanded && (
+                <div className="space-y-2 border-t px-3 py-3">
+                  {theme.objects.map((obj) => (
+                    <div
+                      key={obj.id}
+                      className="flex items-center justify-between gap-3 rounded border bg-gray-50 px-3 py-2"
+                    >
+                      <div className="text-sm text-gray-800">{obj.name}</div>
+                      {renderObjectInsertionButtons(theme.id, theme.name, obj.id, obj.name)}
+                    </div>
+                  ))}
+                  {theme.objects.length === 0 && (
+                    <div className="px-1 py-1 text-xs text-gray-500">Aucun objet selectionnable.</div>
+                  )}
+                </div>
+              )}
             </div>
-          ))}
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {filtered.map((theme) => (
-            <div key={theme.id} className="rounded border bg-white p-4">
-              <div className="text-lg font-semibold mb-2">{theme.name}</div>
-              <div className="space-y-2">
-                {theme.objects.map((obj) => (
-                  <div key={obj.id} className="flex items-center justify-between gap-3 rounded border bg-gray-50 px-3 py-2">
-                    <div className="text-sm text-gray-800">{obj.name}</div>
-                    {renderObjectInsertionButtons(theme.id, theme.name, obj.id, obj.name)}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-          {filtered.length === 0 && (
-            <div className="text-sm text-gray-500">Aucun domaine / objet correspondant.</div>
-          )}
-        </div>
-      )}
+          );
+        })}
+
+        {visibleThemes.length === 0 && (
+          <div className="text-sm text-gray-500">Aucun domaine / objet correspondant.</div>
+        )}
+      </div>
     </div>
   );
 }

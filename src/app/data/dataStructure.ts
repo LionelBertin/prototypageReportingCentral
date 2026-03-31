@@ -200,8 +200,8 @@ export const dataStructure: Theme[] = [
         relations: [
           rel('contrats', 'contrats', 'Contrats', 'Contrat', '1', true),
           rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur manager'),
-          rel('referentiels', 'departement', 'Département', 'Département'),
-          rel('referentiels', 'etablissement', 'Etablissement', 'Etablissement'),
+          rel('referentiels', 'departement', 'Département', 'Département', '1', true),
+          rel('referentiels', 'etablissement', 'Etablissement', 'Etablissement', '1', true),
         ],
       },
     ],
@@ -591,13 +591,12 @@ export const dataStructure: Theme[] = [
         name: 'Candidature',
         cardinality: '0..n <> 1..n Postes à pourvoir, 1 <> 1..n Historique de Candidature',
         attributes: [
-          { id: 'date-candidature', name: 'date candidature', type: 'date' },
-          { id: 'statut-candidature', name: 'statut candidature', type: 'string' },
+          { id: 'date-candidature', name: 'date candidature', type: 'date', magicSel: true },
+          { id: 'statut-candidature', name: 'statut candidature', type: 'string', magicSel: true },
         ],
         relations: [
           rel('recrutement', 'postes-a-pourvoir', 'Postes à pourvoir', 'Postes à pourvoir', '1..n', true),
           rel('recrutement', 'historique-candidature', 'Historique de Candidature', 'Historique de Candidature', '1..n'),
-          rel('recrutement', 'entretiens-recrutement', 'Entretiens', 'Entretiens', '0..n'),
         ],
       },
       {

@@ -350,6 +350,17 @@ export function SelectionPanel({
                               ? 'Colonne calculée'
                               : group.representative.insertionType}
                           </span>
+
+                          {group.representative.insertionType === 'applicable' && (
+                            <button
+                              onClick={() => onEditDateReference(group.representative.id)}
+                              className="flex items-center gap-1 rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-700 hover:bg-purple-200"
+                              title="Modifier la date de référence de l'objet"
+                            >
+                              <Calendar className="size-3" />
+                              {getDateReferenceLabel(group.representative)}
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -473,16 +484,6 @@ export function SelectionPanel({
                                       ? '🧮 Colonne calculée'
                                       : attr.insertionType}
                                   </span>
-                                )}
-
-                                {attr.isApplicable && (
-                                  <button
-                                    onClick={() => onEditDateReference(attr.id)}
-                                    className="flex items-center gap-1 rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-700 hover:bg-purple-200"
-                                  >
-                                    <Calendar className="size-3" />
-                                    {getDateReferenceLabel(attr)}
-                                  </button>
                                 )}
 
                                 {attr.insertionType !== 'applicable' && (

@@ -57,8 +57,8 @@
 -- Postes [applicationDate]
   1..n <> 1 Contrat (RécursiveMagicSel)
   0..n <> 1 Collaborateur manager
-  0..n <> 1 Département
-  0..n <> 1 Etablissement
+  0..n <> 1 Département (RécursiveMagicSel)
+  0..n <> 1 Etablissement (RécursiveMagicSel)
 --- intitulé (magicSel)
 --- document
 --- date début (magicSel)
@@ -233,9 +233,9 @@
 --- montant HT
 --- montant TTC (magicSel)
 - Le Recrutement
+-- Postes à pourvoir
   0..n <> 1 Département (RécursiveMagicSel)
   0..n <> 1 Etablissement (RécursiveMagicSel)
--- Postes à pourvoir
 --- Intitulé (magicSel)
 --- Date ouverture poste (magicSel)
 --- Date fermeture poste
