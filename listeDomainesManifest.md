@@ -56,7 +56,7 @@
 --- motif fin
 -- Postes [applicationDate]
   1..n <> 1 Contrat (RécursiveMagicSel)
-  0..n <> 1 Collaborateur manager
+  0..n <> 1 Collaborateur as "Manager"
   0..n <> 1 Département (RécursiveMagicSel)
   0..n <> 1 Etablissement (RécursiveMagicSel)
 --- intitulé (magicSel)
@@ -67,41 +67,11 @@
 --- csp
 --- modalité de temps de travail
 - Les absences
--- Absences validées
-  0..n <> 1 Collaborateur de l'absence  (RécursiveMagicSel)
-  0..n <> 1 Collaborateur approbation
---- type compte (magicSel)
---- date demande
---- date approbation
---- date début (magicSel)
---- date fin (magicSel)
---- durée réelle
---- durée ouvrée (magicSel)
--- Absences refusées
-  0..n <> 1 Collaborateur de l'absence (RécursiveMagicSel)
-  0..n <> 1 Collaborateur refus
---- type compte (magicSel)
---- date demande (magicSel)
---- date refus (magicSel)
---- motivation du refus (magicSel)
---- date début
---- date fin
---- durée réelle
---- durée ouvrée
--- Absences en attente de validation
-  0..n <> 1 Collaborateur de l'absence (RécursiveMagicSel)
---- type compte (magicSel)
---- date demande (magicSel)
---- date début
---- date fin
---- durée réelle
---- durée ouvrée (magicSel)
--- Absences_mod_alt
-  0..n <> 1 Collaborateur qui a posé l'absence
-  0..n <> 1 Collaborateur qui bénéficie de l'absence (RécursiveMagicSel)
-  0..n <> 1 Collaborateur qui a approuvé l'absence
-  0..n <> 1 Collaborateur qui a refusé l'absence
---- type compte (magicSel)
+-- Absences
+  0..n <> 1 Collaborateur as "Demandeur"
+  0..n <> 1 Collaborateur as "Absent" (RécursiveMagicSel)
+  0..n <> 1 Collaborateur as "Approbateur"
+  0..n <> 1 Collaborateur as "Refuser" (magicSel)
 --- statut ["à traiter","refusé","approuvé"] (magicSel)
 --- date demande
 --- date refus (magicSel)
@@ -115,30 +85,33 @@
   0..n <> 1 Collaborateur (RécursiveMagicSel)
 --- type compte (magicSel)
 --- solde (magicSel)
+smartObjects:{
+    {
+    title:"Absences approuvées futures",
+    columns:["type compte","date début","date fin", "Collaborateur_Absence.nom", "Collaborateur_Absence.prénom", "Collaborateur_Approbation.nom", "Collaborateur_Approbation.prénom"],
+    filters:{statut="approuvé" and "date début" > dateDuJour}
+    },
+    {
+    title:"Absences passées",
+    columns:["type compte","date début","date fin", "Collaborateur_Absence.nom", "Collaborateur_Absence.prénom", "Collaborateur_Approbation.nom", "Collaborateur_Approbation.prénom"],
+    filters:{statut="approuvé" and "date début" <= dateDuJour}
+    },
+    {
+    title:"Absences à traiter",
+    columns:["date demande","type compte","durée ouvrée", "Collaborateur_Absence.nom", "Collaborateur_Absence.prénom", "Collaborateur_Absence.poste[applicable].manager.nom", "Collaborateur_Absence.poste[applicable].manager.prénom"],
+    filters:{statut="à traiter"}
+    }, 
+    {
+    title:"Absences refusées futures",
+    columns:["date refus","motivation du refus", "durée ouvrée", "Collaborateur_Absence.nom", "Collaborateur_Absence.prénom", "Collaborateur_Refus.nom", "Collaborateur_Refus.prénom"],
+    filters:{"statut"="refusé" and "date début" > dateDuJour}
+    }
+  }
 - Les dépenses
--- Dépenses validées
-  0..n <> 1 Collaborateur de la dépense (RécursiveMagicSel)
-  0..n <> 1 Collaborateur approbation
---- date dépense (magicSel)
---- date approbation (magicSel)
---- nature de dépense (magicSel)
---- devise (magicSel)
---- montant HT
---- montant TTC (magicSel)
--- Dépenses refusées
-  0..n <> 1 Collaborateur de la dépense (RécursiveMagicSel)
-  0..n <> 1 Collaborateur refus
---- date dépense (magicSel)
---- date refus (magicSel)
---- motif de refus (magicSel)
---- nature de dépense (magicSel)
---- devise (magicSel)
---- montant HT
---- montant TTC (magicSel)
--- Dépenses _mod_alt
-  0..n <> 1 Collaborateur de la dépense (RécursiveMagicSel)
-  0..n <> 1 Collaborateur refus
-  0..n <> 1 Collaborateur approbation
+-- Dépenses
+  0..n <> 1 Collaborateur as "Collaborateur dépense" (RécursiveMagicSel)
+  0..n <> 1 Collaborateur as "Refus dépense"
+  0..n <> 1 Collaborateur as "Approbation dépense"
 --- statut ["à traiter","refusé","approuvé"] (magicSel)
 --- date dépense (magicSel)
 --- date refus (magicSel)
@@ -148,6 +121,23 @@
 --- devise (magicSel)
 --- montant HT
 --- montant TTC (magicSel)
+smartObjects:{
+    {
+    title:"Dépenses approuvées",
+    columns:["nature de dépense","date dépense", "Collaborateur dépense.nom", "Collaborateur dépense.prénom", "Approbation dépense.nom", "Approbation dépense.prénom"],
+    filters:{statut="approuvé"}
+    },
+    {
+    title:"Dépenses refusées",
+    columns:["date refus","motif de refus","Collaborateur dépense.nom", "Collaborateur dépense.prénom", "Refus dépense.nom", "Refus dépense.prénom"],
+    filters:{"statut"="refusé"}
+    },
+    {
+    title:"Dépenses en attente de validation",
+    columns:["date dépense","nature de dépense","Collaborateur dépense.nom", "Collaborateur dépense.prénom", "Collaborateur dépense.poste[applicable].manager.nom", "Collaborateur dépense.poste[applicable].manager.prénom"],
+    filters:{statut="à traiter"}
+    }
+  }
 - Les entretiens
 -- Entretiens
   0..n <> 1 Collaborateur concerné (RécursiveMagicSel)

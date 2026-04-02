@@ -3,8 +3,23 @@
 ###########################################################
 # P1
 
-Dans la structure des données, j'ai ajouté des "smartObjects". Ils correspondent à des ensemble préconfigurés de sélection d'attributs et d'application de filtre.
-Lors de la sélection des "Attributs à insérer dans le rapport", juste après le titre, avant la zone de recherche, on peut proposer un bouton pour chaque smartObjects de l'objet en cours. Au clic ça sélectionne automatiquement les attributs listés dans la configuration pour cet objet.
+## convertir listeManifest en json pour disposer de plus d'attirbuts
+ex : nommage des relations entre les objets
+ajout de la description à afficher dans un picto d'information.
+...
+
+
+## filtrer facilement 
+pouvoir filtrer facilement 
+"mes managés"
+"mon département" 
+
+## date du rapport
+J'ai le sentiment qu'une notion de "date du rapport" pourrait être utile.
+
+## smartObjcts
+il faudrait donner de la visibilité aux filtres qui seront appliqués 
+
 
 
 ###########################################################
@@ -19,4 +34,8 @@ Par exemple, depuis une absence validée, si on cherche "adresse", il faut dépl
 # P3
 j'ai encore des objets liés trop profonds qui sont proposés en passant par exemple via les postes à pourvoir, les doc partagés, les départements, les établissements...
 
+
 ###########################################################
+
+
+

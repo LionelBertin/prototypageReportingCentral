@@ -7,11 +7,14 @@ export interface FilterCondition {
   attributeId: string; // ID de l'attribut filtré (pour permettre le filtrage sur d'autres attributs en cas d'agrégation)
   attributeName: string; // Nom de l'attribut filtré
   attributeType: AttributeType; // Type de l'attribut filtré
-  operator: 'equals' | 'notEquals' | 'greaterThan' | 'lessThan' | 'greaterOrEqual' | 'lessOrEqual' | 'contains' | 'startsWith' | 'endsWith' | 'isEmpty' | 'isNotEmpty';
-  value: string | number | boolean;
+  operator: 'equals' | 'notEquals' | 'greaterThan' | 'lessThan' | 'greaterOrEqual' | 'lessOrEqual' | 'contains' | 'startsWith' | 'endsWith' | 'isEmpty' | 'isNotEmpty' | 'in';
+  value: string | number | boolean | string[];
   valueType?: 'fixed' | 'attribute'; // Type de valeur : fixe ou référence à un attribut
   referenceAttributeId?: string; // ID de l'attribut référencé (si valueType === 'attribute')
   referenceAttributeName?: string; // Nom de l'attribut référencé (pour affichage)
+  targetKind?: 'native' | 'compartment';
+  compartmentSourceAttributeId?: string;
+  compartmentSourceAttributeName?: string;
 }
 
 export interface FilterGroup {

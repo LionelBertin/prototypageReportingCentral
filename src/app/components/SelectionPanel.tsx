@@ -1,6 +1,6 @@
-import { X, Filter, Calendar, Edit2, Layers } from 'lucide-react';
+import { X, Filter, Calendar, Edit2, Layers, MoreHorizontal } from 'lucide-react';
 import { SelectedAttribute } from '../types/selection';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { dataStructure } from '../data';
 
 const aggregationLabels: Record<string, string> = {
@@ -15,7 +15,6 @@ const aggregationLabels: Record<string, string> = {
 interface SelectionPanelProps {
   selectedAttributes: SelectedAttribute[];
   onRemoveAttribute: (id: string) => void;
-  onEditFilter: (id: string) => void;
   onEditCompartment: (id: string) => void;
   onEditDateReference: (id: string) => void;
   onEditConditionalColumn: (id: string) => void;
@@ -24,12 +23,16 @@ interface SelectionPanelProps {
   onReorder: (draggedId: string, targetId: string) => void;
   onEditColumnName: (id: string, newName: string) => void;
   getDateAttributeName: (attributeId: string) => string;
+  showCompartmenting: boolean;
+  showConditionalColumns: boolean;
+  showCalculatedColumns: boolean;
+  showColumnRename: boolean;
+  filterInvolvedAttributeIds?: string[];
 }
 
 export function SelectionPanel({
   selectedAttributes,
   onRemoveAttribute,
-  onEditFilter,
   onEditCompartment,
   onEditDateReference,
   onEditConditionalColumn,
@@ -38,13 +41,20 @@ export function SelectionPanel({
   onReorder,
   onEditColumnName,
   getDateAttributeName,
+  showCompartmenting,
+  showConditionalColumns,
+  showCalculatedColumns,
+  showColumnRename,
+  filterInvolvedAttributeIds = [],
 }: SelectionPanelProps) {
   const [editingColumnId, setEditingColumnId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const handleStartEdit = (attr: SelectedAttribute) => {
+    if (!showColumnRename) return;
     setEditingColumnId(attr.id);
     setEditingValue(attr.columnName || getDisplayColumnName(attr));
   };
@@ -144,6 +154,22 @@ export function SelectionPanel({
     return `${aggregationLabel} de "${attr.attributeName}"`;
   };
 
+  const getOperationDetailLabel = (attr: SelectedAttribute): string => {
+    if (attr.insertionType === 'first') {
+      const sortAttributeName = getAttributeNameFromId(attr.sortAttributeId);
+      return sortAttributeName
+        ? `Première instance sur "${sortAttributeName}"`
+        : 'Première instance';
+    }
+    if (attr.insertionType === 'last') {
+      const sortAttributeName = getAttributeNameFromId(attr.sortAttributeId);
+      return sortAttributeName
+        ? `Dernière instance sur "${sortAttributeName}"`
+        : 'Dernière instance';
+    }
+    return getAggregationDetailLabel(attr);
+  };
+
   const getAttributeTypeLabel = (attr: SelectedAttribute) => {
     switch (attr.attributeType) {
       case 'string':
@@ -175,38 +201,6 @@ export function SelectionPanel({
       default:
         return 'Non défini';
     }
-  };
-
-  const getFilterLabel = (filterGroups: SelectedAttribute['filterGroups']) => {
-    if (!filterGroups || filterGroups.length === 0) return '';
-    
-    const operatorLabels: Record<string, string> = {
-      'equals': '=',
-      'notEquals': '≠',
-      'greaterThan': '>',
-      'lessThan': '<',
-      'greaterOrEqual': '≥',
-      'lessOrEqual': '≤',
-      'contains': '⊃',
-      'startsWith': '⊃..',
-      'endsWith': '..⊂',
-    };
-    
-    // Afficher un résumé compact
-    const totalConditions = filterGroups.reduce((sum, group) => sum + group.conditions.length, 0);
-    if (totalConditions === 1) {
-      const cond = filterGroups[0].conditions[0];
-      const opLabel = operatorLabels[cond.operator] || cond.operator;
-      if (cond.operator === 'isEmpty' || cond.operator === 'isNotEmpty') {
-        return `${opLabel}`;
-      }
-      if (cond.valueType === 'attribute' && cond.referenceAttributeName) {
-        return `${opLabel} ${cond.referenceAttributeName}`;
-      }
-      return `${opLabel} ${cond.value}`;
-    }
-    
-    return `${filterGroups.length} groupe${filterGroups.length > 1 ? 's' : ''} (${totalConditions} condition${totalConditions > 1 ? 's' : ''})`;
   };
 
   const getOperatorLabel = (operator: string) => {
@@ -249,161 +243,56 @@ export function SelectionPanel({
       return getDisplayColumnName(attr);
     }
 
-    const linkedObjectName = attr.navigationPath
-      ?.map((item) => item.objectName?.trim())
-      .filter((value): value is string => !!value)
-      .at(-1);
+    const lastPathItem = attr.navigationPath?.at(-1);
 
-    if (linkedObjectName) {
-      return linkedObjectName;
+    if (lastPathItem) {
+      const objectName = lastPathItem.objectName?.trim();
+      const relationLabel = lastPathItem.relationLabel?.trim();
+
+      if (relationLabel && objectName && relationLabel !== objectName) {
+        return `${objectName} — ${relationLabel}`;
+      }
+      if (objectName) {
+        return objectName;
+      }
     }
 
     return attr.objectName;
   };
 
-  const groupedAttributes = useMemo(() => {
-    const groups: Array<{ key: string; representative: SelectedAttribute; attributes: SelectedAttribute[] }> = [];
-    const groupMap = new Map<string, { key: string; representative: SelectedAttribute; attributes: SelectedAttribute[] }>();
-
-    for (const attr of selectedAttributes) {
-      const key = getObjectInstanceKey(attr);
-      const existing = groupMap.get(key);
-
-      if (existing) {
-        existing.attributes.push(attr);
-        continue;
-      }
-
-      const group = {
-        key,
-        representative: attr,
-        attributes: [attr],
-      };
-
-      groupMap.set(key, group);
-      groups.push(group);
-    }
-
-    return groups;
-  }, [selectedAttributes]);
-
   return (
     <div className="h-full overflow-y-auto bg-white p-4">
-      <h2 className="mb-4 font-semibold text-gray-900">Attributs sélectionnés</h2>
-
       {selectedAttributes.length === 0 ? (
         <p className="text-sm text-gray-500">
           Aucun attribut sélectionné. Cliquez sur un attribut dans la structure pour l'ajouter.
         </p>
       ) : (
-        <div className="space-y-3">
-          {groupedAttributes.map((group, groupIndex) => {
-            const groupFilter = group.representative.filterGroups;
-            const showGroupFilter = group.representative.insertionType !== 'applicable';
+        <div className="space-y-2">
+          {selectedAttributes.map((attr, index) => {
+            const isDragged = draggedId === attr.id;
+            const isFilterInvolved = filterInvolvedAttributeIds.includes(attr.id);
 
             return (
-              <div key={group.key} className="rounded-lg border border-gray-200 bg-gray-50">
-                <div className="border-b border-gray-200 px-4 py-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                      <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">
-                        {groupIndex + 1}
-                      </div>
-                      <div>
-                        <div className="text-sm font-semibold text-gray-900">
-                          {getObjectGroupTitle(group.representative)}
-                        </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <span className="rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
-                            {group.attributes.length} attribut{group.attributes.length > 1 ? 's' : ''}
-                          </span>
-                          <span className={`rounded px-2 py-0.5 text-xs ${
-                            group.representative.insertionType === 'normal'
-                              ? 'bg-gray-100 text-gray-700'
-                              : group.representative.insertionType === 'first'
-                              ? 'bg-green-100 text-green-700'
-                              : group.representative.insertionType === 'last'
-                              ? 'bg-yellow-100 text-yellow-700'
-                              : group.representative.insertionType === 'aggregation'
-                              ? 'bg-purple-100 text-purple-700'
-                              : group.representative.insertionType === 'applicable'
-                              ? 'bg-indigo-100 text-indigo-700'
-                              : group.representative.insertionType === 'conditional'
-                              ? 'bg-purple-100 text-purple-700'
-                              : group.representative.insertionType === 'calculated'
-                              ? 'bg-teal-100 text-teal-700'
-                              : 'bg-gray-100 text-gray-700'
-                          }`}>
-                            {group.representative.insertionType === 'normal'
-                              ? 'Liste détaillée'
-                              : group.representative.insertionType === 'first'
-                              ? 'Première instance'
-                              : group.representative.insertionType === 'last'
-                              ? 'Dernière instance'
-                              : group.representative.insertionType === 'aggregation'
-                              ? getAggregationDetailLabel(group.representative)
-                              : group.representative.insertionType === 'applicable'
-                              ? 'Instance applicable'
-                              : group.representative.insertionType === 'conditional'
-                              ? 'Colonne conditionnelle'
-                              : group.representative.insertionType === 'calculated'
-                              ? 'Colonne calculée'
-                              : group.representative.insertionType}
-                          </span>
-
-                          {group.representative.insertionType === 'applicable' && (
-                            <button
-                              onClick={() => onEditDateReference(group.representative.id)}
-                              className="flex items-center gap-1 rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-700 hover:bg-purple-200"
-                              title="Modifier la date de référence de l'objet"
-                            >
-                              <Calendar className="size-3" />
-                              {getDateReferenceLabel(group.representative)}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {showGroupFilter && (
-                      <button
-                        onClick={() => onEditFilter(group.representative.id)}
-                        className={`flex items-center gap-1 rounded px-2 py-1 text-xs ${
-                          groupFilter && groupFilter.length > 0
-                            ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
-                            : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                        }`}
-                        title={groupFilter && groupFilter.length > 0 ? 'Modifier le filtre appliqué à tous les attributs de cet objet' : 'Ajouter un filtre pour tous les attributs de cet objet'}
-                      >
-                        <Filter className="size-3" />
-                        {groupFilter && groupFilter.length > 0 ? getFilterLabel(groupFilter) : 'Filtrer l\'objet'}
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-2 p-3">
-                  {group.attributes.map((attr) => {
-                    const isDragged = draggedId === attr.id;
-
-                    return (
-                      <div
-                        key={attr.id}
-                        draggable={editingColumnId !== attr.id}
-                        onDragStart={() => handleDragStart(attr.id)}
-                        onDragOver={(event) => handleDragOver(event, attr.id)}
-                        onDrop={() => handleDrop(attr.id)}
-                        onDragEnd={handleDragEnd}
-                        className={`rounded-lg border border-gray-200 bg-white p-3 transition ${
-                          isDragged ? 'cursor-grabbing opacity-60' : 'cursor-grab'
-                        } ${dragOverId === attr.id ? 'border-blue-400 ring-1 ring-blue-200' : ''}`}
-                        title="Glissez-déposez pour réordonner"
-                      >
+              <div
+                key={attr.id}
+                draggable={editingColumnId !== attr.id}
+                onDragStart={() => handleDragStart(attr.id)}
+                onDragOver={(event) => handleDragOver(event, attr.id)}
+                onDrop={() => handleDrop(attr.id)}
+                onDragEnd={handleDragEnd}
+                className={`rounded-lg border border-gray-200 bg-white p-3 transition ${
+                  isDragged ? 'cursor-grabbing opacity-60' : 'cursor-grab'
+                } ${dragOverId === attr.id ? 'border-blue-400 ring-1 ring-blue-200' : ''}`}
+                title="Glissez-déposez pour réordonner"
+              >
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex-1">
                             <div className="flex flex-1 flex-col">
                               <div className="flex items-center gap-2">
-                                {editingColumnId === attr.id ? (
+                                <div className="flex size-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[10px] font-semibold text-white">
+                                  {index + 1}
+                                </div>
+                                {editingColumnId === attr.id && showColumnRename ? (
                                   <div className="flex flex-1 items-center gap-2">
                                     <input
                                       type="text"
@@ -432,29 +321,29 @@ export function SelectionPanel({
                                 ) : (
                                   <>
                                     <span className="flex-1 text-sm font-medium text-gray-900">
-                                      {getDisplayColumnName(attr)}
+                                      {`${getDisplayColumnName(attr)} – ${getObjectGroupTitle(attr)}`}
                                     </span>
-                                    <button
-                                      onClick={() => handleStartEdit(attr)}
-                                      className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                                      title="Éditer le nom de la colonne"
-                                    >
-                                      <Edit2 className="size-3" />
-                                    </button>
+                                    {isFilterInvolved && (
+                                      <Filter className="size-3 text-orange-600" title="Utilisé dans le filtrage" />
+                                    )}
+                                    {showColumnRename && (
+                                      <button
+                                        onClick={() => handleStartEdit(attr)}
+                                        className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                                        title="Éditer le nom de la colonne"
+                                      >
+                                        <Edit2 className="size-3" />
+                                      </button>
+                                    )}
                                   </>
                                 )}
                               </div>
 
                               <div className="mt-1 flex flex-wrap items-center gap-2">
-                                {attr.insertionType === 'aggregation' ? (
-                                  <button
-                                    onClick={() => onEditAggregation(attr.id)}
-                                    className="rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-700 hover:bg-purple-200"
-                                    title="Consulter et modifier la configuration d'agrégation"
-                                  >
-                                    {getAggregationDetailLabel(attr)}
-                                  </button>
-                                ) : (
+                                {attr.insertionType !== 'normal'
+                                  && attr.insertionType !== 'aggregation'
+                                  && !(attr.insertionType === 'conditional' && !showConditionalColumns)
+                                  && !(attr.insertionType === 'calculated' && !showCalculatedColumns) && (
                                   <span className={`rounded px-2 py-0.5 text-xs ${
                                     attr.insertionType === 'normal'
                                       ? 'bg-gray-100 text-gray-700'
@@ -486,23 +375,30 @@ export function SelectionPanel({
                                   </span>
                                 )}
 
-                                {attr.insertionType !== 'applicable' && (
+                                {['first', 'last', 'aggregation'].includes(attr.insertionType) && (
                                   <button
-                                    onClick={() => onEditCompartment(attr.id)}
-                                    className={`flex items-center gap-1 rounded px-2 py-0.5 text-xs ${
-                                      attr.compartmentConfig && attr.compartmentConfig.compartments.length > 0
-                                        ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                                        : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                                    }`}
-                                    title={attr.compartmentConfig && attr.compartmentConfig.compartments.length > 0 ? 'Modifier les compartiments' : 'Ajouter des compartiments'}
+                                    onClick={() => onEditAggregation(attr.id)}
+                                    className="flex items-center gap-1 rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-700 hover:bg-amber-200"
+                                    title="Modifier la configuration de l'opération"
                                   >
-                                    <Layers className="size-3" />
-                                    {attr.compartmentConfig && attr.compartmentConfig.compartments.length > 0 ? `${attr.compartmentConfig.compartments.length} compartiment${attr.compartmentConfig.compartments.length > 1 ? 's' : ''}` : 'Compartimenter'}
+                                    {getOperationDetailLabel(attr)}
                                   </button>
                                 )}
+
+                                {attr.insertionType === 'applicable' && (
+                                  <button
+                                    onClick={() => onEditDateReference(attr.id)}
+                                    className="flex items-center gap-1 rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-700 hover:bg-purple-200"
+                                    title="Modifier la date de référence"
+                                  >
+                                    <Calendar className="size-3" />
+                                    {getDateReferenceLabel(attr)}
+                                  </button>
+                                )}
+
                               </div>
 
-                              {attr.compartmentConfig && attr.compartmentConfig.compartments.length > 0 && (
+                              {showCompartmenting && attr.compartmentConfig && attr.compartmentConfig.compartments.length > 0 && (
                                 <div className="mt-2 rounded bg-green-50 p-2 text-xs text-green-900">
                                   <div className="mb-1 font-semibold">Compartiments actifs :</div>
                                   <div className="space-y-1">
@@ -530,7 +426,7 @@ export function SelectionPanel({
                                 </div>
                               )}
 
-                              {attr.insertionType === 'conditional' && attr.conditionalConfig && (
+                              {showConditionalColumns && attr.insertionType === 'conditional' && attr.conditionalConfig && (
                                 <div className="mt-2 rounded bg-purple-50 p-2 text-xs text-purple-900">
                                   <div className="mb-1 font-semibold">Conditions :</div>
                                   <div className="space-y-1">
@@ -563,7 +459,7 @@ export function SelectionPanel({
                                 </div>
                               )}
 
-                              {attr.insertionType === 'calculated' && attr.calculatedConfig && (
+                              {showCalculatedColumns && attr.insertionType === 'calculated' && attr.calculatedConfig && (
                                 <div className="mt-2 rounded bg-teal-50 p-2 text-xs text-teal-900">
                                   <div className="mb-1 font-semibold">Formule :</div>
                                   <div className="ml-2 font-mono">
@@ -596,6 +492,37 @@ export function SelectionPanel({
                           </div>
 
                           <div className="ml-2 flex items-center">
+                            <span className="mr-2 rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700">
+                              {getAttributeTypeLabel(attr)}
+                            </span>
+                            {showCompartmenting && attr.insertionType !== 'applicable' && (
+                              <div className="relative">
+                                <button
+                                  onClick={() => setOpenMenuId((current) => current === attr.id ? null : attr.id)}
+                                  className="rounded p-1 hover:bg-gray-200"
+                                  title="Actions secondaires"
+                                >
+                                  <MoreHorizontal className="size-4 text-gray-600" />
+                                </button>
+
+                                {openMenuId === attr.id && (
+                                  <div className="absolute right-0 top-8 z-10 min-w-44 rounded border border-gray-200 bg-white p-1 shadow-lg">
+                                    <button
+                                      onClick={() => {
+                                        setOpenMenuId(null);
+                                        onEditCompartment(attr.id);
+                                      }}
+                                      className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100"
+                                    >
+                                      <Layers className="size-3" />
+                                      {attr.compartmentConfig && attr.compartmentConfig.compartments.length > 0
+                                        ? 'Modifier les compartiments'
+                                        : 'Compartimenter'}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                             <button
                               onClick={() => onRemoveAttribute(attr.id)}
                               className="rounded p-1 hover:bg-gray-200"
@@ -605,10 +532,6 @@ export function SelectionPanel({
                             </button>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
               </div>
             );
           })}

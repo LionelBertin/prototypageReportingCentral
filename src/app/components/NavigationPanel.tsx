@@ -13,7 +13,7 @@ interface NavigationPanelProps {
     objectId: string,
     objectName: string,
     cardinality: string,
-    insertionMode: 'detailed' | 'aggregation' | 'special',
+    insertionMode: 'detailed' | 'operation' | 'aggregation' | 'special',
     isApplicable?: boolean,
     navigationPath?: NavigationPath
   ) => void;
@@ -28,6 +28,7 @@ interface NavigationPanelProps {
     themeId: string;
     objectId: string;
   };
+  showLinkedObjectCardinalities?: boolean;
 }
 
 export function NavigationPanel({
@@ -35,6 +36,7 @@ export function NavigationPanel({
   showOnlyObjects = false,
   onObjectSelect,
   mainObject,
+  showLinkedObjectCardinalities = false,
 }: NavigationPanelProps) {
   const [expandedThemes, setExpandedThemes] = useState<Set<string>>(new Set());
   const [expandedObjects, setExpandedObjects] = useState<Set<string>>(new Set());
@@ -96,6 +98,7 @@ export function NavigationPanel({
     setExpandedObjects(newExpanded);
   };
 
+  // By default, all relation nodes are expanded. This set stores collapsed relation keys.
   const toggleRelation = (relationKey: string) => {
     const newExpanded = new Set(expandedRelations);
     if (newExpanded.has(relationKey)) newExpanded.delete(relationKey);
@@ -495,14 +498,16 @@ export function NavigationPanel({
   ) => {
     const allowDetailedInsertion = canUseDetailedInsertion(themeId, objectId);
     const allowAddFieldsInsertion = canAddFieldsInsertion(themeId, objectId);
-    const showSelectionButton = allowDetailedInsertion || allowAddFieldsInsertion;
+    const isDirectlyNavigable = Boolean(navigationPath && navigationPath.length > 0);
+    const showSelectionButton = isDirectlyNavigable || allowDetailedInsertion || allowAddFieldsInsertion;
     const isLinkedObject = Boolean(navigationPath && navigationPath.length > 0);
     const showAggregationButton = !(isLinkedObject && isSingleCardinality(cardinality));
     const showSpecialValueButton = Boolean(objectIsApplicable);
 
     return (
       <div className="flex shrink-0 items-center gap-1">
-        {showSelectionButton && (
+        {/* Slot 1 : Sélectionner des attributs — toujours présent pour l'alignement */}
+        {showSelectionButton ? (
           <button
             onClick={(event) => {
               event.stopPropagation();
@@ -522,8 +527,11 @@ export function NavigationPanel({
           >
             Sélectionner des attributs
           </button>
+        ) : (
+          <div className="w-36" />
         )}
-        {showAggregationButton && (
+        {/* Slot 2 : Agrégation */}
+        {showAggregationButton ? (
           <button
             onClick={(event) => {
               event.stopPropagation();
@@ -533,18 +541,21 @@ export function NavigationPanel({
                 objectId,
                 objectName,
                 cardinality,
-                'aggregation',
+                'operation',
                 objectIsApplicable,
                 navigationPath
               );
             }}
-            className="w-24 rounded border border-purple-300 bg-purple-50 px-2 py-1 text-center text-xs text-purple-700 hover:bg-purple-100"
-            title="Insérer une agrégation"
+            className="w-24 rounded border border-amber-300 bg-amber-100 px-2 py-1 text-center text-xs text-amber-700 hover:bg-amber-200"
+            title="Insérer une opération"
           >
-            Agrégation
+            Opération
           </button>
+        ) : (
+          <div className="w-24" />
         )}
-        {showSpecialValueButton && (
+        {/* Slot 3 : Valeur spéciale */}
+        {showSpecialValueButton ? (
           <button
             onClick={(event) => {
               event.stopPropagation();
@@ -559,11 +570,13 @@ export function NavigationPanel({
                 navigationPath
               );
             }}
-            className="w-28 rounded border border-indigo-300 bg-indigo-50 px-2 py-1 text-center text-xs text-indigo-700 hover:bg-indigo-100"
+            className="w-28 rounded border border-purple-300 bg-purple-100 px-2 py-1 text-center text-xs text-purple-700 hover:bg-purple-200"
             title="Insérer une valeur spéciale"
           >
             Valeur spéciale
           </button>
+        ) : (
+          <div className="w-28" />
         )}
       </div>
     );
@@ -725,13 +738,18 @@ export function NavigationPanel({
                 >
                   {relationHasChildren &&
                     (expandedRelations.has(relationKey) ? (
-                      <ChevronDown className="size-3 text-blue-600" />
-                    ) : (
                       <ChevronRight className="size-3 text-blue-600" />
+                    ) : (
+                      <ChevronDown className="size-3 text-blue-600" />
                     ))}
                   <span className="text-blue-700">{relatedObj.name}</span>
                   {relation.label !== relatedObj.name && (
                     <span className="text-blue-500">- {relation.label}</span>
+                  )}
+                  {showLinkedObjectCardinalities && relation.cardinality && (
+                    <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700">
+                      {relation.cardinality}
+                    </span>
                   )}
                 </button>
                 {renderObjectInsertButtons(
@@ -753,7 +771,7 @@ export function NavigationPanel({
                 )}
               </div>
 
-              {relationHasChildren && expandedRelations.has(relationKey) && (
+              {relationHasChildren && !expandedRelations.has(relationKey) && (
                 <div className="ml-4 mt-1 space-y-0.5">
                   {(() => {
                     if (filteredInboundSources.length === 0) return null;
@@ -791,13 +809,18 @@ export function NavigationPanel({
                                     >
                                     {inboundHasChildren &&
                                       (expandedRelations.has(inboundKey) ? (
-                                        <ChevronDown className="size-3 text-blue-600" />
-                                      ) : (
                                         <ChevronRight className="size-3 text-blue-600" />
+                                      ) : (
+                                        <ChevronDown className="size-3 text-blue-600" />
                                       ))}
                                     <span className="text-blue-700">{src.objectName}</span>
                                     {src.sourceLabel && src.sourceLabel !== src.objectName && (
                                       <span className="text-blue-500">- {src.sourceLabel}</span>
+                                    )}
+                                    {showLinkedObjectCardinalities && obj.cardinality && (
+                                      <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700">
+                                        {obj.cardinality}
+                                      </span>
                                     )}
                                     </button>
                                     {renderObjectInsertButtons(
@@ -819,7 +842,7 @@ export function NavigationPanel({
                                     )}
                                   </div>
 
-                                  {inboundHasChildren && expandedRelations.has(inboundKey) && (
+                                  {inboundHasChildren && !expandedRelations.has(inboundKey) && (
                                     <div className="ml-2 mt-1 space-y-0.5">
                                       {renderRelations(
                                         inboundKey,
@@ -898,7 +921,7 @@ export function NavigationPanel({
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Rechercher..."
+          placeholder="Rechercher une donnée..."
           className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm placeholder-gray-400 focus:border-blue-500 focus:outline-none"
         />
       </div>
@@ -907,7 +930,7 @@ export function NavigationPanel({
         <div className="space-y-4">
           <div className="rounded border border-blue-200 bg-white p-3">
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-blue-700">
-              Objet principal et objets lies
+              {mainObjectContext?.object.name ?? 'Objet principal'}
             </h3>
 
             {mainObjectContext ? (
@@ -952,16 +975,7 @@ export function NavigationPanel({
             )}
           </div>
 
-          <div className="rounded border border-gray-200 bg-white p-3">
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-700">
-              Autres objets (meme domaine puis autres domaines)
-            </h3>
-            {otherThemes.length > 0 ? (
-              renderThemesList(otherThemes)
-            ) : (
-              <p className="text-xs text-gray-500">Aucun autre objet disponible.</p>
-            )}
-          </div>
+
         </div>
       ) : (
         renderThemesList(filteredThemes)

@@ -9,7 +9,7 @@ import { ConditionalColumnDialog } from './ConditionalColumnDialog';
 import { CalculatedColumnDialog } from './CalculatedColumnDialog';
 import { DateReferenceDialog } from './DateReferenceDialog';
 import { SelectedAttribute, AggregationType, InsertionType, FilterGroup, CompartmentConfig, DateReference, ConditionalColumnConfig, CalculatedColumnConfig } from '../types/selection';
-import { AttributeType, dataStructure } from '../data/dataStructure';
+import { AttributeType, SmartObjectDefinition, dataStructure } from '../data/dataStructure';
 
 type NavigationPath = NonNullable<SelectedAttribute['navigationPath']>;
 
@@ -28,9 +28,11 @@ type PendingObjectInsertion = {
   objectId: string;
   objectName: string;
   cardinality: string;
-  mode: 'detailed' | 'aggregation' | 'special';
+  mode: 'detailed' | 'operation' | 'aggregation' | 'special';
   isApplicable?: boolean;
+  smartObjects?: SmartObjectDefinition[];
   navigationPath?: NavigationPath;
+  directMagicOnly?: boolean;
 };
 
 type AvailableObjectAttribute = {
@@ -56,14 +58,27 @@ export function AttributeSelector() {
   const [pendingMainObject, setPendingMainObject] = useState<MainObjectSelection | null>(null);
   const [objectInsertionDialogOpen, setObjectInsertionDialogOpen] = useState(false);
   const [pendingObjectInsertion, setPendingObjectInsertion] = useState<PendingObjectInsertion | null>(null);
-  const [filterDialogOpen, setFilterDialogOpen] = useState(false);
+  const [globalFilterDialogOpen, setGlobalFilterDialogOpen] = useState(false);
+  const [globalFilterGroups, setGlobalFilterGroups] = useState<FilterGroup[] | undefined>(undefined);
   const [compartmentDialogOpen, setCompartmentDialogOpen] = useState(false);
   const [dateReferenceDialogOpen, setDateReferenceDialogOpen] = useState(false);
   const [conditionalColumnDialogOpen, setConditionalColumnDialogOpen] = useState(false);
   const [calculatedColumnDialogOpen, setCalculatedColumnDialogOpen] = useState(false);
   const [editingAggregationAttributeId, setEditingAggregationAttributeId] = useState<string | null>(null);
+  const [editingOperationGroupKey, setEditingOperationGroupKey] = useState<string | null>(null);
   const [editingAttributeId, setEditingAttributeId] = useState<string | null>(null);
   const [editingObjectInstanceKey, setEditingObjectInstanceKey] = useState<string | null>(null);
+  const [showCompartmenting, setShowCompartmenting] = useState(false);
+  const [showConditionalColumns, setShowConditionalColumns] = useState(false);
+  const [showCalculatedColumns, setShowCalculatedColumns] = useState(false);
+  const [showColumnRename, setShowColumnRename] = useState(false);
+  const [showLinkedObjectCardinalities, setShowLinkedObjectCardinalities] = useState(false);
+  const [prototypeConfigOpen, setPrototypeConfigOpen] = useState(false);
+  const [draftShowCompartmenting, setDraftShowCompartmenting] = useState(false);
+  const [draftShowConditionalColumns, setDraftShowConditionalColumns] = useState(false);
+  const [draftShowCalculatedColumns, setDraftShowCalculatedColumns] = useState(false);
+  const [draftShowColumnRename, setDraftShowColumnRename] = useState(false);
+  const [draftShowLinkedObjectCardinalities, setDraftShowLinkedObjectCardinalities] = useState(false);
 
   const buildSelectedAttribute = ({
     themeId,
@@ -78,6 +93,7 @@ export function AttributeSelector() {
     aggregationType,
     isApplicable,
     dateReference,
+    filterGroups,
     navigationPath,
   }: {
     themeId: string;
@@ -92,6 +108,7 @@ export function AttributeSelector() {
     aggregationType?: AggregationType;
     isApplicable?: boolean;
     dateReference?: DateReference;
+    filterGroups?: FilterGroup[];
     navigationPath?: NavigationPath;
   }): SelectedAttribute => {
     const effectiveApplicable = insertionType === 'applicable' || !!isApplicable;
@@ -108,12 +125,32 @@ export function AttributeSelector() {
       insertionType,
       sortAttributeId,
       aggregationType,
+      filterGroups,
       isApplicable: effectiveApplicable,
       dateReference: insertionType === 'applicable'
         ? (dateReference ?? { type: 'today' })
         : (effectiveApplicable ? { type: 'today' } : undefined),
       navigationPath,
     };
+  };
+
+  const getTodayIsoDate = () => {
+    const today = new Date();
+    return [
+      today.getFullYear(),
+      String(today.getMonth() + 1).padStart(2, '0'),
+      String(today.getDate()).padStart(2, '0'),
+    ].join('-');
+  };
+
+  const getDefaultSortAttributeId = (attributes: AvailableObjectAttribute[]) => {
+    const dateAttribute = attributes.find((attr) => attr.type === 'date');
+    if (dateAttribute) return dateAttribute.id;
+
+    const numberAttribute = attributes.find((attr) => attr.type === 'number');
+    if (numberAttribute) return numberAttribute.id;
+
+    return attributes[0]?.id;
   };
 
   const getObjectAttributes = (themeId: string, objectId: string) => {
@@ -217,6 +254,29 @@ export function AttributeSelector() {
     return collected;
   };
 
+  const getDirectMagicAttributes = (themeId: string, objectId: string) => {
+    const theme = dataStructure.find((t) => t.id === themeId);
+    const obj = theme?.objects.find((o) => o.id === objectId);
+    if (!theme || !obj) return [] as AvailableObjectAttribute[];
+
+    return obj.attributes
+      .filter((attr) => !!attr.magicSel)
+      .map((attr) => ({
+        id: attr.id,
+        name: attr.name,
+        rawName: attr.name,
+        type: attr.type,
+        magicSel: attr.magicSel,
+        smartSel: !!attr.magicSel,
+        sourceObjectSupportsApplicable: !!(obj.applicationDate || obj.isApplicable),
+        sourceThemeId: theme.id,
+        sourceThemeName: theme.name,
+        sourceObjectId: obj.id,
+        sourceObjectName: obj.name,
+        relativeNavigationPath: [],
+      }));
+  };
+
   const getMainObjectModeLabel = () => {
     if (!mainObjectConfig) return '';
 
@@ -249,64 +309,11 @@ export function AttributeSelector() {
     themeId: string,
     themeName: string,
     objectId: string,
-    objectName: string,
-    mode: 'detailed' | 'aggregation' | 'special'
+    objectName: string
   ) => {
     const theme = dataStructure.find((t) => t.id === themeId);
     const obj = theme?.objects.find((o) => o.id === objectId);
     if (!obj) return;
-
-    if (mode === 'special') {
-      const objectAttributes = getObjectAttributes(themeId, objectId);
-      const smartAttributes = objectAttributes.filter((attr) => !!attr.smartSel);
-
-      if (smartAttributes.length === 0) {
-        alert('Aucun attribut de sélection intelligente disponible pour cet objet.');
-        return;
-      }
-
-      const today = new Date();
-      const customDate = [
-        today.getFullYear(),
-        String(today.getMonth() + 1).padStart(2, '0'),
-        String(today.getDate()).padStart(2, '0'),
-      ].join('-');
-
-      const autoSelected = smartAttributes.map((attr) =>
-        buildSelectedAttribute({
-          themeId: attr.sourceThemeId,
-          themeName: attr.sourceThemeName,
-          objectId: attr.sourceObjectId,
-          objectName: attr.sourceObjectName,
-          attributeId: attr.id,
-          attributeName: attr.rawName,
-          attributeType: attr.type,
-          insertionType: attr.sourceObjectSupportsApplicable ? 'applicable' : 'normal',
-          isApplicable: attr.sourceObjectSupportsApplicable,
-          dateReference: attr.sourceObjectSupportsApplicable
-            ? { type: 'custom', customDate }
-            : undefined,
-          navigationPath: attr.relativeNavigationPath,
-        })
-      );
-
-      setMainObject({
-        themeId,
-        themeName,
-        objectId,
-        objectName,
-      });
-      setMainObjectConfig({
-        insertionType: 'applicable',
-        dateReference: { type: 'custom', customDate },
-      });
-      setSelectedAttributes((prev) => appendUniqueAttributes(prev, autoSelected));
-      setSelectingMainObject(false);
-      setPendingMainObject(null);
-      setPendingObjectInsertion(null);
-      setObjectInsertionDialogOpen(false);
-      return;
-    }
 
     setPendingMainObject({
       themeId,
@@ -323,8 +330,9 @@ export function AttributeSelector() {
       objectId,
       objectName,
       cardinality: obj.cardinality,
-      mode,
+      mode: 'detailed',
       isApplicable: obj.applicationDate || obj.isApplicable,
+      smartObjects: obj.smartObjects,
     });
     setObjectInsertionDialogOpen(true);
   };
@@ -335,10 +343,85 @@ export function AttributeSelector() {
     objectId: string,
     objectName: string,
     cardinality: string,
-    mode: 'detailed' | 'aggregation' | 'special',
+    mode: 'detailed' | 'operation' | 'aggregation' | 'special',
     isApplicable?: boolean,
     navigationPath?: NavigationPath
   ) => {
+    if (mode === 'operation') {
+      const objectAttributes = getObjectAttributes(themeId, objectId);
+      const smartAttributes = objectAttributes.filter((attr) => !!attr.smartSel);
+
+      if (smartAttributes.length === 0) {
+        alert('Aucun attribut de sélection intelligente disponible pour cet objet.');
+        return;
+      }
+
+      const defaultSortAttributeId = getDefaultSortAttributeId(smartAttributes);
+      if (!defaultSortAttributeId) {
+        alert('Impossible de déterminer un attribut de tri pour l\'opération.');
+        return;
+      }
+
+      const autoInserted = smartAttributes.map((attr) =>
+        buildSelectedAttribute({
+          themeId: attr.sourceThemeId,
+          themeName: attr.sourceThemeName,
+          objectId: attr.sourceObjectId,
+          objectName: attr.sourceObjectName,
+          attributeId: attr.id,
+          attributeName: attr.rawName,
+          attributeType: attr.type,
+          insertionType: 'last',
+          sortAttributeId: defaultSortAttributeId,
+          navigationPath: [
+            ...(navigationPath ?? []),
+            ...attr.relativeNavigationPath,
+          ],
+        })
+      );
+
+      setSelectedAttributes((prev) => appendUniqueAttributes(prev, autoInserted));
+      return;
+    }
+
+    if (mode === 'special' && isApplicable) {
+      const objectAttributes = getObjectAttributes(themeId, objectId);
+      const smartAttributes = objectAttributes.filter((attr) => !!attr.smartSel);
+
+      if (smartAttributes.length === 0) {
+        alert('Aucun attribut de sélection intelligente disponible pour cet objet.');
+        return;
+      }
+
+      const customDate = getTodayIsoDate();
+      const autoInserted = smartAttributes.map((attr) =>
+        buildSelectedAttribute({
+          themeId: attr.sourceThemeId,
+          themeName: attr.sourceThemeName,
+          objectId: attr.sourceObjectId,
+          objectName: attr.sourceObjectName,
+          attributeId: attr.id,
+          attributeName: attr.rawName,
+          attributeType: attr.type,
+          insertionType: attr.sourceObjectSupportsApplicable ? 'applicable' : 'normal',
+          isApplicable: attr.sourceObjectSupportsApplicable,
+          dateReference: attr.sourceObjectSupportsApplicable
+            ? { type: 'custom', customDate }
+            : undefined,
+          navigationPath: [
+            ...(navigationPath ?? []),
+            ...attr.relativeNavigationPath,
+          ],
+        })
+      );
+
+      setSelectedAttributes((prev) => appendUniqueAttributes(prev, autoInserted));
+      return;
+    }
+
+    const theme = dataStructure.find((t) => t.id === themeId);
+    const obj = theme?.objects.find((o) => o.id === objectId);
+
     setPendingObjectInsertion({
       themeId,
       themeName,
@@ -347,9 +430,17 @@ export function AttributeSelector() {
       cardinality,
       mode,
       isApplicable,
+      smartObjects: obj?.smartObjects,
       navigationPath,
+      directMagicOnly: mode === 'aggregation',
     });
     setObjectInsertionDialogOpen(true);
+  };
+
+  const getInsertionAvailableAttributes = (pending: PendingObjectInsertion) => {
+    return pending.directMagicOnly
+      ? getDirectMagicAttributes(pending.themeId, pending.objectId)
+      : getObjectAttributes(pending.themeId, pending.objectId);
   };
 
   const getSelectedAttributeUniquenessKey = (attr: SelectedAttribute) => {
@@ -392,29 +483,64 @@ export function AttributeSelector() {
     if (!pendingObjectInsertion) return;
 
     if (editingAggregationAttributeId) {
-      if (config.insertionType !== 'aggregation') return;
+      const objectAttributes = pendingObjectInsertion.directMagicOnly
+        ? getDirectMagicAttributes(pendingObjectInsertion.themeId, pendingObjectInsertion.objectId)
+        : getObjectAttributes(pendingObjectInsertion.themeId, pendingObjectInsertion.objectId);
+      const edited = selectedAttributes.find((attr) => attr.id === editingAggregationAttributeId);
+      if (!edited) return;
 
-      const objectAttributes = getObjectAttributes(pendingObjectInsertion.themeId, pendingObjectInsertion.objectId);
-      const aggregatedAttr = objectAttributes.find((attr) => attr.id === config.aggregationAttributeId);
-      if (!aggregatedAttr) return;
+      if (config.insertionType === 'aggregation') {
+        const aggregatedAttr = objectAttributes.find((attr) => attr.id === config.aggregationAttributeId);
+        if (!aggregatedAttr) return;
 
-      setSelectedAttributes((prev) =>
-        prev.map((attr) => {
-          if (attr.id !== editingAggregationAttributeId) return attr;
-          return {
-            ...attr,
-            attributeId: aggregatedAttr.id,
-            attributeName: aggregatedAttr.rawName,
-            attributeType: aggregatedAttr.type,
-            insertionType: 'aggregation',
-            aggregationType: config.aggregationType,
-            sortAttributeId: config.sortAttributeId,
-            sortDirection: config.sortDirection,
-          };
-        })
-      );
+        const newAttr = buildSelectedAttribute({
+          themeId: aggregatedAttr.sourceThemeId,
+          themeName: aggregatedAttr.sourceThemeName,
+          objectId: aggregatedAttr.sourceObjectId,
+          objectName: aggregatedAttr.sourceObjectName,
+          attributeId: aggregatedAttr.id,
+          attributeName: aggregatedAttr.rawName,
+          attributeType: aggregatedAttr.type,
+          insertionType: 'aggregation',
+          sortAttributeId: config.sortAttributeId,
+          aggregationType: config.aggregationType,
+          navigationPath: [
+            ...(pendingObjectInsertion.navigationPath ?? []),
+            ...aggregatedAttr.relativeNavigationPath,
+          ],
+        });
+
+        if (config.sortDirection) {
+          newAttr.sortDirection = config.sortDirection;
+        }
+
+        setSelectedAttributes((prev) => {
+          const remaining = editingOperationGroupKey
+            ? prev.filter((attr) => getObjectInstanceKey(attr) !== editingOperationGroupKey)
+            : prev.filter((attr) => attr.id !== editingAggregationAttributeId);
+          return appendUniqueAttributes(remaining, [newAttr]);
+        });
+      } else {
+        setSelectedAttributes((prev) =>
+          prev.map((attr) => {
+            const isTarget = editingOperationGroupKey
+              ? getObjectInstanceKey(attr) === editingOperationGroupKey
+              : attr.id === editingAggregationAttributeId;
+            if (!isTarget) return attr;
+
+            return {
+              ...attr,
+              insertionType: config.insertionType,
+              sortAttributeId: config.sortAttributeId,
+              sortDirection: undefined,
+              aggregationType: undefined,
+            };
+          })
+        );
+      }
 
       setEditingAggregationAttributeId(null);
+      setEditingOperationGroupKey(null);
       setPendingObjectInsertion(null);
       setObjectInsertionDialogOpen(false);
       return;
@@ -422,7 +548,9 @@ export function AttributeSelector() {
 
     const isMainObjectSelection = selectingMainObject && !!pendingMainObject;
 
-    const objectAttributes = getObjectAttributes(pendingObjectInsertion.themeId, pendingObjectInsertion.objectId);
+    const objectAttributes = pendingObjectInsertion.directMagicOnly
+      ? getDirectMagicAttributes(pendingObjectInsertion.themeId, pendingObjectInsertion.objectId)
+      : getObjectAttributes(pendingObjectInsertion.themeId, pendingObjectInsertion.objectId);
 
     if (config.insertionType === 'aggregation') {
       const aggregatedAttr = objectAttributes.find((attr) => attr.id === config.aggregationAttributeId);
@@ -469,11 +597,43 @@ export function AttributeSelector() {
     }
 
     const selectedIds = config.selectedAttributeIds ?? [];
+    const smartFilterTargetObjectKeys = new Set(
+      (config.smartFilterGroups ?? [])
+        .flatMap((group) => group.conditions)
+        .map((condition) => objectAttributes.find((attribute) => attribute.id === condition.attributeId))
+        .filter((attribute): attribute is NonNullable<typeof attribute> => !!attribute)
+        .map((attribute) => `${attribute.sourceThemeId}::${attribute.sourceObjectId}`)
+    );
+    const todayCustomDate = (() => {
+      const now = new Date();
+      return [
+        now.getFullYear(),
+        String(now.getMonth() + 1).padStart(2, '0'),
+        String(now.getDate()).padStart(2, '0'),
+      ].join('-');
+    })();
+
     const newAttributes = objectAttributes
       .filter((attr) => selectedIds.includes(attr.id))
       .map((attr) =>
         {
-          const shouldApplyDateReference = config.insertionType === 'applicable' && attr.sourceObjectSupportsApplicable;
+          const attributeObjectKey = `${attr.sourceThemeId}::${attr.sourceObjectId}`;
+          const shouldApplySmartFilters =
+            !!config.smartFilterGroups
+            && config.smartFilterGroups.length > 0
+            && smartFilterTargetObjectKeys.has(attributeObjectKey);
+
+          const shouldApplyDateReference =
+            (config.insertionType === 'applicable' || config.applyApplicableToday)
+            && attr.sourceObjectSupportsApplicable;
+
+          const nextInsertionType: InsertionType = shouldApplyDateReference
+            ? 'applicable'
+            : (config.insertionType === 'applicable' ? 'normal' : config.insertionType);
+
+          const nextDateReference = shouldApplyDateReference
+            ? (config.dateReference ?? (config.applyApplicableToday ? { type: 'custom', customDate: todayCustomDate } : undefined))
+            : undefined;
 
           return buildSelectedAttribute({
             themeId: attr.sourceThemeId,
@@ -483,10 +643,11 @@ export function AttributeSelector() {
             attributeId: attr.id,
             attributeName: attr.rawName,
             attributeType: attr.type,
-            insertionType: shouldApplyDateReference ? 'applicable' : 'normal',
+            insertionType: nextInsertionType,
             sortAttributeId: config.sortAttributeId,
+            filterGroups: shouldApplySmartFilters ? config.smartFilterGroups : undefined,
             isApplicable: shouldApplyDateReference,
-            dateReference: shouldApplyDateReference ? config.dateReference : undefined,
+            dateReference: nextDateReference,
             navigationPath: [
               ...(pendingObjectInsertion.navigationPath ?? []),
               ...attr.relativeNavigationPath,
@@ -535,31 +696,12 @@ export function AttributeSelector() {
     setSelectedAttributes((prev) => prev.filter((attr) => attr.id !== id));
   };
 
-  const handleEditFilter = (id: string) => {
-    const currentAttr = selectedAttributes.find((attr) => attr.id === id);
-    if (!currentAttr || currentAttr.insertionType === 'applicable') return;
-    setEditingAttributeId(id);
-    setEditingObjectInstanceKey(getObjectInstanceKey(currentAttr));
-    setFilterDialogOpen(true);
-  };
-
-  const handleFilterConfirm = (filterGroups?: FilterGroup[]) => {
-    if (!editingAttributeId) return;
-
-    const key = editingObjectInstanceKey;
-
-    setSelectedAttributes((prev) =>
-      prev.map((attr) =>
-        key
-          ? (getObjectInstanceKey(attr) === key ? { ...attr, filterGroups } : attr)
-          : (attr.id === editingAttributeId ? { ...attr, filterGroups } : attr)
-      )
-    );
-    setEditingAttributeId(null);
-    setEditingObjectInstanceKey(null);
+  const handleGlobalFilterConfirm = (filterGroups?: FilterGroup[]) => {
+    setGlobalFilterGroups(filterGroups);
   };
 
   const handleEditCompartment = (id: string) => {
+    if (!showCompartmenting) return;
     const currentAttr = selectedAttributes.find((attr) => attr.id === id);
     if (!currentAttr || currentAttr.insertionType === 'applicable') return;
     setEditingAttributeId(id);
@@ -601,6 +743,7 @@ export function AttributeSelector() {
   };
 
   const handleEditConditionalColumn = (id: string) => {
+    if (!showConditionalColumns) return;
     setEditingAttributeId(id);
     setConditionalColumnDialogOpen(true);
   };
@@ -634,27 +777,32 @@ export function AttributeSelector() {
   };
 
   const handleCreateConditionalColumn = () => {
+    if (!showConditionalColumns) return;
     setEditingAttributeId(null);
     setConditionalColumnDialogOpen(true);
   };
 
   const handleEditCalculatedColumn = (id: string) => {
+    if (!showCalculatedColumns) return;
     setEditingAttributeId(id);
     setCalculatedColumnDialogOpen(true);
   };
 
   const handleEditAggregation = (id: string) => {
     const attr = selectedAttributes.find((a) => a.id === id);
-    if (!attr || attr.insertionType !== 'aggregation') return;
+    if (!attr || !['first', 'last', 'aggregation'].includes(attr.insertionType)) return;
+
+    const targetGroupKey = getObjectInstanceKey(attr);
 
     setEditingAggregationAttributeId(id);
+    setEditingOperationGroupKey(targetGroupKey);
     setPendingObjectInsertion({
       themeId: attr.themeId,
       themeName: attr.themeName,
       objectId: attr.objectId,
       objectName: attr.objectName,
       cardinality: attr.navigationPath?.[attr.navigationPath.length - 1]?.cardinalityName || '1',
-      mode: 'aggregation',
+      mode: 'operation',
       isApplicable: attr.isApplicable,
       navigationPath: attr.navigationPath,
     });
@@ -690,6 +838,7 @@ export function AttributeSelector() {
   };
 
   const handleCreateCalculatedColumn = () => {
+    if (!showCalculatedColumns) return;
     setEditingAttributeId(null);
     setCalculatedColumnDialogOpen(true);
   };
@@ -760,6 +909,24 @@ export function AttributeSelector() {
     setSelectedAttributes([]);
   };
 
+  const openPrototypeConfig = () => {
+    setDraftShowCompartmenting(showCompartmenting);
+    setDraftShowConditionalColumns(showConditionalColumns);
+    setDraftShowCalculatedColumns(showCalculatedColumns);
+    setDraftShowColumnRename(showColumnRename);
+    setDraftShowLinkedObjectCardinalities(showLinkedObjectCardinalities);
+    setPrototypeConfigOpen(true);
+  };
+
+  const applyPrototypeConfig = () => {
+    setShowCompartmenting(draftShowCompartmenting);
+    setShowConditionalColumns(draftShowConditionalColumns);
+    setShowCalculatedColumns(draftShowCalculatedColumns);
+    setShowColumnRename(draftShowColumnRename);
+    setShowLinkedObjectCardinalities(draftShowLinkedObjectCardinalities);
+    setPrototypeConfigOpen(false);
+  };
+
   const getDateAttributeName = (attributeId: string): string => {
     const attr = selectedAttributes.find((a) => a.id === attributeId);
     if (attr) {
@@ -780,16 +947,84 @@ export function AttributeSelector() {
     return selectedAttributes.filter((attr) => attr.attributeType === 'date');
   };
 
-  // Récupérer les attributs déjà sélectionnés pour comparaison dans les filtres
-  const getSelectedAttributesForFilter = (currentAttributeId: string) => {
+  const getGlobalSelectedAttributesForFilter = () => {
+    return selectedAttributes.map((attr) => ({
+      id: attr.id,
+      name: attr.attributeName,
+      columnName: attr.columnName || `${attr.attributeName} (${attr.objectName})`,
+      type: attr.attributeType,
+    }));
+  };
+
+  const getGlobalCompartmentFilterAttributes = () => {
+    if (!showCompartmenting) return [] as Array<{ id: string; name: string; values: string[]; sourceAttributeName: string }>;
+
     return selectedAttributes
-      .filter((attr) => attr.id !== currentAttributeId)
+      .filter((attr) => !!attr.compartmentConfig && attr.compartmentConfig.compartments.length > 0)
       .map((attr) => ({
         id: attr.id,
-        name: attr.attributeName,
-        columnName: attr.columnName || `${attr.attributeName} (${attr.objectName})`,
-        type: attr.attributeType,
+        name: `Compartiment ${attr.columnName || attr.attributeName}`,
+        values: attr.compartmentConfig?.compartments.map((comp) => comp.name) ?? [],
+        sourceAttributeName: attr.columnName || attr.attributeName,
       }));
+  };
+
+  const globalFilterInvolvedAttributeIds = Array.from(
+    new Set(
+      (globalFilterGroups ?? []).flatMap((group) =>
+        group.conditions.flatMap((condition) =>
+          [condition.attributeId, condition.referenceAttributeId].filter((value): value is string => !!value)
+        )
+      )
+    )
+  );
+
+  const getGlobalFilterSummary = () => {
+    if (!globalFilterGroups || globalFilterGroups.length === 0) {
+      return 'Aucun filtre global défini';
+    }
+    const totalConditions = globalFilterGroups.reduce((sum, group) => sum + group.conditions.length, 0);
+    return `${globalFilterGroups.length} groupe${globalFilterGroups.length > 1 ? 's' : ''} (${totalConditions} condition${totalConditions > 1 ? 's' : ''})`;
+  };
+
+  const getGlobalFilterConditionLabel = (condition: FilterGroup['conditions'][number]) => {
+    const operatorLabels: Record<string, string> = {
+      equals: '=',
+      notEquals: '!=',
+      greaterThan: '>',
+      lessThan: '<',
+      greaterOrEqual: '>=',
+      lessOrEqual: '<=',
+      contains: 'contient',
+      startsWith: 'commence par',
+      endsWith: 'termine par',
+      isEmpty: 'vide',
+      isNotEmpty: 'renseignée',
+      in: 'in',
+    };
+
+    const op = operatorLabels[condition.operator] ?? condition.operator;
+
+    if (condition.operator === 'isEmpty' || condition.operator === 'isNotEmpty') {
+      return `${condition.attributeName} ${op}`;
+    }
+
+    if (condition.valueType === 'attribute' && condition.referenceAttributeName) {
+      return `${condition.attributeName} ${op} ${condition.referenceAttributeName}`;
+    }
+
+    const renderedValue = Array.isArray(condition.value)
+      ? `[${condition.value.join(', ')}]`
+      : `${condition.value}`;
+
+    return `${condition.attributeName} ${op} ${renderedValue}`;
+  };
+
+  const getGlobalFilterGroupLines = () => {
+    if (!globalFilterGroups || globalFilterGroups.length === 0) return [] as string[];
+    return globalFilterGroups.map((group) =>
+      group.conditions.map(getGlobalFilterConditionLabel).join(` ${group.logicalOperator} `)
+    );
   };
 
   const getSelectedDateAttributesForFilter = (currentAttributeId: string) => {
@@ -804,44 +1039,42 @@ export function AttributeSelector() {
 
   const editingAttribute = selectedAttributes.find((attr) => attr.id === editingAttributeId);
 
-  // Récupérer les attributs de l'objet pour le filtrage (utile pour les agrégations)
-  const getObjectAttributesForFilter = () => {
-    if (!editingAttribute) return undefined;
-    
-    const theme = dataStructure.find((t) => t.id === editingAttribute.themeId);
-    if (!theme) return undefined;
-
-    const obj = theme.objects.find((o) => o.id === editingAttribute.objectId);
-    if (!obj) return undefined;
-
-    return obj.attributes;
-  };
-
   return (
     <div className="flex h-screen flex-col">
       {/* Header */}
       <div className="border-b bg-white px-6 py-4">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-semibold text-gray-900">
-              {selectingMainObject ? 'Choisir l\'objet principal du rapport' : 'Sélection des attributs pour le rapport'}
-            </h1>
-            <p className="mt-1 text-sm text-gray-600">
-              {selectingMainObject
-                ? 'Sélectionnez le domaine et l\'objet principal pour ce rapport.'
-                : 'Ajoutez les attributs et configurez le rapport.'}
-            </p>
-          </div>
+        <div className="flex items-center justify-between gap-4">
+          <h1 className="text-xl font-semibold text-gray-900">
+            {selectingMainObject ? 'Quelle est la donnée principale du rapport ?' : 'Ajoutez des données et configurez le rapport.'}
+          </h1>
+          {!selectingMainObject && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleChangeReportType}
+                className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
+              >
+                Changer le type de rapport
+              </button>
+              <button
+                onClick={handleResetSelections}
+                className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
+              >
+                Tout réinitialiser
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Main content */}
       <div className="flex flex-1 overflow-hidden">
         {selectingMainObject ? (
-          <div className="w-full">
-            <MainObjectPicker
-              onSelect={handleMainObjectSelect}
-            />
+          <div className="flex w-full justify-center overflow-y-auto">
+            <div className="w-full max-w-[1200px]">
+              <MainObjectPicker
+                onSelect={handleMainObjectSelect}
+              />
+            </div>
           </div>
         ) : (
           <>
@@ -849,40 +1082,20 @@ export function AttributeSelector() {
               <NavigationPanel
                 onObjectInsert={handleObjectInsert}
                 mainObject={mainObject ? { themeId: mainObject.themeId, objectId: mainObject.objectId } : undefined}
+                showLinkedObjectCardinalities={showLinkedObjectCardinalities}
               />
             </div>
 
             <div className="flex w-1/2 flex-col border-l bg-white">
               <div className="border-b px-4 py-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-lg font-semibold text-gray-900">
-                    {mainObject?.objectName ?? 'Objet principal'}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={handleChangeReportType}
-                      className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
-                    >
-                      Changer le type de rapport
-                    </button>
-                    <button
-                      onClick={handleResetSelections}
-                      className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
-                    >
-                      Tout réinitialiser
-                    </button>
-                  </div>
+                <div className="text-lg font-semibold text-gray-900">
+                  {mainObject ? `Attributs sélectionnés pour le rapport sur les ${mainObject.objectName}` : 'Attributs sélectionnés'}
                 </div>
-                <p className="mt-1 text-sm text-gray-600">
-                  {mainObject ? `${mainObject.themeName} > ${mainObject.objectName}` : 'Objet principal non défini'}
-                  {mainObjectConfig ? ` | ${getMainObjectModeLabel()}` : ''}
-                </p>
               </div>
 
               <SelectionPanel
                 selectedAttributes={selectedAttributes}
                 onRemoveAttribute={handleRemoveAttribute}
-                onEditFilter={handleEditFilter}
                 onEditCompartment={handleEditCompartment}
                 onEditDateReference={handleEditDateReference}
                 onEditConditionalColumn={handleEditConditionalColumn}
@@ -891,7 +1104,55 @@ export function AttributeSelector() {
                 onReorder={handleReorder}
                 onEditColumnName={handleEditColumnName}
                 getDateAttributeName={getDateAttributeName}
+                showCompartmenting={showCompartmenting}
+                showConditionalColumns={showConditionalColumns}
+                showCalculatedColumns={showCalculatedColumns}
+                showColumnRename={showColumnRename}
+                filterInvolvedAttributeIds={globalFilterInvolvedAttributeIds}
               />
+
+              <div className="border-t bg-gray-50 px-4 py-3">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-sm font-medium text-gray-700">Filtrage</div>
+                    <button
+                      onClick={() => setGlobalFilterDialogOpen(true)}
+                      className={`flex items-center gap-1 rounded px-3 py-1.5 text-sm ${
+                        globalFilterGroups && globalFilterGroups.length > 0
+                          ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      Configurer le filtrage
+                    </button>
+                  </div>
+
+                  {globalFilterGroups && globalFilterGroups.length > 0 ? (
+                    <button
+                      onClick={() => setGlobalFilterDialogOpen(true)}
+                      className="w-full rounded border border-orange-200 bg-orange-50 p-2 text-left text-xs text-orange-800 hover:bg-orange-100"
+                      title="Modifier le filtrage global"
+                    >
+                      <div className="mb-1 font-medium">{getGlobalFilterSummary()}</div>
+                      <div className="space-y-1">
+                        {getGlobalFilterGroupLines().map((line, index) => (
+                          <div key={index}>
+                            Groupe {index + 1}: {line}
+                          </div>
+                        ))}
+                      </div>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setGlobalFilterDialogOpen(true)}
+                      className="w-full rounded border border-orange-200 bg-orange-50 p-2 text-left text-xs text-orange-700 hover:bg-orange-100"
+                      title="Configurer le filtrage global"
+                    >
+                      Aucun filtre global défini
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </>
         )}
@@ -905,6 +1166,7 @@ export function AttributeSelector() {
             setObjectInsertionDialogOpen(false);
             setPendingObjectInsertion(null);
             setEditingAggregationAttributeId(null);
+            setEditingOperationGroupKey(null);
             if (selectingMainObject) {
               setPendingMainObject(null);
             }
@@ -912,10 +1174,8 @@ export function AttributeSelector() {
           objectName={pendingObjectInsertion.objectName}
           cardinality={pendingObjectInsertion.cardinality}
           objectSupportsApplicable={!!pendingObjectInsertion.isApplicable}
-          availableAttributes={getObjectAttributes(
-            pendingObjectInsertion.themeId,
-            pendingObjectInsertion.objectId
-          )}
+          availableAttributes={getInsertionAvailableAttributes(pendingObjectInsertion)}
+          smartObjects={pendingObjectInsertion.smartObjects}
           availableDateAttributes={getAvailableDateAttributes().map((attr) => ({
             id: attr.id,
             name: attr.columnName || `${attr.attributeName} (${attr.objectName})`,
@@ -925,10 +1185,17 @@ export function AttributeSelector() {
             editingAggregationAttributeId
               ? (() => {
                   const edited = selectedAttributes.find((a) => a.id === editingAggregationAttributeId);
-                  if (!edited || edited.insertionType !== 'aggregation') return undefined;
+                  if (!edited || !['first', 'last', 'aggregation'].includes(edited.insertionType)) return undefined;
+                  const selectedAttributeIds = editingOperationGroupKey
+                    ? selectedAttributes
+                        .filter((candidate) => getObjectInstanceKey(candidate) === editingOperationGroupKey)
+                        .map((candidate) => candidate.attributeId)
+                    : [edited.attributeId];
+
                   return {
-                    insertionType: 'aggregation' as const,
-                    aggregationAttributeId: edited.attributeId,
+                    insertionType: edited.insertionType,
+                    selectedAttributeIds,
+                    aggregationAttributeId: edited.insertionType === 'aggregation' ? edited.attributeId : undefined,
                     aggregationType: edited.aggregationType,
                     sortAttributeId: edited.sortAttributeId,
                     sortDirection: edited.sortDirection,
@@ -942,21 +1209,6 @@ export function AttributeSelector() {
 
       {editingAttribute && (
         <>
-          <FilterDialog
-            isOpen={filterDialogOpen}
-            onClose={() => {
-              setFilterDialogOpen(false);
-              setEditingAttributeId(null);
-              setEditingObjectInstanceKey(null);
-            }}
-            attributeName={editingAttribute.attributeName}
-            attributeType={editingAttribute.attributeType}
-            currentFilterGroups={editingAttribute.filterGroups}
-            onConfirm={handleFilterConfirm}
-            objectAttributes={getObjectAttributesForFilter()}
-            selectedFilterAttributes={getSelectedAttributesForFilter(editingAttribute.id)}
-          />
-
           <CompartmentDialog
             isOpen={compartmentDialogOpen}
             onClose={() => {
@@ -1028,30 +1280,58 @@ export function AttributeSelector() {
         />
       )}
 
+      <FilterDialog
+        isOpen={globalFilterDialogOpen}
+        onClose={() => setGlobalFilterDialogOpen(false)}
+        attributeName="Filtrage global"
+        attributeType="string"
+        currentFilterGroups={globalFilterGroups}
+        onConfirm={handleGlobalFilterConfirm}
+        objectAttributes={selectedAttributes.map((attr) => ({
+          id: attr.id,
+          name: `${attr.columnName || attr.attributeName} < ${attr.objectName}`,
+          type: attr.attributeType,
+        }))}
+        selectedFilterAttributes={getGlobalSelectedAttributesForFilter()}
+        compartmentFilterAttributes={getGlobalCompartmentFilterAttributes()}
+        showCompartmenting={showCompartmenting}
+      />
+
       {!selectingMainObject && (
         <div className="border-t bg-white">
           <div className="flex">
-            <div className="w-1/2" />
+            <div className="w-1/2 px-4 py-4">
+              <button
+                onClick={openPrototypeConfig}
+                className="rounded border border-gray-300 bg-gray-50 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                conf proto
+              </button>
+            </div>
             <div className="w-1/2 px-4 py-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="text-sm text-gray-600">
                     {selectedAttributes.length} champ{selectedAttributes.length !== 1 ? 's' : ''} dans le rapport
                   </div>
-                  <button
-                    onClick={handleCreateConditionalColumn}
-                    className="rounded border border-purple-300 bg-purple-50 px-3 py-1.5 text-sm text-purple-700 hover:bg-purple-100"
-                    title="Créer une colonne conditionnelle qui évalue des expressions logiques"
-                  >
-                    + Colonne conditionnelle
-                  </button>
-                  <button
-                    onClick={handleCreateCalculatedColumn}
-                    className="rounded border border-teal-300 bg-teal-50 px-3 py-1.5 text-sm text-teal-700 hover:bg-teal-100"
-                    title="Créer une colonne calculée avec des opérations mathématiques ou logiques"
-                  >
-                    + Colonne calculée
-                  </button>
+                  {showConditionalColumns && (
+                    <button
+                      onClick={handleCreateConditionalColumn}
+                      className="rounded border border-purple-300 bg-purple-50 px-3 py-1.5 text-sm text-purple-700 hover:bg-purple-100"
+                      title="Créer une colonne conditionnelle qui évalue des expressions logiques"
+                    >
+                      + Colonne conditionnelle
+                    </button>
+                  )}
+                  {showCalculatedColumns && (
+                    <button
+                      onClick={handleCreateCalculatedColumn}
+                      className="rounded border border-teal-300 bg-teal-50 px-3 py-1.5 text-sm text-teal-700 hover:bg-teal-100"
+                      title="Créer une colonne calculée avec des opérations mathématiques ou logiques"
+                    >
+                      + Colonne calculée
+                    </button>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <button
@@ -1065,6 +1345,77 @@ export function AttributeSelector() {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {prototypeConfigOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-lg rounded-lg bg-white p-5 shadow-xl">
+            <h3 className="mb-4 text-base font-semibold text-gray-900">Configuration prototype</h3>
+
+            <div className="space-y-3">
+              {[
+                {
+                  label: 'Compartimentage',
+                  enabled: draftShowCompartmenting,
+                  setEnabled: setDraftShowCompartmenting,
+                },
+                {
+                  label: 'Colonne conditionnelle',
+                  enabled: draftShowConditionalColumns,
+                  setEnabled: setDraftShowConditionalColumns,
+                },
+                {
+                  label: 'Colonne calculée',
+                  enabled: draftShowCalculatedColumns,
+                  setEnabled: setDraftShowCalculatedColumns,
+                },
+                {
+                  label: 'Renommage colonnes',
+                  enabled: draftShowColumnRename,
+                  setEnabled: setDraftShowColumnRename,
+                },
+                {
+                  label: 'Cardinalites objets lies',
+                  enabled: draftShowLinkedObjectCardinalities,
+                  setEnabled: setDraftShowLinkedObjectCardinalities,
+                },
+              ].map((toggle) => (
+                <div key={toggle.label} className="flex items-center justify-between rounded border border-gray-200 px-3 py-2">
+                  <span className="text-sm text-gray-800">{toggle.label}</span>
+                  <div className="flex items-center gap-1 rounded bg-gray-100 p-0.5">
+                    <button
+                      onClick={() => toggle.setEnabled(true)}
+                      className={`rounded px-2 py-1 text-xs ${toggle.enabled ? 'bg-green-600 font-medium text-white shadow-sm' : 'text-green-700 hover:bg-green-50'}`}
+                    >
+                      Oui
+                    </button>
+                    <button
+                      onClick={() => toggle.setEnabled(false)}
+                      className={`rounded px-2 py-1 text-xs ${!toggle.enabled ? 'bg-red-600 font-medium text-white shadow-sm' : 'text-red-700 hover:bg-red-50'}`}
+                    >
+                      Non
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setPrototypeConfigOpen(false)}
+                className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={applyPrototypeConfig}
+                className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700"
+              >
+                Appliquer
+              </button>
             </div>
           </div>
         </div>

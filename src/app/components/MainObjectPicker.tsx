@@ -6,8 +6,7 @@ type Props = {
     themeId: string,
     themeName: string,
     objectId: string,
-    objectName: string,
-    mode: 'detailed' | 'aggregation' | 'special'
+    objectName: string
   ) => void;
 };
 
@@ -30,22 +29,10 @@ export function MainObjectPicker({ onSelect }: Props) {
   ) => (
     <div className="flex shrink-0 items-center gap-1">
       <button
-        onClick={() => onSelect(themeId, themeName, objectId, objectName, 'detailed')}
-        className="rounded border border-blue-300 bg-blue-50 px-2 py-1 text-xs text-blue-700 hover:bg-blue-100"
+        onClick={() => onSelect(themeId, themeName, objectId, objectName)}
+        className="rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
       >
-        Liste detaillee
-      </button>
-      <button
-        onClick={() => onSelect(themeId, themeName, objectId, objectName, 'aggregation')}
-        className="rounded border border-purple-300 bg-purple-50 px-2 py-1 text-xs text-purple-700 hover:bg-purple-100"
-      >
-        Agregation
-      </button>
-      <button
-        onClick={() => onSelect(themeId, themeName, objectId, objectName, 'special')}
-        className="rounded border border-indigo-300 bg-indigo-50 px-2 py-1 text-xs text-indigo-700 hover:bg-indigo-100"
-      >
-        Valeur speciale
+        Faire un rapport
       </button>
     </div>
   );
@@ -85,7 +72,7 @@ export function MainObjectPicker({ onSelect }: Props) {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Rechercher un domaine ou un objet..."
+          placeholder="Recherche une donnée..."
           className="w-72 rounded border px-3 py-2"
         />
       </div>

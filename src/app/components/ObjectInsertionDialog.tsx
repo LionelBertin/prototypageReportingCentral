@@ -1,9 +1,9 @@
 import { useMemo, useState, useEffect } from 'react';
 import { X } from 'lucide-react';
-import type { AttributeType } from '../data/dataStructure';
-import type { AggregationType, DateReference, InsertionType } from '../types/selection';
+import type { AttributeType, SmartObjectDefinition } from '../data/dataStructure';
+import type { AggregationType, DateReference, FilterGroup, InsertionType } from '../types/selection';
 
-type ObjectInsertionMode = 'detailed' | 'aggregation' | 'special';
+type ObjectInsertionMode = 'detailed' | 'operation' | 'aggregation' | 'special';
 
 export interface ObjectInsertionConfig {
   insertionType: Extract<InsertionType, 'normal' | 'aggregation' | 'first' | 'last' | 'applicable'>;
@@ -13,6 +13,8 @@ export interface ObjectInsertionConfig {
   sortAttributeId?: string;
   sortDirection?: 'asc' | 'desc';
   dateReference?: DateReference;
+  smartFilterGroups?: FilterGroup[];
+  applyApplicableToday?: boolean;
 }
 
 interface ObjectInsertionDialogProps {
@@ -29,8 +31,9 @@ interface ObjectInsertionDialogProps {
     magicSel?: boolean;
     smartSel?: boolean;
     sourceObjectName?: string;
-    relativeNavigationPath?: Array<{ objectName: string }>;
+    relativeNavigationPath?: Array<{ objectName: string; relationLabel?: string; sourceObjectName?: string }>;
   }>;
+  smartObjects?: SmartObjectDefinition[];
   availableDateAttributes: Array<{ id: string; name: string }>;
   initialMode: ObjectInsertionMode;
   initialConfig?: Partial<ObjectInsertionConfig>;
@@ -74,6 +77,7 @@ export function ObjectInsertionDialog({
   cardinality,
   objectSupportsApplicable = false,
   availableAttributes,
+  smartObjects = [],
   availableDateAttributes,
   initialMode,
   initialConfig,
@@ -90,11 +94,14 @@ export function ObjectInsertionDialog({
   const [specialType, setSpecialType] = useState<'first' | 'last' | 'applicable'>(
     objectSupportsApplicable && !cardinality.includes('n') ? 'applicable' : 'first'
   );
+  const [operationType, setOperationType] = useState<'first' | 'last' | 'aggregation'>('last');
   const [sortAttributeId, setSortAttributeId] = useState<string>('');
   const [referenceType, setReferenceType] = useState<DateReference['type']>('today');
   const [customDate, setCustomDate] = useState<string>('');
   const [referenceAttributeId, setReferenceAttributeId] = useState<string>('');
   const [attributeSearchTerm, setAttributeSearchTerm] = useState<string>('');
+  const [smartFilterGroups, setSmartFilterGroups] = useState<FilterGroup[] | undefined>(undefined);
+  const [applyApplicableToday, setApplyApplicableToday] = useState<boolean>(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -109,12 +116,52 @@ export function ObjectInsertionDialog({
       (initialConfig?.insertionType as 'first' | 'last' | 'applicable' | undefined)
         ?? (objectSupportsApplicable && !cardinality.includes('n') ? 'applicable' : 'first')
     );
+    setOperationType(
+      initialConfig?.insertionType === 'aggregation'
+        ? 'aggregation'
+        : initialConfig?.insertionType === 'first'
+        ? 'first'
+        : initialConfig?.insertionType === 'last'
+        ? 'last'
+        : 'last'
+    );
     setSortAttributeId(initialConfig?.sortAttributeId ?? '');
     setReferenceType(initialConfig?.dateReference?.type ?? 'today');
     setCustomDate(initialConfig?.dateReference?.customDate ?? '');
     setReferenceAttributeId(initialConfig?.dateReference?.attributeId ?? '');
     setAttributeSearchTerm('');
+    setSmartFilterGroups(initialConfig?.smartFilterGroups);
+    setApplyApplicableToday(!!initialConfig?.applyApplicableToday);
   }, [isOpen, availableAttributes, initialConfig, objectSupportsApplicable, cardinality]);
+
+  const normalize = (value: string) =>
+    value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLocaleLowerCase()
+      .replace(/\[applicable\]/g, ' applicable ')
+      .replace(/[_.>]/g, ' ')
+      .replace(/['’]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const getTokens = (value: string) => normalize(value).split(' ').filter(Boolean);
+
+  const isTokenSubset = (needle: string, haystack: string) => {
+    const needleTokens = getTokens(needle);
+    const haystackTokens = new Set(getTokens(haystack));
+    if (needleTokens.length === 0) return true;
+    return needleTokens.every((token) => haystackTokens.has(token));
+  };
+
+  const todayAsIsoDate = () => {
+    const now = new Date();
+    return [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getDate()).padStart(2, '0'),
+    ].join('-');
+  };
 
   const hasMultipleCardinality = cardinality.includes('n');
 
@@ -236,6 +283,96 @@ export function ObjectInsertionDialog({
     return orderedGroups;
   }, [filteredAttributes]);
 
+  const matchSmartPathToAttribute = (
+    attribute: ObjectInsertionDialogProps['availableAttributes'][number],
+    columnPath: string
+  ) => {
+    const columnParts = columnPath
+      .split('.')
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (columnParts.length === 0) return false;
+
+    const rawAttributeName = attribute.rawName ?? attribute.name;
+    const requestedAttributeName = columnParts[columnParts.length - 1];
+    if (!isTokenSubset(requestedAttributeName, rawAttributeName)) {
+      return false;
+    }
+
+    const requestedPath = columnParts.slice(0, -1);
+    if (requestedPath.length === 0) {
+      return true;
+    }
+
+    const pathSteps = (attribute.relativeNavigationPath ?? []).map((step) =>
+      [step.relationLabel, step.objectName].filter(Boolean).join(' ')
+    );
+
+    if (requestedPath.length > pathSteps.length) {
+      return false;
+    }
+
+    return requestedPath.every((requestedPart, index) => {
+      const pathStep = pathSteps[index];
+      return isTokenSubset(requestedPart, pathStep);
+    });
+  };
+
+  const resolveSmartColumnIds = (smartObject: SmartObjectDefinition) => {
+    const selectedIds: string[] = [];
+
+    for (const column of smartObject.columns) {
+      const matched = availableAttributes.find((attribute) => matchSmartPathToAttribute(attribute, column));
+      if (matched) {
+        selectedIds.push(matched.id);
+      }
+    }
+
+    return Array.from(new Set(selectedIds));
+  };
+
+  const resolveSmartFilterGroups = (smartObject: SmartObjectDefinition): FilterGroup[] | undefined => {
+    if (!smartObject.filters || smartObject.filters.conditions.length === 0) {
+      return undefined;
+    }
+
+    const conditions = smartObject.filters.conditions
+      .map((condition) => {
+        const matched = availableAttributes.find((attribute) => matchSmartPathToAttribute(attribute, condition.attributePath));
+        if (!matched) {
+          return null;
+        }
+
+        const rawValue = condition.value === 'dateDuJour' ? todayAsIsoDate() : condition.value;
+
+        return {
+          attributeId: matched.id,
+          attributeName: matched.rawName ?? matched.name,
+          attributeType: matched.type,
+          operator: condition.operator,
+          value: rawValue,
+          valueType: 'fixed' as const,
+        };
+      })
+      .filter((condition): condition is NonNullable<typeof condition> => condition !== null);
+
+    if (conditions.length === 0) {
+      return undefined;
+    }
+
+    return [{
+      logicalOperator: smartObject.filters.logicalOperator,
+      conditions,
+    }];
+  };
+
+  const applySmartObject = (smartObject: SmartObjectDefinition) => {
+    const resolvedAttributeIds = resolveSmartColumnIds(smartObject);
+    setSelectedAttributeIds(resolvedAttributeIds);
+    setSmartFilterGroups(resolveSmartFilterGroups(smartObject));
+    setApplyApplicableToday(true);
+  };
+
   if (!isOpen) return null;
 
   const toggleAttribute = (attributeId: string) => {
@@ -287,6 +424,48 @@ export function ObjectInsertionDialog({
   };
 
   const handleConfirm = () => {
+    if (mode === 'operation') {
+      if (operationType === 'aggregation') {
+        if (!aggregationAttributeId) {
+          alert('Veuillez sélectionner un attribut à agréger');
+          return;
+        }
+
+        if (aggregationType === 'CONCAT' && !aggregationSortAttributeId) {
+          alert('Veuillez sélectionner un attribut de tri pour la concaténation');
+          return;
+        }
+
+        onConfirm({
+          insertionType: 'aggregation',
+          aggregationAttributeId,
+          aggregationType,
+          sortAttributeId: aggregationType === 'CONCAT' ? aggregationSortAttributeId : undefined,
+          sortDirection: aggregationType === 'CONCAT' ? aggregationSortDirection : undefined,
+        });
+        onClose();
+        return;
+      }
+
+      if (selectedAttributeIds.length === 0) {
+        alert('Veuillez sélectionner au moins un attribut');
+        return;
+      }
+
+      if (hasMultipleCardinality && !sortAttributeId) {
+        alert('Veuillez sélectionner un attribut de tri');
+        return;
+      }
+
+      onConfirm({
+        insertionType: operationType,
+        selectedAttributeIds,
+        sortAttributeId: hasMultipleCardinality ? sortAttributeId : undefined,
+      });
+      onClose();
+      return;
+    }
+
     if (mode === 'detailed') {
       if (selectedAttributeIds.length === 0) {
         alert('Veuillez sélectionner au moins un attribut');
@@ -296,6 +475,8 @@ export function ObjectInsertionDialog({
       onConfirm({
         insertionType: 'normal',
         selectedAttributeIds,
+        smartFilterGroups,
+        applyApplicableToday,
       });
       onClose();
       return;
@@ -362,15 +543,25 @@ export function ObjectInsertionDialog({
       insertionType: specialType,
       selectedAttributeIds,
       sortAttributeId,
+      smartFilterGroups,
+      applyApplicableToday,
     });
     onClose();
   };
 
-  const renderGroupedAttributesList = (tone: 'blue' | 'indigo') => {
-    const textClass = tone === 'blue' ? 'text-blue-700' : 'text-indigo-700';
-    const borderClass = tone === 'blue' ? 'border-blue-100' : 'border-indigo-100';
-    const sectionClass = tone === 'blue' ? 'border-blue-200 bg-blue-50' : 'border-indigo-200 bg-indigo-50';
-    const inputClass = tone === 'blue' ? 'border-blue-200' : 'border-indigo-200';
+  const renderGroupedAttributesList = (tone: 'blue' | 'indigo' | 'yellow') => {
+    const textClass =
+      tone === 'blue' ? 'text-blue-700' : tone === 'indigo' ? 'text-indigo-700' : 'text-amber-700';
+    const borderClass =
+      tone === 'blue' ? 'border-blue-100' : tone === 'indigo' ? 'border-indigo-100' : 'border-amber-100';
+    const sectionClass =
+      tone === 'blue'
+        ? 'border-blue-200 bg-blue-50'
+        : tone === 'indigo'
+        ? 'border-indigo-200 bg-indigo-50'
+        : 'border-amber-200 bg-amber-50';
+    const inputClass =
+      tone === 'blue' ? 'border-blue-200' : tone === 'indigo' ? 'border-indigo-200' : 'border-amber-200';
 
     return (
       <div className={`rounded border p-3 ${sectionClass}`}>
@@ -379,6 +570,25 @@ export function ObjectInsertionDialog({
             Attributs à insérer dans le rapport
           </label>
         </div>
+        {smartObjects.length > 0 && (
+          <div className="mb-2">
+            <div className="mb-1.5 flex flex-wrap gap-2">
+              {smartObjects.map((smartObject) => (
+                <button
+                  key={smartObject.title}
+                  type="button"
+                  onClick={() => applySmartObject(smartObject)}
+                  className="rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-700 hover:bg-blue-100"
+                >
+                  {smartObject.title}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-gray-500">
+              Les filtres correspondants seront appliqués à l'étape suivante.
+            </p>
+          </div>
+        )}
         <input
           type="text"
           value={attributeSearchTerm}
@@ -456,48 +666,209 @@ export function ObjectInsertionDialog({
             <>{renderGroupedAttributesList('blue')}</>
           )}
 
+          {mode === 'operation' && (
+            <div className="space-y-3 rounded border border-amber-200 bg-amber-50 p-3">
+              <div className="space-y-2">
+                {hasMultipleCardinality && (
+                  <>
+                    <label className="flex items-center gap-2 text-sm text-gray-700">
+                      <input
+                        type="radio"
+                        name="operationType"
+                        value="first"
+                        checked={operationType === 'first'}
+                        onChange={() => setOperationType('first')}
+                        className="size-4"
+                      />
+                      <span>Première instance</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-gray-700">
+                      <input
+                        type="radio"
+                        name="operationType"
+                        value="last"
+                        checked={operationType === 'last'}
+                        onChange={() => setOperationType('last')}
+                        className="size-4"
+                      />
+                      <span>Dernière instance</span>
+                    </label>
+                  </>
+                )}
+
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="radio"
+                    name="operationType"
+                    value="aggregation"
+                    checked={operationType === 'aggregation'}
+                    onChange={() => setOperationType('aggregation')}
+                    className="size-4"
+                  />
+                  <span>Agrégation</span>
+                </label>
+              </div>
+
+              {(operationType === 'first' || operationType === 'last') && hasMultipleCardinality && (
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Attribut de tri</label>
+                  <select
+                    value={sortAttributeId}
+                    onChange={(e) => setSortAttributeId(e.target.value)}
+                    className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                  >
+                    <option value="">Sélectionner un attribut</option>
+                    {availableAttributes.map((attr) => (
+                      <option key={attr.id} value={attr.id}>
+                        {attr.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {operationType === 'aggregation' ? (
+                <div className="space-y-3 rounded border border-amber-300 bg-amber-50/40 p-3">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Opération</label>
+                    <select
+                      value={aggregationType}
+                      onChange={(e) => {
+                        const nextOp = e.target.value as AggregationType;
+                        setAggregationType(nextOp);
+                        if (aggregationAttributeId) {
+                          const currentAttr = availableAttributes.find((a) => a.id === aggregationAttributeId);
+                          const allowed = currentAttr?.type === 'number'
+                            ? ['COUNT', 'CONCAT', 'SUM', 'MIN', 'MAX', 'AVG']
+                            : currentAttr?.type === 'date'
+                            ? ['COUNT', 'CONCAT', 'MIN', 'MAX']
+                            : ['COUNT', 'CONCAT'];
+                          if (!allowed.includes(nextOp)) setAggregationAttributeId('');
+                        }
+                      }}
+                      className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                    >
+                      {allAggregations.map((agg) => (
+                        <option key={agg} value={agg}>
+                          {aggregationLabels[agg]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Attribut à agréger</label>
+                    <select
+                      value={aggregationAttributeId}
+                      onChange={(e) => setAggregationAttributeId(e.target.value)}
+                      className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                    >
+                      <option value="">Sélectionner un attribut</option>
+                      {availableAttributes
+                        .filter((attr) => {
+                          if (aggregationType === 'SUM' || aggregationType === 'AVG') return attr.type === 'number';
+                          if (aggregationType === 'MIN' || aggregationType === 'MAX') return attr.type === 'number' || attr.type === 'date';
+                          return true;
+                        })
+                        .map((attr) => (
+                          <option key={attr.id} value={attr.id}>
+                            {attr.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  {aggregationType === 'CONCAT' && (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700">
+                          Attribut de tri pour la concaténation
+                        </label>
+                        <select
+                          value={aggregationSortAttributeId}
+                          onChange={(e) => setAggregationSortAttributeId(e.target.value)}
+                          className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                        >
+                          <option value="">Sélectionner un attribut</option>
+                          {availableAttributes.map((attr) => (
+                            <option key={attr.id} value={attr.id}>
+                              {attr.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700">
+                          Sens du tri
+                        </label>
+                        <select
+                          value={aggregationSortDirection}
+                          onChange={(e) => setAggregationSortDirection(e.target.value as 'asc' | 'desc')}
+                          className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                        >
+                          <option value="asc">Croissant</option>
+                          <option value="desc">Décroissant</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                renderGroupedAttributesList('yellow')
+              )}
+            </div>
+          )}
+
           {mode === 'aggregation' && (
             <div className="space-y-3 rounded border border-purple-200 bg-purple-50 p-3">
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Attribut à agréger</label>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Opération</label>
                 <select
-                  value={aggregationAttributeId}
+                  value={aggregationType}
                   onChange={(e) => {
-                    const nextId = e.target.value;
-                    setAggregationAttributeId(nextId);
-                    const nextAttr = availableAttributes.find((attr) => attr.id === nextId);
-                    const nextAllowed = nextAttr?.type === 'number'
-                      ? ['COUNT', 'CONCAT', 'SUM', 'MIN', 'MAX', 'AVG']
-                      : nextAttr?.type === 'date'
-                      ? ['COUNT', 'CONCAT', 'MIN', 'MAX']
-                      : ['COUNT', 'CONCAT'];
-                    if (!nextAllowed.includes(aggregationType)) {
-                      setAggregationType(nextAllowed[0] as AggregationType);
+                    const nextOp = e.target.value as AggregationType;
+                    setAggregationType(nextOp);
+                    // Réinitialise l'attribut si incompatible avec la nouvelle opération
+                    if (aggregationAttributeId) {
+                      const currentAttr = availableAttributes.find((a) => a.id === aggregationAttributeId);
+                      const allowed = currentAttr?.type === 'number'
+                        ? ['COUNT', 'CONCAT', 'SUM', 'MIN', 'MAX', 'AVG']
+                        : currentAttr?.type === 'date'
+                        ? ['COUNT', 'CONCAT', 'MIN', 'MAX']
+                        : ['COUNT', 'CONCAT'];
+                      if (!allowed.includes(nextOp)) setAggregationAttributeId('');
                     }
                   }}
                   className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
                 >
-                  <option value="">Sélectionner un attribut</option>
-                  {availableAttributes.map((attr) => (
-                    <option key={attr.id} value={attr.id}>
-                      {attr.name}
+                  {allAggregations.map((agg) => (
+                    <option key={agg} value={agg}>
+                      {aggregationLabels[agg]}
                     </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Opération</label>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Attribut à agréger</label>
                 <select
-                  value={aggregationType}
-                  onChange={(e) => setAggregationType(e.target.value as AggregationType)}
+                  value={aggregationAttributeId}
+                  onChange={(e) => setAggregationAttributeId(e.target.value)}
                   className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
                 >
-                  {(aggregationAttributeId ? availableAggregationTypes : allAggregations.slice(0, 2)).map((agg) => (
-                    <option key={agg} value={agg}>
-                      {aggregationLabels[agg]}
-                    </option>
-                  ))}
+                  <option value="">Sélectionner un attribut</option>
+                  {availableAttributes
+                    .filter((attr) => {
+                      if (aggregationType === 'SUM' || aggregationType === 'AVG') return attr.type === 'number';
+                      if (aggregationType === 'MIN' || aggregationType === 'MAX') return attr.type === 'number' || attr.type === 'date';
+                      return true; // COUNT et CONCAT acceptent tout
+                    })
+                    .map((attr) => (
+                      <option key={attr.id} value={attr.id}>
+                        {attr.name}
+                      </option>
+                    ))}
                 </select>
               </div>
 

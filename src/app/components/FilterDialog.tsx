@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
 import { AttributeType, DataObject } from '../data/dataStructure';
 import { FilterCondition, FilterGroup, SelectedAttribute } from '../types/selection';
@@ -14,6 +14,8 @@ interface FilterDialogProps {
   objectAttributes?: DataObject['attributes'];
   // Attributs déjà présents dans le rapport, utilisables en comparaison si même type
   selectedFilterAttributes?: Array<{ id: string; name: string; columnName?: string; type: AttributeType }>;
+  compartmentFilterAttributes?: Array<{ id: string; name: string; values: string[]; sourceAttributeName: string }>;
+  showCompartmenting?: boolean;
 }
 
 export function FilterDialog({
@@ -25,17 +27,42 @@ export function FilterDialog({
   onConfirm,
   objectAttributes,
   selectedFilterAttributes,
+  compartmentFilterAttributes = [],
+  showCompartmenting = false,
 }: FilterDialogProps) {
+  const filterTargets = useMemo(
+    () => [
+      ...(objectAttributes ?? []).map((attr) => ({
+        id: attr.id,
+        name: attr.name,
+        type: attr.type,
+        targetKind: 'native' as const,
+      })),
+      ...(showCompartmenting
+        ? compartmentFilterAttributes.map((attr) => ({
+            id: attr.id,
+            name: attr.name,
+            type: 'string' as AttributeType,
+            targetKind: 'compartment' as const,
+            values: attr.values,
+            sourceAttributeName: attr.sourceAttributeName,
+          }))
+        : []),
+    ],
+    [objectAttributes, showCompartmenting, compartmentFilterAttributes]
+  );
+
   const [filterGroups, setFilterGroups] = useState<FilterGroup[]>(
     currentFilterGroups && currentFilterGroups.length > 0
       ? currentFilterGroups
       : [{
           conditions: [{
-            attributeId: '',
+            attributeId: filterTargets[0]?.id ?? '',
             attributeName: attributeName,
-            attributeType: attributeType,
+            attributeType: filterTargets[0]?.type ?? attributeType,
             operator: 'equals',
             value: '',
+            targetKind: filterTargets[0]?.targetKind ?? 'native',
           }],
           logicalOperator: 'ET',
         }]
@@ -48,17 +75,18 @@ export function FilterDialog({
       } else {
         setFilterGroups([{
           conditions: [{
-            attributeId: '',
+            attributeId: filterTargets[0]?.id ?? '',
             attributeName: attributeName,
-            attributeType: attributeType,
+            attributeType: filterTargets[0]?.type ?? attributeType,
             operator: 'equals',
             value: '',
+            targetKind: filterTargets[0]?.targetKind ?? 'native',
           }],
           logicalOperator: 'ET',
         }]);
       }
     }
-  }, [isOpen, currentFilterGroups, attributeName, attributeType]);
+  }, [isOpen, currentFilterGroups, attributeName, attributeType, filterTargets]);
 
   if (!isOpen) return null;
 
@@ -67,6 +95,16 @@ export function FilterDialog({
       { value: 'equals' as const, label: 'Égal à' },
       { value: 'notEquals' as const, label: 'Différent de' },
     ];
+
+    if (attrType === 'string') {
+      return [
+        ...common,
+        { value: 'contains' as const, label: 'Contient' },
+        { value: 'startsWith' as const, label: 'Commence par' },
+        { value: 'endsWith' as const, label: 'Termine par' },
+        { value: 'in' as const, label: 'Appartient à' },
+      ];
+    }
 
     if (attrType === 'number' || attrType === 'date') {
       const operators = [
@@ -88,15 +126,6 @@ export function FilterDialog({
       return operators;
     }
 
-    if (attrType === 'string') {
-      return [
-        ...common,
-        { value: 'contains' as const, label: 'Contient' },
-        { value: 'startsWith' as const, label: 'Commence par' },
-        { value: 'endsWith' as const, label: 'Termine par' },
-      ];
-    }
-
     return common;
   };
 
@@ -113,19 +142,23 @@ export function FilterDialog({
       { value: 'endsWith' as const, label: 'Termine par' },
       { value: 'isEmpty' as const, label: 'Vide' },
       { value: 'isNotEmpty' as const, label: 'Renseignée' },
+      { value: 'in' as const, label: 'in' },
     ];
     return allOperators.find(op => op.value === operator)?.label || operator;
   };
 
   const addConditionToGroup = (groupIndex: number) => {
     const newGroups = [...filterGroups];
-    const selectedAttr = objectAttributes?.[0] || { id: '', name: attributeName, type: attributeType };
+    const selectedAttr = filterTargets[0] || { id: '', name: attributeName, type: attributeType, targetKind: 'native' as const };
     newGroups[groupIndex].conditions.push({
       attributeId: selectedAttr.id,
       attributeName: selectedAttr.name,
       attributeType: selectedAttr.type,
       operator: 'equals',
       value: '',
+      targetKind: selectedAttr.targetKind,
+      compartmentSourceAttributeId: selectedAttr.targetKind === 'compartment' ? selectedAttr.id : undefined,
+      compartmentSourceAttributeName: selectedAttr.targetKind === 'compartment' ? selectedAttr.name : undefined,
     });
     setFilterGroups(newGroups);
   };
@@ -157,7 +190,7 @@ export function FilterDialog({
   };
 
   const addFilterGroup = () => {
-    const selectedAttr = objectAttributes?.[0] || { id: '', name: attributeName, type: attributeType };
+    const selectedAttr = filterTargets[0] || { id: '', name: attributeName, type: attributeType, targetKind: 'native' as const };
     setFilterGroups([
       ...filterGroups,
       {
@@ -167,6 +200,9 @@ export function FilterDialog({
           attributeType: selectedAttr.type,
           operator: 'equals',
           value: '',
+          targetKind: selectedAttr.targetKind,
+          compartmentSourceAttributeId: selectedAttr.targetKind === 'compartment' ? selectedAttr.id : undefined,
+          compartmentSourceAttributeName: selectedAttr.targetKind === 'compartment' ? selectedAttr.name : undefined,
         }],
         logicalOperator: 'ET',
       },
@@ -203,14 +239,20 @@ export function FilterDialog({
     const newGroups = [...filterGroups];
     
     // Si on change l'attribut sélectionné, mettre à jour aussi le type
-    if (field === 'attributeId' && objectAttributes) {
-      const selectedAttr = objectAttributes.find(attr => attr.id === value);
+    if (field === 'attributeId') {
+      const selectedAttr = filterTargets.find(attr => attr.id === value);
       if (selectedAttr) {
         newGroups[groupIndex].conditions[conditionIndex].attributeId = selectedAttr.id;
         newGroups[groupIndex].conditions[conditionIndex].attributeName = selectedAttr.name;
         newGroups[groupIndex].conditions[conditionIndex].attributeType = selectedAttr.type;
-        newGroups[groupIndex].conditions[conditionIndex].operator = 'equals';
-        newGroups[groupIndex].conditions[conditionIndex].value = '';
+        newGroups[groupIndex].conditions[conditionIndex].targetKind = selectedAttr.targetKind;
+        newGroups[groupIndex].conditions[conditionIndex].compartmentSourceAttributeId = selectedAttr.targetKind === 'compartment' ? selectedAttr.id : undefined;
+        newGroups[groupIndex].conditions[conditionIndex].compartmentSourceAttributeName = selectedAttr.targetKind === 'compartment' ? selectedAttr.name : undefined;
+        newGroups[groupIndex].conditions[conditionIndex].operator = selectedAttr.targetKind === 'compartment' ? 'in' : 'equals';
+        newGroups[groupIndex].conditions[conditionIndex].value = selectedAttr.targetKind === 'compartment' ? [] : '';
+        newGroups[groupIndex].conditions[conditionIndex].valueType = 'fixed';
+        newGroups[groupIndex].conditions[conditionIndex].referenceAttributeId = undefined;
+        newGroups[groupIndex].conditions[conditionIndex].referenceAttributeName = undefined;
       }
     } else {
       (newGroups[groupIndex].conditions[conditionIndex] as any)[field] = value;
@@ -238,7 +280,7 @@ export function FilterDialog({
           cond => cond.operator === 'isEmpty' ||
                   cond.operator === 'isNotEmpty' ||
                   (cond.valueType === 'attribute' && !!cond.referenceAttributeId) ||
-                  ((cond.valueType !== 'attribute') && (cond.value !== '' && cond.value !== null && cond.value !== undefined))
+                  ((cond.valueType !== 'attribute') && ((Array.isArray(cond.value) && cond.value.length > 0) || (!Array.isArray(cond.value) && cond.value !== '' && cond.value !== null && cond.value !== undefined)))
         ),
       }))
       .filter(group => group.conditions.length > 0);
@@ -267,30 +309,34 @@ export function FilterDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="font-semibold text-gray-900">Filtres sur {attributeName}</h3>
+          <h3 className="font-semibold text-gray-900">Filtres</h3>
           <button onClick={onClose} className="rounded p-1 hover:bg-gray-100">
             <X className="size-5 text-gray-600" />
           </button>
         </div>
 
         {hasActiveFilters && (
-          <div className="mb-4 rounded bg-blue-50 p-3">
-            <p className="mb-2 text-sm font-medium text-blue-900">Filtres actifs :</p>
-            <div className="space-y-1 text-sm text-blue-800">
+          <div className="mb-4 rounded border border-orange-200 bg-orange-50 p-3">
+            <p className="mb-2 text-sm font-medium text-orange-900">Filtres actifs :</p>
+            <div className="space-y-1 text-sm text-orange-800">
               {currentFilterGroups.map((group, gIdx) => (
                 <div key={gIdx}>
-                  {gIdx > 0 && <div className="my-1 font-bold text-blue-900">OU</div>}
+                  {gIdx > 0 && <div className="my-1 font-bold text-orange-900">OU</div>}
                   <div className="ml-2">
                     {group.conditions.length > 1 && <span>(</span>}
                     {group.conditions.map((cond, cIdx) => (
                       <span key={cIdx}>
-                        {cIdx > 0 && <span className="font-semibold text-blue-900"> {group.logicalOperator} </span>}
+                        {cIdx > 0 && <span className="font-semibold text-orange-900"> {group.logicalOperator} </span>}
                         <span className="font-medium">{cond.attributeName}</span> {getOperatorLabel(cond.operator)}
                         {cond.operator !== 'isEmpty' && cond.operator !== 'isNotEmpty' && (
                           cond.valueType === 'attribute' && cond.referenceAttributeName ? (
                             <span> <span className="italic">{cond.referenceAttributeName}</span></span>
                           ) : (
-                            <span> &quot;{cond.value?.toString()}&quot;</span>
+                            <span>
+                              {Array.isArray(cond.value)
+                                ? ` [${cond.value.join(', ')}]`
+                                : ` "${cond.value?.toString()}"`}
+                            </span>
                           )
                         )}
                       </span>
@@ -303,14 +349,6 @@ export function FilterDialog({
           </div>
         )}
 
-        <div className="mb-4 rounded bg-gray-50 p-3 text-sm text-gray-700">
-          <p className="font-medium">Logique de filtrage :</p>
-          <ul className="ml-4 mt-1 list-disc space-y-1">
-            <li>Les conditions dans un même groupe sont liées par <strong>ET</strong> ou <strong>OU</strong></li>
-            <li>Les différents groupes sont toujours liés par <strong>OU</strong></li>
-          </ul>
-        </div>
-
         <div className="space-y-4">
           {filterGroups.map((group, groupIndex) => (
             <div key={groupIndex} className="rounded border-2 border-gray-300 bg-white p-4">
@@ -322,7 +360,7 @@ export function FilterDialog({
                       onClick={() => updateGroupOperator(groupIndex, 'ET')}
                       className={`rounded px-3 py-1 text-xs font-medium ${
                         group.logicalOperator === 'ET'
-                          ? 'bg-blue-600 text-white'
+                          ? 'bg-orange-600 text-white'
                           : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
                       }`}
                     >
@@ -332,7 +370,7 @@ export function FilterDialog({
                       onClick={() => updateGroupOperator(groupIndex, 'OU')}
                       className={`rounded px-3 py-1 text-xs font-medium ${
                         group.logicalOperator === 'OU'
-                          ? 'bg-blue-600 text-white'
+                          ? 'bg-orange-600 text-white'
                           : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
                       }`}
                     >
@@ -355,20 +393,21 @@ export function FilterDialog({
                 {group.conditions.map((condition, conditionIndex) => (
                   (() => {
                     const comparableAttributes = (selectedFilterAttributes ?? []).filter(
-                      (attr) => attr.type === condition.attributeType
+                      (attr) => attr.type === condition.attributeType && condition.targetKind !== 'compartment'
                     );
+                    const selectedCompartmentTarget = compartmentFilterAttributes.find((attr) => attr.id === condition.attributeId);
 
                     return (
                   <div key={conditionIndex} className="flex items-start gap-2">
                     {conditionIndex > 0 && (
-                      <div className="flex h-10 items-center rounded bg-blue-100 px-2 text-xs font-semibold text-blue-700">
+                      <div className="flex h-10 items-center rounded bg-orange-100 px-2 text-xs font-semibold text-orange-700">
                         {group.logicalOperator}
                       </div>
                     )}
                     
                     <div className="flex flex-1 gap-2">
                       {/* Sélection de l'attribut (uniquement pour les agrégations) */}
-                      {objectAttributes && objectAttributes.length > 0 && (
+                      {filterTargets.length > 0 && (
                         <div className="flex-1">
                           <label className="mb-1 block text-xs font-medium text-gray-700">
                             Attribut
@@ -378,11 +417,20 @@ export function FilterDialog({
                             onChange={(e) => updateCondition(groupIndex, conditionIndex, 'attributeId', e.target.value)}
                             className="w-full rounded border border-gray-300 px-2 py-2 text-sm"
                           >
-                            {objectAttributes.map((attr) => (
+                            {(objectAttributes ?? []).map((attr) => (
                               <option key={attr.id} value={attr.id}>
                                 {attr.name}
                               </option>
                             ))}
+                            {showCompartmenting && compartmentFilterAttributes.length > 0 && (
+                              <optgroup label="Attributs compartimentés">
+                                {compartmentFilterAttributes.map((attr) => (
+                                  <option key={attr.id} value={attr.id}>
+                                    {attr.name}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
                           </select>
                         </div>
                       )}
@@ -465,6 +513,28 @@ export function FilterDialog({
                                 </option>
                               ))}
                             </select>
+                          ) : condition.targetKind === 'compartment' && selectedCompartmentTarget ? (
+                            <div className="space-y-1 rounded border border-gray-200 p-2">
+                              {selectedCompartmentTarget.values.map((value) => {
+                                const currentValues = Array.isArray(condition.value) ? condition.value : [];
+                                const checked = currentValues.includes(value);
+                                return (
+                                  <label key={value} className="flex items-center gap-2 text-sm text-gray-700">
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={() => {
+                                        const nextValues = checked
+                                          ? currentValues.filter((current) => current !== value)
+                                          : [...currentValues, value];
+                                        updateCondition(groupIndex, conditionIndex, 'value', nextValues);
+                                      }}
+                                    />
+                                    <span>{value}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
                           ) : condition.attributeType === 'boolean' ? (
                             <select
                               value={condition.value?.toString() || ''}

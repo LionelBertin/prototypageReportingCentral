@@ -17,6 +17,29 @@ export interface ObjectRelation {
   recursiveMagicSel?: boolean;
 }
 
+export type SmartObjectFilterOperator =
+  | 'equals'
+  | 'greaterThan'
+  | 'lessThan'
+  | 'greaterOrEqual'
+  | 'lessOrEqual'
+  | 'contains';
+
+export interface SmartObjectFilterCondition {
+  attributePath: string;
+  operator: SmartObjectFilterOperator;
+  value: string | number | boolean | 'dateDuJour';
+}
+
+export interface SmartObjectDefinition {
+  title: string;
+  columns: string[];
+  filters?: {
+    logicalOperator: 'ET' | 'OU';
+    conditions: SmartObjectFilterCondition[];
+  };
+}
+
 export interface DataObject {
   id: string;
   name: string;
@@ -25,6 +48,7 @@ export interface DataObject {
   applicationDate?: boolean;
   isApplicable?: boolean;
   relations?: ObjectRelation[];
+  smartObjects?: SmartObjectDefinition[];
 }
 
 export interface Theme {
@@ -72,9 +96,9 @@ export const dataStructure: Theme[] = [
           rel('collaborateurs', 'adresse-residence', 'Adresse de résidence', 'Adresse de résidence'),
           rel('collaborateurs', 'informations-contact', 'Informations contact', 'Informations contact'),
           rel('collaborateurs', 'contact-urgence', "Contact d'urgence", "Contact d'urgence"),
-          rel('collaborateurs', 'documents-identite', "Documents d'identité collaborateur", "Documents d'identité", '1..n'),
-          rel('collaborateurs', 'enfants-charge', 'Enfants à charge collaborateur', 'Enfants à charge', '0..n'),
-          rel('collaborateurs', 'taille-goodies', 'Taille goodies collaborateur', 'Taille goodies'),
+          rel('collaborateurs', 'documents-identite', "Documents d'identité", "Documents d'identité", '1..n'),
+          rel('collaborateurs', 'enfants-charge', 'Enfants à charge', 'Enfants à charge', '0..n'),
+          rel('collaborateurs', 'taille-goodies', 'Taille goodies', 'Taille goodies'),
         ],
       },
       {
@@ -124,7 +148,7 @@ export const dataStructure: Theme[] = [
       },
       {
         id: 'documents-identite',
-        name: "Documents d'identité collaborateur",
+        name: "Documents d'identité",
         cardinality: '1..n <> 1 Collaborateur',
         attributes: [
           { id: 'type-document', name: 'type de document', type: 'string' },
@@ -136,7 +160,7 @@ export const dataStructure: Theme[] = [
       },
       {
         id: 'enfants-charge',
-        name: 'Enfants à charge collaborateur',
+        name: 'Enfants à charge',
         cardinality: '0..n <> 1 Collaborateur',
         attributes: [
           { id: 'nom-enfant', name: 'nom', type: 'string' },
@@ -148,7 +172,7 @@ export const dataStructure: Theme[] = [
       },
       {
         id: 'taille-goodies',
-        name: 'Taille goodies collaborateur',
+        name: 'Taille goodies',
         cardinality: '1 <> 1 Collaborateur',
         attributes: [
           { id: 'taille-cm', name: 'taille en cm', type: 'number' },
@@ -211,59 +235,8 @@ export const dataStructure: Theme[] = [
     name: 'Les absences',
     objects: [
       {
-        id: 'absences-validees',
-        name: 'Absences validées',
-        cardinality: "0..n <> 1 Collaborateur de l'absence, 0..n <> 1 Collaborateur approbation",
-        attributes: [
-          { id: 'type-compte-validee', name: 'type compte', type: 'string', magicSel: true },
-          { id: 'date-demande-validee', name: 'date demande', type: 'date' },
-          { id: 'date-approbation', name: 'date approbation', type: 'date' },
-          { id: 'date-debut-validee', name: 'date début', type: 'date', magicSel: true },
-          { id: 'date-fin-validee', name: 'date fin', type: 'date', magicSel: true },
-          { id: 'duree-reelle-validee', name: 'durée réelle', type: 'number' },
-          { id: 'duree-ouvree-validee', name: 'durée ouvrée', type: 'number', magicSel: true },
-        ],
-        relations: [
-          rel('collaborateurs', 'collaborateur', 'Collaborateur', "Collaborateur de l'absence", '1', true),
-          rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur approbation'),
-        ],
-      },
-      {
-        id: 'absences-refusees',
-        name: 'Absences refusées',
-        cardinality: "0..n <> 1 Collaborateur de l'absence, 0..n <> 1 Collaborateur refus",
-        attributes: [
-          { id: 'type-compte-refusee', name: 'type compte', type: 'string', magicSel: true },
-          { id: 'date-demande-refusee', name: 'date demande', type: 'date', magicSel: true },
-          { id: 'date-refus', name: 'date refus', type: 'date', magicSel: true },
-          { id: 'motivation-refus', name: 'motivation du refus', type: 'string', magicSel: true },
-          { id: 'date-debut-refusee', name: 'date début', type: 'date' },
-          { id: 'date-fin-refusee', name: 'date fin', type: 'date' },
-          { id: 'duree-reelle-refusee', name: 'durée réelle', type: 'number' },
-          { id: 'duree-ouvree-refusee', name: 'durée ouvrée', type: 'number' },
-        ],
-        relations: [
-          rel('collaborateurs', 'collaborateur', 'Collaborateur', "Collaborateur de l'absence", '1', true),
-          rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur refus'),
-        ],
-      },
-      {
-        id: 'absences-attente',
-        name: 'Absences en attente de validation',
-        cardinality: "0..n <> 1 Collaborateur de l'absence",
-        attributes: [
-          { id: 'type-compte-attente', name: 'type compte', type: 'string', magicSel: true },
-          { id: 'date-demande-attente', name: 'date demande', type: 'date', magicSel: true },
-          { id: 'date-debut-attente', name: 'date début', type: 'date' },
-          { id: 'date-fin-attente', name: 'date fin', type: 'date' },
-          { id: 'duree-reelle-attente', name: 'durée réelle', type: 'number' },
-          { id: 'duree-ouvree-attente', name: 'durée ouvrée', type: 'number', magicSel: true },
-        ],
-        relations: [rel('collaborateurs', 'collaborateur', 'Collaborateur', "Collaborateur de l'absence", '1', true)],
-      },
-      {
         id: 'absences-mod-alt',
-        name: 'Absences_mod_alt',
+        name: 'Absences',
         cardinality:
           "0..n <> 1 Collaborateur qui a posé l'absence, 0..n <> 1 Collaborateur qui bénéficie de l'absence, 0..n <> 1 Collaborateur qui a approuvé l'absence, 0..n <> 1 Collaborateur qui a refusé l'absence",
         attributes: [
@@ -283,6 +256,115 @@ export const dataStructure: Theme[] = [
           rel('collaborateurs', 'collaborateur', 'Collaborateur', "Collaborateur qui bénéficie de l'absence", '1', true),
           rel('collaborateurs', 'collaborateur', 'Collaborateur', "Collaborateur qui a approuvé l'absence"),
           rel('collaborateurs', 'collaborateur', 'Collaborateur', "Collaborateur qui a refusé l'absence"),
+        ],
+        smartObjects: [
+          {
+            title: 'Absences approuvées',
+            columns: [
+              'type compte',
+              'date début',
+              'date fin',
+              'Collaborateur_Absence.nom',
+              'Collaborateur_Absence.prénom',
+              'Collaborateur_Approbation.nom',
+              'Collaborateur_Approbation.prénom',
+            ],
+            filters: {
+              logicalOperator: 'ET',
+              conditions: [{ attributePath: 'statut', operator: 'equals', value: 'approuvé' }],
+            },
+          },
+          {
+            title: 'Absences à venir',
+            columns: [
+              'type compte',
+              'date début',
+              'date fin',
+              'Collaborateur_Absence.nom',
+              'Collaborateur_Absence.prénom',
+              'Collaborateur_Approbation.nom',
+              'Collaborateur_Approbation.prénom',
+            ],
+            filters: {
+              logicalOperator: 'ET',
+              conditions: [
+                { attributePath: 'statut', operator: 'equals', value: 'approuvé' },
+                { attributePath: 'date début', operator: 'greaterThan', value: 'dateDuJour' },
+              ],
+            },
+          },
+          {
+            title: 'Absences passées',
+            columns: [
+              'type compte',
+              'date début',
+              'date fin',
+              'Collaborateur_Absence.nom',
+              'Collaborateur_Absence.prénom',
+              'Collaborateur_Approbation.nom',
+              'Collaborateur_Approbation.prénom',
+            ],
+            filters: {
+              logicalOperator: 'ET',
+              conditions: [
+                { attributePath: 'statut', operator: 'equals', value: 'approuvé' },
+                { attributePath: 'date début', operator: 'lessOrEqual', value: 'dateDuJour' },
+              ],
+            },
+          },
+          {
+            title: 'Absences en attente de validation',
+            columns: [
+              'type compte',
+              'durée ouvrée',
+              'Collaborateur_Absence.nom',
+              'Collaborateur_Absence.prénom',
+              'Collaborateur_Absence.poste[applicable].manager.nom',
+              'Collaborateur_Absence.poste[applicable].manager.prénom',
+            ],
+            filters: {
+              logicalOperator: 'ET',
+              conditions: [{ attributePath: 'statut', operator: 'equals', value: 'à traiter' }],
+            },
+          },
+          {
+            title: 'Absences passées refusées',
+            columns: [
+              'date refus',
+              'motivation du refus',
+              'durée ouvrée',
+              'Collaborateur_Absence.nom',
+              'Collaborateur_Absence.prénom',
+              'Collaborateur_Refus.nom',
+              'Collaborateur_Refus.prénom',
+            ],
+            filters: {
+              logicalOperator: 'ET',
+              conditions: [
+                { attributePath: 'statut', operator: 'equals', value: 'refusé' },
+                { attributePath: 'date début', operator: 'lessOrEqual', value: 'dateDuJour' },
+              ],
+            },
+          },
+          {
+            title: 'Absences futures refusées',
+            columns: [
+              'date refus',
+              'motivation du refus',
+              'durée ouvrée',
+              'Collaborateur_Absence.nom',
+              'Collaborateur_Absence.prénom',
+              'Collaborateur_Refus.nom',
+              'Collaborateur_Refus.prénom',
+            ],
+            filters: {
+              logicalOperator: 'ET',
+              conditions: [
+                { attributePath: 'statut', operator: 'equals', value: 'refusé' },
+                { attributePath: 'date début', operator: 'greaterThan', value: 'dateDuJour' },
+              ],
+            },
+          },
         ],
       },
       {
@@ -340,7 +422,7 @@ export const dataStructure: Theme[] = [
       },
       {
         id: 'depenses-mod-alt',
-        name: 'Dépenses_mod_alt',
+        name: 'Dépenses',
         cardinality: '0..n <> 1 Collaborateur de la dépense, 0..n <> 1 Collaborateur refus, 0..n <> 1 Collaborateur approbation',
         attributes: [
           { id: 'statut-depense-mod-alt', name: 'statut', type: 'string', magicSel: true },
@@ -635,7 +717,6 @@ export const dataStructure: Theme[] = [
           { id: 'nom-departement', name: 'Nom', type: 'string', magicSel: true },
           { id: 'code-departement', name: 'Code', type: 'string' },
         ],
-        relations: [rel('referentiels', 'etablissement', 'Etablissement', 'Etablissement')],
       },
       {
         id: 'etablissement',
