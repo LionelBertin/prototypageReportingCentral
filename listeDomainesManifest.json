@@ -432,13 +432,13 @@
             {
               "id": "date-de-naissance",
               "name": "Date de naissance",
-              "magicSel": false,
+              "magicSel": true,
               "dataType": "date"
             },
             {
               "id": "prenom",
               "name": "Prénom",
-              "magicSel": false,
+              "magicSel": true,
               "dataType": "string"
             }
           ]
@@ -2693,7 +2693,7 @@
         },
         {
           "id": "historique-des-syntheses-d-entretiens",
-          "name": "Historique des synthèses d'entretiens",
+          "name": "Synthèses d'entretiens",
           "relations": [
             {
               "targetObject": "Collaborateur",

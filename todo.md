@@ -5,7 +5,7 @@
 
 
 ## réduction des cardinalités
-réintégrer "opération" et "valeur spéciale" suite à l'insertion par défaut de la lsite détaillée ?
+réintégrer "opération" et "valeur spéciale" suite à l'insertion par défaut de la liste détaillée ?
 
 
 ## filtrer facilement 
@@ -25,8 +25,6 @@ une notion de date/période de rapport serait utile
 
 ###########################################################
 # P3
-## Objets liés proposés
-j'ai encore des objets liés trop profonds qui sont proposés en passant par exemple via les postes à pourvoir, les doc partagés, les départements, les établissements...
 
 
 ###########################################################

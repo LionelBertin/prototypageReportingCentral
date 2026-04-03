@@ -102,6 +102,18 @@ export function AttributeSelector() {
   const [showColumnRename, setShowColumnRename] = useState(false);
   const [showLinkedObjectCardinalities, setShowLinkedObjectCardinalities] = useState(true);
   const [showSelectAllButton, setShowSelectAllButton] = useState(true);
+  const [reportDate, setReportDate] = useState(() => {
+    const today = new Date();
+    return [
+      today.getFullYear(),
+      String(today.getMonth() + 1).padStart(2, '0'),
+      String(today.getDate()).padStart(2, '0'),
+    ].join('-');
+  });
+  const [includeDepartedCollaborators, setIncludeDepartedCollaborators] = useState(false);
+  const [includePresentCollaborators, setIncludePresentCollaborators] = useState(true);
+  const [includeFutureCollaborators, setIncludeFutureCollaborators] = useState(false);
+  const [collaboratorStatusFilterExpanded, setCollaboratorStatusFilterExpanded] = useState(false);
   const [prototypeConfigOpen, setPrototypeConfigOpen] = useState(false);
   const [draftShowCompartmenting, setDraftShowCompartmenting] = useState(false);
   const [draftShowConditionalColumns, setDraftShowConditionalColumns] = useState(false);
@@ -179,6 +191,64 @@ export function AttributeSelector() {
   const isSingleRelationCardinality = (cardinality?: string) => {
     if (!cardinality) return true;
     return !cardinality.includes('n');
+  };
+
+  const isObjectLinkedToCollaborateur = (themeId: string, objectId: string) => {
+    const objectByKey = new Map(
+      dataStructure.flatMap((theme) =>
+        theme.objects.map((obj) => [`${theme.id}::${obj.id}`, { themeId: theme.id, obj }] as const)
+      )
+    );
+
+    const queue: Array<{ themeId: string; objectId: string }> = [{ themeId, objectId }];
+    const visited = new Set<string>();
+
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (!current) continue;
+
+      const currentKey = `${current.themeId}::${current.objectId}`;
+      if (visited.has(currentKey)) continue;
+      visited.add(currentKey);
+
+      const found = objectByKey.get(currentKey as `${string}::${string}`);
+      if (!found) continue;
+
+      if (found.obj.id === 'collaborateur' || found.obj.name.trim().toLocaleLowerCase() === 'collaborateur') {
+        return true;
+      }
+
+      for (const relation of found.obj.relations ?? []) {
+        if (!isSingleRelationCardinality(relation.cardinality)) continue;
+        const targetKey = `${relation.targetThemeId}::${relation.targetObjectId}`;
+        if (!visited.has(targetKey)) {
+          queue.push({ themeId: relation.targetThemeId, objectId: relation.targetObjectId });
+        }
+      }
+
+      for (const [sourceKey, sourceEntry] of objectByKey.entries()) {
+        if (visited.has(sourceKey)) continue;
+
+        const inboundRelation = (sourceEntry.obj.relations ?? []).find(
+          (relation) =>
+            relation.targetThemeId === current.themeId
+            && relation.targetObjectId === current.objectId
+            && isSingleRelationCardinality(relation.cardinalityFrom)
+        );
+
+        if (!inboundRelation) continue;
+        queue.push({ themeId: sourceEntry.themeId, objectId: sourceEntry.obj.id });
+      }
+    }
+
+    return false;
+  };
+
+  const getFormattedReportDate = (isoDate: string) => {
+    if (!isoDate) return '';
+    const [year, month, day] = isoDate.split('-');
+    if (!year || !month || !day) return isoDate;
+    return `${day}/${month}/${year}`;
   };
 
   const getDefaultSortAttributeId = (attributes: AvailableObjectAttribute[]) => {
@@ -1208,6 +1278,11 @@ export function AttributeSelector() {
     setObjectInsertionDialogOpen(false);
     setSortColumnIds([]);
     setPendingSortColumnId('');
+    setReportDate(getTodayIsoDate());
+    setIncludeDepartedCollaborators(false);
+    setIncludePresentCollaborators(true);
+    setIncludeFutureCollaborators(false);
+    setCollaboratorStatusFilterExpanded(false);
   };
 
   const handleResetSelections = () => {
@@ -1388,6 +1463,31 @@ export function AttributeSelector() {
         ? `(${group.conditions.map(getGlobalFilterConditionLabel).join(` ${group.logicalOperator} `)})`
         : group.conditions.map(getGlobalFilterConditionLabel).join(` ${group.logicalOperator} `)
     );
+  };
+
+  const getCollaboratorStatusFilterLines = () => {
+    const formattedDate = getFormattedReportDate(reportDate);
+    const lines: string[] = [];
+
+    if (includeDepartedCollaborators) {
+      lines.push(
+        `Partis: collaborateurs ayant un contrat avec Date fin <= ${formattedDate} et n'ayant aucun contrat avec Date début >= ${formattedDate}.`
+      );
+    }
+
+    if (includePresentCollaborators) {
+      lines.push(
+        `Présents: collaborateurs ayant un contrat avec Date début <= ${formattedDate} et (Date fin >= ${formattedDate} ou Date fin vide).`
+      );
+    }
+
+    if (includeFutureCollaborators) {
+      lines.push(
+        `Futurs: collaborateurs ayant un contrat avec Date début >= ${formattedDate} et n'ayant aucun contrat avec Date fin <= ${formattedDate}.`
+      );
+    }
+
+    return lines;
   };
 
   const getSortableSelectedAttributes = () => {
@@ -1767,6 +1867,10 @@ export function AttributeSelector() {
   const deselectAllSelectedAttributes = () => {
     setSelectedAttributes([]);
     setGlobalFilterGroups(undefined);
+    setReportDate(getTodayIsoDate());
+    setIncludeDepartedCollaborators(false);
+    setIncludePresentCollaborators(true);
+    setIncludeFutureCollaborators(false);
   };
 
   const normalizeSearchText = (value: string) => value
@@ -1847,6 +1951,22 @@ export function AttributeSelector() {
   const availableSortPickers = sortableSelectedAttributes.filter(
     (attr) => !sortColumnIds.includes(attr.id) && !groupedColumnIds.includes(attr.id)
   );
+  const mainObjectLinkedToCollaborateur = !!(
+    !selectingMainObject
+    && mainObject
+    && isObjectLinkedToCollaborateur(mainObject.themeId, mainObject.objectId)
+  );
+  const activeCollaboratorStatusLabels = [
+    includeDepartedCollaborators ? 'partis' : null,
+    includePresentCollaborators ? 'présents' : null,
+    includeFutureCollaborators ? 'futurs' : null,
+  ].filter((label): label is string => label !== null);
+  const activeCollaboratorStatusSummary =
+    activeCollaboratorStatusLabels.length === 0
+      ? 'aucun'
+      : activeCollaboratorStatusLabels.length === 1
+      ? activeCollaboratorStatusLabels[0]
+      : `${activeCollaboratorStatusLabels.slice(0, -1).join(', ')} et ${activeCollaboratorStatusLabels[activeCollaboratorStatusLabels.length - 1]}`;
 
   return (
     <div className="flex h-screen flex-col">
@@ -2101,6 +2221,84 @@ export function AttributeSelector() {
                 <div className="space-y-3">
                   <div className="rounded border border-gray-200 bg-white p-2 text-xs text-gray-800">
                     <div className="mb-1 text-[11px] font-medium leading-none text-gray-700">Filtrage</div>
+                    <div className={`mb-2 rounded border border-orange-200 bg-orange-50 ${!mainObjectLinkedToCollaborateur ? 'opacity-60' : ''}`}>
+                      <button
+                        type="button"
+                        onClick={() => setCollaboratorStatusFilterExpanded((prev) => !prev)}
+                        className="flex w-full items-center justify-between px-2 py-1.5 text-left text-[11px] text-orange-900"
+                      >
+                        <span className="font-medium">Statuts collaborateurs</span>
+                        <span>
+                          {mainObjectLinkedToCollaborateur
+                            ? `${activeCollaboratorStatusSummary} · Date ${getFormattedReportDate(reportDate)}`
+                            : 'Non applicable'}
+                        </span>
+                      </button>
+
+                      {collaboratorStatusFilterExpanded && (
+                        <div className="space-y-2 border-t border-orange-200 px-2 py-2">
+                          {!mainObjectLinkedToCollaborateur && (
+                            <div className="text-[11px] text-orange-900">
+                              Aucun lien (même indirect) avec Collaborateur depuis l'objet principal.
+                            </div>
+                          )}
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            <label className="text-[11px] font-medium text-orange-900" htmlFor="report-date">
+                              Date du rapport
+                            </label>
+                            <input
+                              id="report-date"
+                              type="date"
+                              value={reportDate}
+                              onChange={(event) => setReportDate(event.target.value)}
+                              disabled={!mainObjectLinkedToCollaborateur}
+                              className="rounded border border-orange-300 bg-white px-2 py-1 text-[11px] text-orange-900"
+                            />
+                            <span className="text-[11px] text-orange-800">{getFormattedReportDate(reportDate)}</span>
+                          </div>
+
+                          <div className="flex flex-wrap gap-3 text-[11px] text-orange-900">
+                            <label className="flex items-center gap-1">
+                              <input
+                                type="checkbox"
+                                checked={includeDepartedCollaborators}
+                                onChange={(event) => setIncludeDepartedCollaborators(event.target.checked)}
+                                disabled={!mainObjectLinkedToCollaborateur}
+                              />
+                              partis
+                            </label>
+                            <label className="flex items-center gap-1">
+                              <input
+                                type="checkbox"
+                                checked={includePresentCollaborators}
+                                onChange={(event) => setIncludePresentCollaborators(event.target.checked)}
+                                disabled={!mainObjectLinkedToCollaborateur}
+                              />
+                              présents
+                            </label>
+                            <label className="flex items-center gap-1">
+                              <input
+                                type="checkbox"
+                                checked={includeFutureCollaborators}
+                                onChange={(event) => setIncludeFutureCollaborators(event.target.checked)}
+                                disabled={!mainObjectLinkedToCollaborateur}
+                              />
+                              futurs
+                            </label>
+                          </div>
+
+                          {mainObjectLinkedToCollaborateur && getCollaboratorStatusFilterLines().length > 0 && (
+                            <div className="space-y-1 rounded border border-orange-200 bg-white p-2 text-[11px] text-orange-900">
+                              {getCollaboratorStatusFilterLines().map((line, index) => (
+                                <div key={index}>• {line}</div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
                     <button
                       onClick={() => setGlobalFilterDialogOpen(true)}
                       className="w-full rounded border border-orange-200 bg-orange-50 p-2 text-left text-xs text-orange-800 hover:bg-orange-100"
@@ -2403,7 +2601,18 @@ export function AttributeSelector() {
                   <button
                     className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
                     onClick={() => {
-                      console.log('Selected attributes:', selectedAttributes);
+                      console.log('Report payload:', {
+                        selectedAttributes,
+                        globalFilterGroups,
+                        collaboratorStatusFilter: {
+                          enabled: mainObjectLinkedToCollaborateur,
+                          reportDate,
+                          includeDepartedCollaborators,
+                          includePresentCollaborators,
+                          includeFutureCollaborators,
+                          generatedLines: mainObjectLinkedToCollaborateur ? getCollaboratorStatusFilterLines() : [],
+                        },
+                      });
                       alert('Configuration sauvegardée ! Voir la console pour les détails.');
                     }}
                   >
