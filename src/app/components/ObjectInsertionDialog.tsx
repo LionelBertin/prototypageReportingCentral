@@ -24,6 +24,7 @@ interface ObjectInsertionDialogProps {
   objectName: string;
   cardinality: string;
   objectSupportsApplicable?: boolean;
+  objectApplicationDateMandatory?: boolean;
   availableAttributes: Array<{
     id: string;
     name: string;
@@ -79,6 +80,7 @@ export function ObjectInsertionDialog({
   objectName,
   cardinality,
   objectSupportsApplicable = false,
+  objectApplicationDateMandatory = false,
   availableAttributes,
   smartObjects = [],
   availableDateAttributes,
@@ -87,6 +89,7 @@ export function ObjectInsertionDialog({
   onConfirm,
 }: ObjectInsertionDialogProps) {
   const mode: ObjectInsertionMode = initialMode;
+  const shouldForceApplicableDate = objectSupportsApplicable && objectApplicationDateMandatory;
   const [selectedAttributeIds, setSelectedAttributeIds] = useState<string[]>(
     availableAttributes.filter((attr) => !!attr.smartSel).map((attr) => attr.id)
   );
@@ -134,8 +137,8 @@ export function ObjectInsertionDialog({
     setReferenceAttributeId(initialConfig?.dateReference?.attributeId ?? '');
     setAttributeSearchTerm('');
     setSmartFilterGroups(initialConfig?.smartFilterGroups);
-    setApplyApplicableToday(!!initialConfig?.applyApplicableToday);
-  }, [isOpen, availableAttributes, initialConfig, objectSupportsApplicable, cardinality]);
+    setApplyApplicableToday(initialConfig?.applyApplicableToday ?? shouldForceApplicableDate);
+  }, [isOpen, availableAttributes, initialConfig, objectSupportsApplicable, objectApplicationDateMandatory, cardinality, shouldForceApplicableDate]);
 
   const normalize = (value: string) =>
     value
@@ -480,7 +483,7 @@ export function ObjectInsertionDialog({
         insertionType: 'normal',
         selectedAttributeIds,
         smartFilterGroups,
-        applyApplicableToday,
+        applyApplicableToday: shouldForceApplicableDate || applyApplicableToday,
       });
       onClose();
       return;

@@ -4,7 +4,6 @@
 # P1
 
 
-
 ## réduction des cardinalités
 réintégrer "opération" et "valeur spéciale" suite à l'insertion par défaut de la lsite détaillée ?
 

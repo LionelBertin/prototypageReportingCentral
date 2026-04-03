@@ -48,6 +48,8 @@ export interface SmartObjectFilterGroupDefinition {
 export interface ApplicationDateConfig {
   startAttributeId?: string;
   endAttributeId?: string;
+  mandatory?: boolean;
+  resultingSingleLine?: boolean;
 }
 
 export interface SmartObjectDefinition {
@@ -101,7 +103,7 @@ type ManifestObject = {
   id: string;
   name: string;
   cardinality?: string;
-  applicationDate?: boolean | { startAttributeId?: string; endAttributeId?: string };
+  applicationDate?: boolean | { startAttributeId?: string; endAttributeId?: string; mandatory?: boolean; resultingSingleLine?: boolean };
   isApplicable?: boolean;
   description?: string;
   attributes?: ManifestAttribute[];
@@ -591,24 +593,22 @@ const buildDataStructure = (): Theme[] => {
     name: domain.name,
     description: domain.description,
     objects: (domain.objects ?? []).map((obj) => {
-      const relations: ObjectRelation[] = (obj.relations ?? [])
-        .map((relation) => {
-          const target = resolveRelationTarget(relation, domain.id, objectLookup);
-          if (!target) return null;
+      const relations: ObjectRelation[] = (obj.relations ?? []).flatMap((relation) => {
+        const target = resolveRelationTarget(relation, domain.id, objectLookup);
+        if (!target) return [];
 
-          return {
-            targetThemeId: target.themeId,
-            targetObjectId: target.objectId,
-            targetObjectName: target.objectName,
-            label: relation.relationName || target.objectName,
-            cardinality: normalizeCardinality(relation.cardinalityTo || relation.cardinalityFrom),
-            cardinalityFrom: normalizeCardinality(relation.cardinalityFrom || relation.cardinalityTo),
-            magicSel: !!relation.magicSel,
-            recursiveMagicSel: !!relation.recursiveMagicSel,
-            description: relation.description,
-          };
-        })
-        .filter((relation): relation is ObjectRelation => relation !== null);
+        return [{
+          targetThemeId: target.themeId,
+          targetObjectId: target.objectId,
+          targetObjectName: target.objectName,
+          label: relation.relationName || target.objectName,
+          cardinality: normalizeCardinality(relation.cardinalityTo || relation.cardinalityFrom),
+          cardinalityFrom: normalizeCardinality(relation.cardinalityFrom || relation.cardinalityTo),
+          magicSel: !!relation.magicSel,
+          recursiveMagicSel: !!relation.recursiveMagicSel,
+          description: relation.description,
+        }];
+      });
 
       return {
         id: obj.id,
@@ -617,8 +617,15 @@ const buildDataStructure = (): Theme[] => {
         cardinality: obj.cardinality || buildFallbackCardinality(obj),
         applicationDate: !!obj.applicationDate,
         applicationDateConfig: (typeof obj.applicationDate === 'object' && obj.applicationDate !== null)
-          ? { startAttributeId: obj.applicationDate.startAttributeId, endAttributeId: obj.applicationDate.endAttributeId }
-          : undefined,
+          ? {
+              startAttributeId: obj.applicationDate.startAttributeId,
+              endAttributeId: obj.applicationDate.endAttributeId,
+              mandatory: !!obj.applicationDate.mandatory,
+              resultingSingleLine: !!obj.applicationDate.resultingSingleLine,
+            }
+          : (obj.applicationDate
+            ? { mandatory: false, resultingSingleLine: false }
+            : undefined),
         isApplicable: !!obj.isApplicable || !!obj.applicationDate,
         attributes: (obj.attributes ?? []).map((attribute) => ({
           id: attribute.id,

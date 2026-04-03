@@ -316,7 +316,9 @@
           "name": "Contrats",
           "applicationDate": {
             "startAttributeId": "date-d-but",
-            "endAttributeId": "date-fin"
+            "endAttributeId": "date-fin",
+            "mandatory": false,
+            "resultingSingleLine": true
           },
           "relations": [
             {
@@ -413,7 +415,9 @@
           "name": "Postes",
           "applicationDate": {
             "startAttributeId": "date-d-but",
-            "endAttributeId": "date-fin"
+            "endAttributeId": "date-fin",
+            "mandatory": false,
+            "resultingSingleLine": true
           },
           "relations": [
             {
@@ -694,7 +698,10 @@
         {
           "id": "solde-de-cong-s",
           "name": "Solde de congés",
-          "applicationDate": true,
+          "applicationDate": {
+            "mandatory": true,
+            "resultingSingleLine": true
+          },
           "relations": [
             {
               "targetObject": "Collaborateur",
@@ -858,8 +865,8 @@
       ]
     },
     {
-      "id": "les-entretiens",
-      "name": "Les entretiens",
+      "id": "talents-comp-tences",
+      "name": "Talent & compétences",
       "objects": [
         {
           "id": "entretiens",
@@ -923,6 +930,48 @@
               "name": "Commentaire final",
               "magicSel": true,
               "dataType": "string"
+            }
+          ]
+        },
+        {
+          "id": "objectifs",
+          "name": "Objectifs",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+            },
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Manager",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "description",
+              "name": "Description",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "date-d-but",
+              "name": "Date début",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "date-fin",
+              "name": "Date fin",
+              "magicSel": true,
+              "dataType": "date"
             }
           ]
         }
@@ -1121,60 +1170,18 @@
       ]
     },
     {
-      "id": "les-objectifs",
-      "name": "Les objectifs",
-      "objects": [
-        {
-          "id": "objectifs",
-          "name": "Objectifs",
-          "relations": [
-            {
-              "targetObject": "Collaborateur",
-              "relationName": "Collaborateur",
-              "cardinalityFrom": "many",
-              "cardinalityTo": "one",
-              "recursiveMagicSel": true,
-              "magicSel": false
-            },
-            {
-              "targetObject": "Collaborateur",
-              "relationName": "Manager",
-              "cardinalityFrom": "many",
-              "cardinalityTo": "one",
-              "recursiveMagicSel": false,
-              "magicSel": false
-            }
-          ],
-          "attributes": [
-            {
-              "id": "description",
-              "name": "Description",
-              "magicSel": true,
-              "dataType": "string"
-            },
-            {
-              "id": "date-d-but",
-              "name": "Date début",
-              "magicSel": true,
-              "dataType": "date"
-            },
-            {
-              "id": "date-fin",
-              "name": "Date fin",
-              "magicSel": true,
-              "dataType": "date"
-            }
-          ]
-        }
-      ]
-    },
-    {
       "id": "les-r-mun-rations",
       "name": "Les rémunérations",
       "objects": [
         {
           "id": "r-mun-ration-th-orique-fixe",
           "name": "Rémunération théorique fixe",
+          "applicationDate": {
+            "startAttributeId": "date-d-but",
+            "endAttributeId": "date-fin",
+            "mandatory": false,
+            "resultingSingleLine": false
+          },
           "relations": [
             {
               "targetObject": "Collaborateur",
@@ -1203,6 +1210,12 @@
               "name": "Montant",
               "magicSel": true,
               "dataType": "number"
+            },
+            {
+              "id": "nature-de-r-mun-ration",
+              "name": "Nature de rémunération",
+              "magicSel": true,
+              "dataType": "string"
             },
             {
               "id": "p-riodicit",
@@ -1513,8 +1526,8 @@
           "name": "Candidats",
           "relations": [
             {
-              "targetObject": "Candidatures",
-              "relationName": "Candidatures",
+              "targetObject": "Candidature",
+              "relationName": "Candidature",
               "cardinalityFrom": "one",
               "cardinalityTo": "many",
               "recursiveMagicSel": false,

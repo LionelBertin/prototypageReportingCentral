@@ -266,7 +266,7 @@ export function SelectionPanel({
     <div className="h-full overflow-y-auto bg-white p-4">
       {selectedAttributes.length === 0 ? (
         <p className="text-sm text-gray-500">
-          Aucun attribut sélectionné. Cliquez sur un attribut dans la structure pour l'ajouter.
+          Cliquez sur un attribut dans la structure pour le sélectionner.
         </p>
       ) : (
         <div className="space-y-2">

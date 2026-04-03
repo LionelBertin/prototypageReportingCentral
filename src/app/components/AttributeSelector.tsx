@@ -30,6 +30,7 @@ type PendingObjectInsertion = {
   cardinality: string;
   mode: 'detailed' | 'operation' | 'aggregation' | 'special';
   isApplicable?: boolean;
+  applicationDateMandatory?: boolean;
   smartObjects?: SmartObjectDefinition[];
   navigationPath?: NavigationPath;
   directMagicOnly?: boolean;
@@ -46,6 +47,7 @@ type AvailableObjectAttribute = {
   smartSel?: boolean;
   autoSmartSel?: boolean;
   sourceObjectSupportsApplicable: boolean;
+  sourceObjectApplicationDateMandatory: boolean;
   sourceThemeId: string;
   sourceThemeName: string;
   sourceObjectId: string;
@@ -64,6 +66,7 @@ type Stage2ObjectGroup = {
   navigationPath: NavigationPath;
   isSelectable: boolean;
   objectSupportsApplicable: boolean;
+  objectApplicationDateMandatory: boolean;
   attributes: AvailableObjectAttribute[];
 };
 
@@ -147,9 +150,7 @@ export function AttributeSelector() {
       aggregationType,
       filterGroups,
       isApplicable: effectiveApplicable,
-      dateReference: insertionType === 'applicable'
-        ? (dateReference ?? { type: 'today' })
-        : (effectiveApplicable ? { type: 'today' } : undefined),
+      dateReference: effectiveApplicable ? (dateReference ?? { type: 'today' }) : undefined,
       applicationDateConfig: sourceObj?.applicationDateConfig,
       navigationPath,
     };
@@ -252,6 +253,7 @@ export function AttributeSelector() {
           smartSel: shouldMarkAsDefault,
           autoSmartSel: shouldMarkForAutoInsert,
           sourceObjectSupportsApplicable: !!(currentObject.applicationDate || currentObject.isApplicable),
+          sourceObjectApplicationDateMandatory: !!currentObject.applicationDateConfig?.mandatory,
           sourceThemeId: currentThemeId,
           sourceThemeName: currentTheme?.name ?? currentThemeId,
           sourceObjectId: currentObjectId,
@@ -362,6 +364,7 @@ export function AttributeSelector() {
         magicSel: attr.magicSel,
         smartSel: !!attr.magicSel,
         sourceObjectSupportsApplicable: !!(obj.applicationDate || obj.isApplicable),
+        sourceObjectApplicationDateMandatory: !!obj.applicationDateConfig?.mandatory,
         sourceThemeId: theme.id,
         sourceThemeName: theme.name,
         sourceObjectId: obj.id,
@@ -412,6 +415,7 @@ export function AttributeSelector() {
     const defaultAttributes = objectAttributes.filter((attr) => !!attr.autoSmartSel);
     const todayDate = getTodayIsoDate();
     const mainObjectSupportsApplicable = !!(obj.applicationDate || obj.isApplicable);
+    const mainObjectApplicationDateMandatory = !!obj.applicationDateConfig?.mandatory;
 
     const autoInserted = defaultAttributes.map((attr) =>
       buildSelectedAttribute({
@@ -422,9 +426,9 @@ export function AttributeSelector() {
         attributeId: attr.id,
         attributeName: attr.rawName,
         attributeType: attr.type,
-        insertionType: attr.sourceObjectSupportsApplicable ? 'applicable' : 'normal',
-        isApplicable: attr.sourceObjectSupportsApplicable,
-        dateReference: attr.sourceObjectSupportsApplicable
+        insertionType: attr.sourceObjectSupportsApplicable && attr.sourceObjectApplicationDateMandatory ? 'applicable' : 'normal',
+        isApplicable: attr.sourceObjectSupportsApplicable && attr.sourceObjectApplicationDateMandatory,
+        dateReference: attr.sourceObjectSupportsApplicable && attr.sourceObjectApplicationDateMandatory
           ? { type: 'custom', customDate: todayDate }
           : undefined,
         navigationPath: attr.relativeNavigationPath,
@@ -439,11 +443,13 @@ export function AttributeSelector() {
     });
     setMainObjectConfig(
       mainObjectSupportsApplicable
-        ? {
-            insertionType: 'applicable',
-            dateReference: { type: 'custom', customDate: todayDate },
-            applyApplicableToday: true,
-          }
+        ? (mainObjectApplicationDateMandatory
+          ? {
+              insertionType: 'applicable',
+              dateReference: { type: 'custom', customDate: todayDate },
+              applyApplicableToday: true,
+            }
+          : { insertionType: 'normal' })
         : { insertionType: 'normal' }
     );
     setSelectingMainObject(false);
@@ -516,7 +522,7 @@ export function AttributeSelector() {
     const todayDate = getTodayIsoDate();
     const groups = smartObject.filters.groups
       .map((filterGroup) => {
-        const conditions = filterGroup.conditions
+        const conditions: FilterGroup['conditions'] = filterGroup.conditions
           .map((condition) => {
             const matched = availableAttributes.find((attribute) =>
               matchSmartPathToAttribute(attribute, condition.attributePath)
@@ -544,12 +550,13 @@ export function AttributeSelector() {
 
         if (conditions.length === 0) return null;
 
-        return {
+        const nextGroup: FilterGroup = {
           logicalOperator: filterGroup.logicalOperator,
           conditions,
         };
+        return nextGroup;
       })
-      .filter((group): group is FilterGroup => group !== null);
+      .filter((group): group is NonNullable<typeof group> => group !== null);
 
     return groups.length > 0 ? groups : undefined;
   };
@@ -593,9 +600,9 @@ export function AttributeSelector() {
           attributeId: attribute.id,
           attributeName: attribute.rawName,
           attributeType: attribute.type,
-          insertionType: attribute.sourceObjectSupportsApplicable ? 'applicable' : 'normal',
-          isApplicable: attribute.sourceObjectSupportsApplicable,
-          dateReference: attribute.sourceObjectSupportsApplicable
+          insertionType: attribute.sourceObjectSupportsApplicable && attribute.sourceObjectApplicationDateMandatory ? 'applicable' : 'normal',
+          isApplicable: attribute.sourceObjectSupportsApplicable && attribute.sourceObjectApplicationDateMandatory,
+          dateReference: attribute.sourceObjectSupportsApplicable && attribute.sourceObjectApplicationDateMandatory
             ? { type: 'custom', customDate: todayDate }
             : undefined,
           navigationPath: attribute.relativeNavigationPath,
@@ -895,8 +902,11 @@ export function AttributeSelector() {
             && smartFilterTargetObjectKeys.has(attributeObjectKey);
 
           const shouldApplyDateReference =
-            (config.insertionType === 'applicable' || config.applyApplicableToday)
-            && attr.sourceObjectSupportsApplicable;
+            (attr.sourceObjectSupportsApplicable && attr.sourceObjectApplicationDateMandatory)
+            || (
+              (config.insertionType === 'applicable' || config.applyApplicableToday)
+              && attr.sourceObjectSupportsApplicable
+            );
 
           const nextInsertionType: InsertionType = shouldApplyDateReference
             ? 'applicable'
@@ -1278,31 +1288,27 @@ export function AttributeSelector() {
     )
   );
 
-  const getGlobalFilterSummary = () => {
-    if (!globalFilterGroups || globalFilterGroups.length === 0) {
-      return 'Aucun filtre global défini';
-    }
-    const totalConditions = globalFilterGroups.reduce((sum, group) => sum + group.conditions.length, 0);
-    return `${globalFilterGroups.length} groupe${globalFilterGroups.length > 1 ? 's' : ''} (${totalConditions} condition${totalConditions > 1 ? 's' : ''})`;
+  const getGlobalFilterOperatorLabel = (operator: FilterGroup['conditions'][number]['operator']) => {
+    const allOperators: Array<{ value: FilterGroup['conditions'][number]['operator']; label: string }> = [
+      { value: 'equals', label: 'Égal à' },
+      { value: 'notEquals', label: 'Différent de' },
+      { value: 'greaterThan', label: 'Supérieur à' },
+      { value: 'lessThan', label: 'Inférieur à' },
+      { value: 'greaterOrEqual', label: 'Supérieur ou égal à' },
+      { value: 'lessOrEqual', label: 'Inférieur ou égal à' },
+      { value: 'contains', label: 'Contient' },
+      { value: 'startsWith', label: 'Commence par' },
+      { value: 'endsWith', label: 'Termine par' },
+      { value: 'isEmpty', label: 'Vide' },
+      { value: 'isNotEmpty', label: 'Renseignée' },
+      { value: 'in', label: 'in' },
+    ];
+
+    return allOperators.find((entry) => entry.value === operator)?.label ?? operator;
   };
 
   const getGlobalFilterConditionLabel = (condition: FilterGroup['conditions'][number]) => {
-    const operatorLabels: Record<string, string> = {
-      equals: '=',
-      notEquals: '!=',
-      greaterThan: '>',
-      lessThan: '<',
-      greaterOrEqual: '>=',
-      lessOrEqual: '<=',
-      contains: 'contient',
-      startsWith: 'commence par',
-      endsWith: 'termine par',
-      isEmpty: 'vide',
-      isNotEmpty: 'renseignée',
-      in: 'in',
-    };
-
-    const op = operatorLabels[condition.operator] ?? condition.operator;
+    const op = getGlobalFilterOperatorLabel(condition.operator);
 
     if (condition.operator === 'isEmpty' || condition.operator === 'isNotEmpty') {
       return `${condition.attributeName} ${op}`;
@@ -1314,7 +1320,7 @@ export function AttributeSelector() {
 
     const renderedValue = Array.isArray(condition.value)
       ? `[${condition.value.join(', ')}]`
-      : `${condition.value}`;
+      : `"${condition.value}"`;
 
     return `${condition.attributeName} ${op} ${renderedValue}`;
   };
@@ -1322,7 +1328,9 @@ export function AttributeSelector() {
   const getGlobalFilterGroupLines = () => {
     if (!globalFilterGroups || globalFilterGroups.length === 0) return [] as string[];
     return globalFilterGroups.map((group) =>
-      group.conditions.map(getGlobalFilterConditionLabel).join(` ${group.logicalOperator} `)
+      group.conditions.length > 1
+        ? `(${group.conditions.map(getGlobalFilterConditionLabel).join(` ${group.logicalOperator} `)})`
+        : group.conditions.map(getGlobalFilterConditionLabel).join(` ${group.logicalOperator} `)
     );
   };
 
@@ -1377,7 +1385,7 @@ export function AttributeSelector() {
       branchVisited: Set<string>
     ) => {
       const currentKey = `${themeId}::${objectId}`;
-      const found = objectByKey.get(currentKey);
+      const found = objectByKey.get(currentKey as `${string}::${string}`);
       if (!found) return;
 
       groups.push({
@@ -1391,6 +1399,7 @@ export function AttributeSelector() {
         navigationPath,
         isSelectable,
         objectSupportsApplicable: !!(found.obj.applicationDate || found.obj.isApplicable),
+        objectApplicationDateMandatory: !!found.obj.applicationDateConfig?.mandatory,
       });
 
       if (!isSelectable) return;
@@ -1404,7 +1413,7 @@ export function AttributeSelector() {
         const relationTargetKey = `${relation.targetThemeId}::${relation.targetObjectId}`;
         if (nextVisited.has(relationTargetKey)) continue;
 
-        const childFound = objectByKey.get(relationTargetKey);
+        const childFound = objectByKey.get(relationTargetKey as `${string}::${string}`);
         if (!childFound) continue;
 
         const childPath = [
@@ -1518,9 +1527,9 @@ export function AttributeSelector() {
         attributeId: attr.id,
         attributeName: attr.rawName,
         attributeType: attr.type,
-        insertionType: attr.sourceObjectSupportsApplicable ? 'applicable' : 'normal',
-        isApplicable: attr.sourceObjectSupportsApplicable,
-        dateReference: attr.sourceObjectSupportsApplicable
+        insertionType: attr.sourceObjectSupportsApplicable && attr.sourceObjectApplicationDateMandatory ? 'applicable' : 'normal',
+        isApplicable: attr.sourceObjectSupportsApplicable && attr.sourceObjectApplicationDateMandatory,
+        dateReference: attr.sourceObjectSupportsApplicable && attr.sourceObjectApplicationDateMandatory
           ? { type: 'custom', customDate: todayDate }
           : undefined,
         navigationPath: attr.relativeNavigationPath,
@@ -1604,6 +1613,7 @@ export function AttributeSelector() {
       cardinality: group.cardinality,
       mode: preset === 'aggregation' ? 'aggregation' : preset === 'applicable' ? 'special' : 'operation',
       isApplicable: group.objectSupportsApplicable,
+      applicationDateMandatory: group.objectApplicationDateMandatory,
       smartObjects: obj.smartObjects,
       navigationPath: group.navigationPath,
       initialConfig,
@@ -1767,8 +1777,8 @@ export function AttributeSelector() {
                       ) : (
                         <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                           <div className="mb-2">
-                            {group.objectSupportsApplicable
-                              ? 'Cet objet est multi-instance. Le choix par défaut est Applicable à la date du jour.'
+                            {group.objectSupportsApplicable && group.objectApplicationDateMandatory
+                              ? 'Cet objet est multi-instance. Une date est obligatoire, le choix par défaut est Applicable à la date du jour.'
                               : 'Cet objet est multi-instance. Choisissez un mode pour retomber sur une instance exploitable.'}
                           </div>
                           <div className="flex flex-wrap gap-2">
@@ -1860,11 +1870,12 @@ export function AttributeSelector() {
                       className="w-full rounded border border-orange-200 bg-orange-50 p-2 text-left text-xs text-orange-800 hover:bg-orange-100"
                       title="Modifier le filtrage global"
                     >
-                      <div className="mb-1 font-medium">{getGlobalFilterSummary()}</div>
+                      <div className="mb-1 font-medium">Filtres actifs :</div>
                       <div className="space-y-1">
                         {getGlobalFilterGroupLines().map((line, index) => (
                           <div key={index}>
-                            Groupe {index + 1}: {line}
+                            {index > 0 && <div className="my-1 font-bold text-orange-900">OU</div>}
+                            <div className="ml-2">{line}</div>
                           </div>
                         ))}
                       </div>
@@ -1901,6 +1912,7 @@ export function AttributeSelector() {
           objectName={pendingObjectInsertion.objectName}
           cardinality={pendingObjectInsertion.cardinality}
           objectSupportsApplicable={!!pendingObjectInsertion.isApplicable}
+          objectApplicationDateMandatory={!!pendingObjectInsertion.applicationDateMandatory}
           availableAttributes={getInsertionAvailableAttributes(pendingObjectInsertion)}
           smartObjects={pendingObjectInsertion.smartObjects}
           availableDateAttributes={getAvailableDateAttributes().map((attr) => ({
@@ -1920,7 +1932,7 @@ export function AttributeSelector() {
                     : [edited.attributeId];
 
                   return {
-                    insertionType: edited.insertionType,
+                    insertionType: edited.insertionType as Extract<InsertionType, 'first' | 'last' | 'aggregation'>,
                     selectedAttributeIds,
                     aggregationAttributeId: edited.insertionType === 'aggregation' ? edited.attributeId : undefined,
                     aggregationType: edited.aggregationType,

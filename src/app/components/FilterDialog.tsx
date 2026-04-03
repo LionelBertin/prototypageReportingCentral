@@ -307,7 +307,7 @@ export function FilterDialog({
     return valueStr;
   };
 
-  const hasActiveFilters = currentFilterGroups && currentFilterGroups.length > 0;
+  const hasActiveFilters = !!(currentFilterGroups && currentFilterGroups.length > 0);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -318,40 +318,6 @@ export function FilterDialog({
             <X className="size-5 text-gray-600" />
           </button>
         </div>
-
-        {hasActiveFilters && (
-          <div className="mb-4 rounded border border-orange-200 bg-orange-50 p-3">
-            <p className="mb-2 text-sm font-medium text-orange-900">Filtres actifs :</p>
-            <div className="space-y-1 text-sm text-orange-800">
-              {currentFilterGroups.map((group, gIdx) => (
-                <div key={gIdx}>
-                  {gIdx > 0 && <div className="my-1 font-bold text-orange-900">OU</div>}
-                  <div className="ml-2">
-                    {group.conditions.length > 1 && <span>(</span>}
-                    {group.conditions.map((cond, cIdx) => (
-                      <span key={cIdx}>
-                        {cIdx > 0 && <span className="font-semibold text-orange-900"> {group.logicalOperator} </span>}
-                        <span className="font-medium">{cond.attributeName}</span> {getOperatorLabel(cond.operator)}
-                        {cond.operator !== 'isEmpty' && cond.operator !== 'isNotEmpty' && (
-                          cond.valueType === 'attribute' && cond.referenceAttributeName ? (
-                            <span> <span className="italic">{cond.referenceAttributeName}</span></span>
-                          ) : (
-                            <span>
-                              {Array.isArray(cond.value)
-                                ? ` [${cond.value.join(', ')}]`
-                                : ` "${cond.value?.toString()}"`}
-                            </span>
-                          )
-                        )}
-                      </span>
-                    ))}
-                    {group.conditions.length > 1 && <span>)</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         <div className="space-y-4">
           {filterGroups.map((group, groupIndex) => (
