@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { SelectionPanel } from './SelectionPanel';
 import MainObjectPicker from './MainObjectPicker';
 import { ObjectInsertionDialog, ObjectInsertionConfig } from './ObjectInsertionDialog';
 import { FilterDialog } from './FilterDialog';
+import { ReportResultDrawer } from './ReportResultDrawer';
 import { CompartmentDialog } from './CompartmentDialog';
 import { ConditionalColumnDialog } from './ConditionalColumnDialog';
 import { CalculatedColumnDialog } from './CalculatedColumnDialog';
@@ -10,6 +11,7 @@ import { DateReferenceDialog } from './DateReferenceDialog';
 import { InfoHint } from './InfoHint';
 import { SelectedAttribute, AggregationType, InsertionType, FilterGroup, CompartmentConfig, DateReference, ConditionalColumnConfig, CalculatedColumnConfig } from '../types/selection';
 import { AttributeType, SmartObjectDefinition, dataStructure } from '../data/dataStructure';
+import { generateReportPreviewRows, ReportPreviewRow } from '../utils/reportPreview';
 
 type NavigationPath = NonNullable<SelectedAttribute['navigationPath']>;
 
@@ -77,6 +79,9 @@ type DepartmentNode = {
   children: DepartmentNode[];
 };
 
+const STATUS_DATE_REFERENCE_ATTRIBUTE_ID = '__status-collaborators-date__';
+const STATUS_DATE_REFERENCE_ATTRIBUTE_LABEL = 'Date de valeur du rapport';
+
 const parseDepartmentHierarchy = (raw: string): DepartmentNode[] => {
   const lines = raw
     .split(/\r?\n/)
@@ -117,6 +122,10 @@ const parseEstablishmentOptions = (raw: string) => Array.from(
       .filter(Boolean)
   )
 ).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+
+const flattenDepartmentTree = (nodes: DepartmentNode[]): string[] => {
+  return nodes.flatMap((node) => [node.name, ...flattenDepartmentTree(node.children)]);
+};
 
 function DepartmentTreeItem({
   node,
@@ -218,6 +227,9 @@ export function AttributeSelector() {
   const [establishmentOptions, setEstablishmentOptions] = useState<string[]>([]);
   const [collaboratorStatusFilterExpanded, setCollaboratorStatusFilterExpanded] = useState(false);
   const [prototypeConfigOpen, setPrototypeConfigOpen] = useState(false);
+  const [reportResultOpen, setReportResultOpen] = useState(false);
+  const [reportPreviewRows, setReportPreviewRows] = useState<ReportPreviewRow[]>([]);
+  const [reportPreviewLastUpdatedAt, setReportPreviewLastUpdatedAt] = useState<string>('');
   const [draftShowCompartmenting, setDraftShowCompartmenting] = useState(false);
   const [draftShowConditionalColumns, setDraftShowConditionalColumns] = useState(false);
   const [draftShowCalculatedColumns, setDraftShowCalculatedColumns] = useState(false);
@@ -626,7 +638,6 @@ export function AttributeSelector() {
 
     const objectAttributes = getObjectAttributes(themeId, objectId);
     const defaultAttributes = objectAttributes.filter((attr) => !!attr.autoSmartSel);
-    const todayDate = getTodayIsoDate();
     const mainObjectSupportsApplicable = !!(obj.applicationDate || obj.isApplicable);
     const mainObjectApplicationDateMandatory = !!obj.applicationDateConfig?.mandatory;
 
@@ -642,7 +653,7 @@ export function AttributeSelector() {
         insertionType: attr.sourceObjectSupportsApplicable && attr.sourceObjectApplicationDateMandatory ? 'applicable' : 'normal',
         isApplicable: attr.sourceObjectSupportsApplicable && attr.sourceObjectApplicationDateMandatory,
         dateReference: attr.sourceObjectSupportsApplicable && attr.sourceObjectApplicationDateMandatory
-          ? { type: 'custom', customDate: todayDate }
+          ? { type: 'today' }
           : undefined,
         navigationPath: attr.relativeNavigationPath,
       })
@@ -659,7 +670,7 @@ export function AttributeSelector() {
         ? (mainObjectApplicationDateMandatory
           ? {
               insertionType: 'applicable',
-              dateReference: { type: 'custom', customDate: todayDate },
+              dateReference: { type: 'today' },
               applyApplicableToday: true,
             }
           : { insertionType: 'normal' })
@@ -785,7 +796,7 @@ export function AttributeSelector() {
     if (!mainObject) return;
 
     const availableAttributes = getObjectAttributes(mainObject.themeId, mainObject.objectId);
-    const selectedAttributeIds = Array.from(
+    const columnAttributeIds = Array.from(
       new Set(
         smartObject.columns.flatMap((columnPath) => {
           const matched = availableAttributes.find((attribute) =>
@@ -796,12 +807,28 @@ export function AttributeSelector() {
       )
     );
 
+    const filterAttributeIds = Array.from(
+      new Set(
+        (smartObject.filters?.groups ?? []).flatMap((group) =>
+          group.conditions.flatMap((condition) => {
+            const matched = availableAttributes.find((attribute) =>
+              matchSmartPathToAttribute(attribute, condition.attributePath)
+            );
+            return matched ? [matched.id] : [];
+          })
+        )
+      )
+    );
+
+    const selectedAttributeIds = Array.from(
+      new Set([...columnAttributeIds, ...filterAttributeIds])
+    );
+
     if (selectedAttributeIds.length === 0) {
-      alert('Aucune colonne du preset n\'a pu être associée aux attributs disponibles.');
+      alert('Aucune colonne ou attribut de filtre du preset n\'a pu être associé aux attributs disponibles.');
       return;
     }
 
-    const todayDate = getTodayIsoDate();
     const presetAttributes = availableAttributes
       .filter((attribute) => selectedAttributeIds.includes(attribute.id))
       .map((attribute) =>
@@ -816,7 +843,7 @@ export function AttributeSelector() {
           insertionType: attribute.sourceObjectSupportsApplicable && attribute.sourceObjectApplicationDateMandatory ? 'applicable' : 'normal',
           isApplicable: attribute.sourceObjectSupportsApplicable && attribute.sourceObjectApplicationDateMandatory,
           dateReference: attribute.sourceObjectSupportsApplicable && attribute.sourceObjectApplicationDateMandatory
-            ? { type: 'custom', customDate: todayDate }
+            ? { type: 'today' }
             : undefined,
           navigationPath: attribute.relativeNavigationPath,
         })
@@ -884,7 +911,6 @@ export function AttributeSelector() {
         return;
       }
 
-      const customDate = getTodayIsoDate();
       const autoInserted = smartAttributes.map((attr) =>
         buildSelectedAttribute({
           themeId: attr.sourceThemeId,
@@ -897,7 +923,7 @@ export function AttributeSelector() {
           insertionType: attr.sourceObjectSupportsApplicable ? 'applicable' : 'normal',
           isApplicable: attr.sourceObjectSupportsApplicable,
           dateReference: attr.sourceObjectSupportsApplicable
-            ? { type: 'custom', customDate }
+            ? { type: 'today' }
             : undefined,
           navigationPath: [
             ...(navigationPath ?? []),
@@ -1095,15 +1121,6 @@ export function AttributeSelector() {
         .filter((attribute): attribute is NonNullable<typeof attribute> => !!attribute)
         .map((attribute) => `${attribute.sourceThemeId}::${attribute.sourceObjectId}`)
     );
-    const todayCustomDate = (() => {
-      const now = new Date();
-      return [
-        now.getFullYear(),
-        String(now.getMonth() + 1).padStart(2, '0'),
-        String(now.getDate()).padStart(2, '0'),
-      ].join('-');
-    })();
-
     const newAttributes = objectAttributes
       .filter((attr) => selectedIds.includes(attr.id))
       .map((attr) =>
@@ -1126,7 +1143,7 @@ export function AttributeSelector() {
             : (config.insertionType === 'applicable' ? 'normal' : config.insertionType);
 
           const nextDateReference = shouldApplyDateReference
-            ? (config.dateReference ?? (config.applyApplicableToday ? { type: 'custom', customDate: todayCustomDate } : undefined))
+            ? (config.dateReference ?? (config.applyApplicableToday ? { type: 'today' } : undefined))
             : undefined;
 
           return buildSelectedAttribute({
@@ -1540,7 +1557,7 @@ export function AttributeSelector() {
   };
 
   const getGlobalSelectedAttributesForFilter = () => {
-    return [...selectedAttributes]
+    const selectedFilterAttributes = [...selectedAttributes]
       .sort(compareSelectedAttributesByAttributeThenContext)
       .map((attr) => ({
       id: attr.id,
@@ -1548,6 +1565,16 @@ export function AttributeSelector() {
       columnName: getSelectedAttributeDisplayName(attr),
       type: attr.attributeType,
       }));
+
+    return [
+      ...selectedFilterAttributes,
+      {
+        id: STATUS_DATE_REFERENCE_ATTRIBUTE_ID,
+        name: STATUS_DATE_REFERENCE_ATTRIBUTE_LABEL,
+        columnName: STATUS_DATE_REFERENCE_ATTRIBUTE_LABEL,
+        type: 'date' as const,
+      },
+    ];
   };
 
   const getGlobalCompartmentFilterAttributes = () => {
@@ -1604,6 +1631,14 @@ export function AttributeSelector() {
 
   const getGlobalFilterConditionLabel = (condition: FilterGroup['conditions'][number]) => {
     const op = getGlobalFilterOperatorLabel(condition.operator);
+    const globalFilterAttributes = getGlobalSelectedAttributesForFilter();
+    const getFilterAttributeLabel = (attributeId?: string, fallbackLabel?: string) => {
+      if (!attributeId) return fallbackLabel ?? '';
+      const matchingAttribute = globalFilterAttributes.find((attr) => attr.id === attributeId);
+      return matchingAttribute?.columnName || matchingAttribute?.name || fallbackLabel || '';
+    };
+
+    const leftAttributeLabel = getFilterAttributeLabel(condition.attributeId, condition.attributeName);
     const formatFilterValue = (value: string | number | boolean) => {
       if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
         return getFormattedReportDate(value);
@@ -1612,18 +1647,19 @@ export function AttributeSelector() {
     };
 
     if (condition.operator === 'isEmpty' || condition.operator === 'isNotEmpty') {
-      return `${condition.attributeName} ${op}`;
+      return `${leftAttributeLabel} ${op}`;
     }
 
-    if (condition.valueType === 'attribute' && condition.referenceAttributeName) {
-      return `${condition.attributeName} ${op} ${condition.referenceAttributeName}`;
+    if (condition.valueType === 'attribute' && (condition.referenceAttributeId || condition.referenceAttributeName)) {
+      const rightAttributeLabel = getFilterAttributeLabel(condition.referenceAttributeId, condition.referenceAttributeName);
+      return `${leftAttributeLabel} ${op} ${rightAttributeLabel}`;
     }
 
     const renderedValue = Array.isArray(condition.value)
       ? `[${condition.value.map((value) => formatFilterValue(value)).join(', ')}]`
       : `"${formatFilterValue(condition.value)}"`;
 
-    return `${condition.attributeName} ${op} ${renderedValue}`;
+    return `${leftAttributeLabel} ${op} ${renderedValue}`;
   };
 
   const getGlobalFilterGroupLines = () => {
@@ -1999,7 +2035,6 @@ export function AttributeSelector() {
   };
 
   const buildMainObjectSelectedAttributes = (attributesToSelect: AvailableObjectAttribute[]) => {
-    const todayDate = getTodayIsoDate();
     return attributesToSelect.map((attr) =>
       buildSelectedAttribute({
         themeId: attr.sourceThemeId,
@@ -2012,7 +2047,7 @@ export function AttributeSelector() {
         insertionType: attr.sourceObjectSupportsApplicable && attr.sourceObjectApplicationDateMandatory ? 'applicable' : 'normal',
         isApplicable: attr.sourceObjectSupportsApplicable && attr.sourceObjectApplicationDateMandatory,
         dateReference: attr.sourceObjectSupportsApplicable && attr.sourceObjectApplicationDateMandatory
-          ? { type: 'custom', customDate: todayDate }
+          ? { type: 'today' }
           : undefined,
         navigationPath: attr.relativeNavigationPath,
       })
@@ -2104,13 +2139,12 @@ export function AttributeSelector() {
     const obj = theme?.objects.find((candidate) => candidate.id === group.objectId);
     if (!theme || !obj) return;
 
-    const todayDate = getTodayIsoDate();
     const initialConfig = preset === 'aggregation'
       ? undefined
       : preset === 'applicable'
       ? {
           insertionType: 'applicable' as const,
-          dateReference: { type: 'custom' as const, customDate: todayDate },
+          dateReference: { type: 'today' as const },
         }
       : {
           insertionType: preset,
@@ -2202,33 +2236,102 @@ export function AttributeSelector() {
     ...collaboratorStatusFilterLines,
     ...(collaboratorOrgFilterLine ? [collaboratorOrgFilterLine] : []),
   ];
+  const departmentFilterOptions = useMemo(
+    () => Array.from(new Set(flattenDepartmentTree(departmentTree))).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }),),
+    [departmentTree]
+  );
+  const reportPreviewColumns = selectedAttributes.map((attr) => ({
+    id: attr.id,
+    label: getSelectedAttributeDisplayName(attr),
+    attributeType: attr.attributeType,
+    attributeName: attr.attributeName,
+    insertionType: attr.insertionType,
+  }));
+
+  const refreshReportPreview = () => {
+    const rows = generateReportPreviewRows({
+      columns: reportPreviewColumns,
+      rowCount: 20,
+      reportDate,
+      globalFilterGroups,
+      collaboratorFilterEnabled: mainObjectLinkedToCollaborateur,
+      includeDepartedCollaborators,
+      includePresentCollaborators,
+      includeFutureCollaborators,
+      selectedDepartmentFilters,
+      selectedEstablishmentFilters,
+      departmentUniverse: departmentFilterOptions,
+      establishmentUniverse: establishmentOptions,
+      sortColumnIds,
+      groupedColumnIds,
+    });
+
+    setReportPreviewRows(rows);
+    const now = new Date();
+    const formattedDate = [
+      String(now.getDate()).padStart(2, '0'),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      now.getFullYear(),
+    ].join('/');
+    const formattedTime = `${String(now.getHours()).padStart(2, '0')}h${String(now.getMinutes()).padStart(2, '0')}`;
+    setReportPreviewLastUpdatedAt(`Actualisé le ${formattedDate} à ${formattedTime}`);
+  };
 
   return (
     <div className="flex h-screen flex-col">
       {/* Header */}
       <div className="border-b bg-white px-6 py-4">
         <div className="flex items-center justify-between gap-4">
-          <h1 className="text-xl font-semibold text-gray-900">
-            {selectingMainObject
-              ? 'Quelle est la donnée principale du rapport ?'
-              : mainObject
-                ? `Rapport : ${mainObject.objectName}`
-                : 'Rapport'}
-          </h1>
-          {!selectingMainObject && (
-            <div className="flex items-center gap-2">
+          {!selectingMainObject && reportResultOpen ? (
+            <>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setReportResultOpen(false)}
+                  title="Retour configuration"
+                  aria-label="Retour configuration"
+                  className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-100"
+                >
+                  &lt;
+                </button>
+                <h1 className="text-xl font-semibold text-gray-900">
+                  {mainObject ? `Rapport : ${mainObject.objectName}` : 'Rapport'}
+                </h1>
+              </div>
+              <div className="flex items-center gap-3">
+                {reportPreviewLastUpdatedAt && (
+                  <div className="text-xs text-gray-500">{reportPreviewLastUpdatedAt}</div>
+                )}
+                <button
+                  onClick={refreshReportPreview}
+                  className="rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-sm text-blue-700 hover:bg-blue-100"
+                >
+                  Actualiser
+                </button>
+              </div>
+            </>
+          ) : !selectingMainObject ? (
+            <div className="flex items-center gap-3">
               <button
                 onClick={handleChangeReportType}
-                className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
+                title="Changer le type de rapport"
+                aria-label="Changer le type de rapport"
+                className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-100"
               >
-                Changer le type de rapport
+                &lt;
               </button>
+              <h1 className="text-xl font-semibold text-gray-900">
+                {mainObject ? `Rapport : ${mainObject.objectName}` : 'Rapport'}
+              </h1>
             </div>
+          ) : (
+            <h1 className="text-xl font-semibold text-gray-900">
+              Quelle est la donnée principale du rapport ?
+            </h1>
           )}
         </div>
       </div>
 
-      {!selectingMainObject && mainObjectSmartObjects.length > 0 && (
+      {!reportResultOpen && !selectingMainObject && mainObjectSmartObjects.length > 0 && (
         <div className="border-b bg-indigo-50/40 px-6 py-3">
           <div className="flex flex-wrap items-center gap-2">
             <div className="shrink-0 text-sm font-medium text-indigo-900">Sélections et filtres rapide</div>
@@ -2250,7 +2353,39 @@ export function AttributeSelector() {
 
       {/* Main content */}
       <div className="flex flex-1 overflow-hidden">
-        {selectingMainObject ? (
+        {reportResultOpen ? (
+          <ReportResultDrawer
+            onBackToConfiguration={() => setReportResultOpen(false)}
+            mainObjectName={mainObject?.objectName ?? 'Rapport'}
+            columns={reportPreviewColumns.map((column) => ({ id: column.id, label: column.label }))}
+            rows={reportPreviewRows}
+            mainObjectLinkedToCollaborateur={mainObjectLinkedToCollaborateur}
+            reportDate={reportDate}
+            includeDepartedCollaborators={includeDepartedCollaborators}
+            includePresentCollaborators={includePresentCollaborators}
+            includeFutureCollaborators={includeFutureCollaborators}
+            selectedDepartmentFilters={selectedDepartmentFilters}
+            selectedEstablishmentFilters={selectedEstablishmentFilters}
+            departmentTree={departmentTree}
+            establishmentOptions={establishmentOptions}
+            onReportDateChange={setReportDate}
+            onIncludeDepartedChange={setIncludeDepartedCollaborators}
+            onIncludePresentChange={setIncludePresentCollaborators}
+            onIncludeFutureChange={setIncludeFutureCollaborators}
+            onSelectedDepartmentsChange={setSelectedDepartmentFilters}
+            onSelectedEstablishmentsChange={setSelectedEstablishmentFilters}
+            globalFilterSummaryLines={getGlobalFilterGroupLines()}
+            collaboratorGeneratedFilterLines={
+              mainObjectLinkedToCollaborateur ? collaboratorGeneratedFilterLines : []
+            }
+            collaboratorStatusSummaryLabel={
+              mainObjectLinkedToCollaborateur
+                ? `${activeCollaboratorStatusSummary} · ${collaboratorOrgFilterSummaryLabel} · ${getFormattedReportDate(reportDate)}`
+                : 'Non applicable'
+            }
+            onEditGlobalFilters={() => setGlobalFilterDialogOpen(true)}
+          />
+        ) : selectingMainObject ? (
           <div className="flex w-full justify-center overflow-y-auto">
             <div className="w-full max-w-[1200px]">
               <MainObjectPicker
@@ -2367,7 +2502,7 @@ export function AttributeSelector() {
                         <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                           <div className="mb-2">
                             {group.objectSupportsApplicable && group.objectApplicationDateMandatory
-                              ? 'Cet objet est multi-instance. Une date est obligatoire, le choix par défaut est Applicable à la date du jour.'
+                              ? 'Cet objet est multi-instance. Une date est obligatoire, le choix par défaut est Applicable à la Date de valeur du rapport.'
                               : 'Cet objet est multi-instance. Choisissez un mode pour retomber sur une instance exploitable.'}
                           </div>
                           <div className="flex flex-wrap gap-2">
@@ -2394,7 +2529,7 @@ export function AttributeSelector() {
                                 onClick={() => openStage2MultiObjectDialog(group, 'applicable')}
                                 className="rounded border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm text-indigo-800 hover:bg-indigo-100"
                               >
-                                Applicable (date du jour)
+                                Applicable (Date de valeur du rapport)
                               </button>
                             )}
                           </div>
@@ -2471,7 +2606,10 @@ export function AttributeSelector() {
                         onClick={() => setCollaboratorStatusFilterExpanded((prev) => !prev)}
                         className="flex w-full items-center justify-between px-2 py-1.5 text-left text-[11px] text-orange-900"
                       >
-                        <span className="font-medium">Statuts collaborateurs</span>
+                        <span className="flex items-center gap-1 font-medium">
+                          <span className="inline-block w-2">{collaboratorStatusFilterExpanded ? 'v' : '>'}</span>
+                          <span>Statuts collaborateurs</span>
+                        </span>
                         <span>
                           {mainObjectLinkedToCollaborateur
                             ? `${activeCollaboratorStatusSummary} · ${collaboratorOrgFilterSummaryLabel} · ${getFormattedReportDate(reportDate)}`
@@ -2489,7 +2627,7 @@ export function AttributeSelector() {
 
                           <div className="flex flex-wrap items-center gap-2">
                             <label className="text-[11px] font-medium text-orange-900" htmlFor="report-date">
-                              Date du rapport
+                              Date de valeur du rapport
                             </label>
                             <input
                               id="report-date"
@@ -2859,17 +2997,24 @@ export function AttributeSelector() {
         attributeType="string"
         currentFilterGroups={globalFilterGroups}
         onConfirm={handleGlobalFilterConfirm}
-        objectAttributes={selectedAttributes.map((attr) => ({
-          id: attr.id,
-          name: getSelectedAttributeDisplayName(attr),
-          type: attr.attributeType,
-        }))}
+        objectAttributes={selectedAttributes.map((attr) => {
+          const sourceTheme = dataStructure.find((theme) => theme.id === attr.themeId);
+          const sourceObject = sourceTheme?.objects.find((object) => object.id === attr.objectId);
+          const sourceAttribute = sourceObject?.attributes.find((attribute) => attribute.id === attr.attributeId);
+
+          return {
+            id: attr.id,
+            name: getSelectedAttributeDisplayName(attr),
+            type: attr.attributeType,
+            enumValues: sourceAttribute?.enumValues,
+          };
+        })}
         selectedFilterAttributes={getGlobalSelectedAttributesForFilter()}
         compartmentFilterAttributes={getGlobalCompartmentFilterAttributes()}
         showCompartmenting={showCompartmenting}
       />
 
-      {!selectingMainObject && (
+      {!reportResultOpen && !selectingMainObject && (
         <div className="border-t bg-white">
           <div className="flex">
             <div className="w-1/2 px-4 py-4">
@@ -2909,8 +3054,12 @@ export function AttributeSelector() {
                   <button
                     className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
                     onClick={() => {
+                      refreshReportPreview();
+                      setReportResultOpen(true);
                       console.log('Report payload:', {
                         selectedAttributes,
+                        groupedColumnIds,
+                        sortColumnIds,
                         globalFilterGroups,
                         collaboratorStatusFilter: {
                           enabled: mainObjectLinkedToCollaborateur,
@@ -2923,7 +3072,6 @@ export function AttributeSelector() {
                           generatedLines: mainObjectLinkedToCollaborateur ? collaboratorGeneratedFilterLines : [],
                         },
                       });
-                      alert('Configuration sauvegardée ! Voir la console pour les détails.');
                     }}
                   >
                     Générer le rapport

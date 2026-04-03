@@ -6,6 +6,7 @@ export interface Attribute {
   id: string;
   name: string;
   type: AttributeType;
+  enumValues?: string[];
   required?: boolean;
   magicSel?: boolean;
   description?: string;
@@ -87,6 +88,7 @@ type ManifestAttribute = {
   id: string;
   name: string;
   dataType?: 'numeric' | 'number' | 'date' | 'string' | 'file' | 'booleen' | 'email' | 'phone';
+  enum?: string[];
   type?: AttributeType;
   magicSel?: boolean;
   description?: string;
@@ -639,6 +641,7 @@ const buildDataStructure = (): Theme[] => {
           id: attribute.id,
           name: attribute.name,
           type: normalizeAttributeType(attribute),
+          enumValues: Array.isArray(attribute.enum) ? attribute.enum : undefined,
           magicSel: !!attribute.magicSel,
           description: attribute.description,
           tooltip: attribute.tooltip,

@@ -198,10 +198,10 @@ export function SelectionPanel({
       return `${day}/${month}/${year}`;
     };
 
-    if (!attr.dateReference) return 'Date du jour';
+    if (!attr.dateReference) return 'Date de valeur du rapport';
     switch (attr.dateReference.type) {
       case 'today':
-        return 'Date du jour';
+        return 'Date de valeur du rapport';
       case 'custom':
         return `Date: ${formatIsoDate(attr.dateReference.customDate ?? '')}`;
       case 'attribute': {

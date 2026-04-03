@@ -523,7 +523,7 @@ export function ObjectInsertionDialog({
       }
 
       if (referenceType === 'attribute' && !referenceAttributeId) {
-        alert('Veuillez sélectionner un attribut de date du rapport');
+        alert('Veuillez sélectionner un attribut de date de valeur du rapport');
         return;
       }
 
@@ -993,7 +993,7 @@ export function ObjectInsertionDialog({
                       onChange={() => setReferenceType('today')}
                       className="size-4"
                     />
-                    <span>Date du jour</span>
+                    <span>Date de valeur du rapport</span>
                   </label>
                   <label className="flex items-center gap-2 text-sm text-gray-700">
                     <input

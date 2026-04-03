@@ -8,15 +8,15 @@
 réintégrer "opération" et "valeur spéciale" suite à l'insertion par défaut de la liste détaillée ?
 
 
-## filtrer facilement 
-pouvoir filtrer facilement 
-"mes managés"
-"mon département" 
-
 
 ###########################################################
 # P2
 
+## filtrer facilement 
+pouvoir filtrer facilement 
+"uniquement moi"
+"mes managés"
+"mon département" 
 
 
 ###########################################################
@@ -26,4 +26,5 @@ pouvoir filtrer facilement
 ###########################################################
 
 
+Il faut indiquer une date de référence pour savoir quelle information afficher dans le rapport
 

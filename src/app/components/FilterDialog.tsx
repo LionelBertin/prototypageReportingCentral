@@ -52,6 +52,7 @@ export function FilterDialog({
         id: attr.id,
         name: attr.name,
         type: attr.type,
+        enumValues: attr.enumValues,
         targetKind: 'native' as const,
       })),
       ...(showCompartmenting
@@ -87,7 +88,33 @@ export function FilterDialog({
   useEffect(() => {
     if (isOpen) {
       if (currentFilterGroups && currentFilterGroups.length > 0) {
-        setFilterGroups(currentFilterGroups);
+        const normalizedGroups = currentFilterGroups.map((group) => ({
+          ...group,
+          conditions: group.conditions.map((condition) => {
+            const target = filterTargets.find((candidate) => candidate.id === condition.attributeId);
+            const enumValues = target?.targetKind === 'native' ? target.enumValues ?? [] : [];
+            const availableOperators = getAvailableOperators(condition.attributeType, enumValues).map((entry) => entry.value);
+            const operator = availableOperators.includes(condition.operator)
+              ? condition.operator
+              : (availableOperators[0] ?? 'equals');
+            const shouldUseArrayValue = condition.targetKind === 'compartment' || enumValues.length > 0;
+            const value = shouldUseArrayValue
+              ? (Array.isArray(condition.value)
+                ? condition.value
+                : (condition.value !== '' && condition.value !== null && condition.value !== undefined
+                  ? [String(condition.value)]
+                  : []))
+              : condition.value;
+
+            return {
+              ...condition,
+              operator,
+              value,
+            };
+          }),
+        }));
+
+        setFilterGroups(normalizedGroups);
       } else {
         setFilterGroups([{
           conditions: [{
@@ -106,7 +133,25 @@ export function FilterDialog({
 
   if (!isOpen) return null;
 
-  const getAvailableOperators = (attrType: AttributeType): Array<{ value: FilterCondition['operator']; label: string }> => {
+  const getConditionEnumValues = (condition: FilterCondition): string[] => {
+    if (condition.targetKind === 'compartment') return [];
+    const selectedTarget = filterTargets.find((target) => target.id === condition.attributeId && target.targetKind === 'native');
+    return selectedTarget?.enumValues ?? [];
+  };
+
+  const getAvailableOperators = (
+    attrType: AttributeType,
+    enumValues?: string[]
+  ): Array<{ value: FilterCondition['operator']; label: string }> => {
+    if ((enumValues?.length ?? 0) > 0) {
+      return [
+        { value: 'equals' as const, label: 'Égal à' },
+        { value: 'notEquals' as const, label: 'Différent de' },
+        { value: 'isEmpty' as const, label: 'Vide' },
+        { value: 'isNotEmpty' as const, label: 'Renseignée' },
+      ];
+    }
+
     const common = [
       { value: 'equals' as const, label: 'Égal à' },
       { value: 'notEquals' as const, label: 'Différent de' },
@@ -262,18 +307,28 @@ export function FilterDialog({
     if (field === 'attributeId') {
       const selectedAttr = filterTargets.find(attr => attr.id === value);
       if (selectedAttr) {
+        const enumValues = selectedAttr.targetKind === 'native' ? selectedAttr.enumValues ?? [] : [];
+        const nextOperator: FilterCondition['operator'] = selectedAttr.targetKind === 'compartment'
+          ? 'in'
+          : (enumValues.length > 0 ? 'equals' : 'equals');
         newGroups[groupIndex].conditions[conditionIndex].attributeId = selectedAttr.id;
         newGroups[groupIndex].conditions[conditionIndex].attributeName = selectedAttr.name;
         newGroups[groupIndex].conditions[conditionIndex].attributeType = selectedAttr.type;
         newGroups[groupIndex].conditions[conditionIndex].targetKind = selectedAttr.targetKind;
         newGroups[groupIndex].conditions[conditionIndex].compartmentSourceAttributeId = selectedAttr.targetKind === 'compartment' ? selectedAttr.id : undefined;
         newGroups[groupIndex].conditions[conditionIndex].compartmentSourceAttributeName = selectedAttr.targetKind === 'compartment' ? selectedAttr.name : undefined;
-        newGroups[groupIndex].conditions[conditionIndex].operator = selectedAttr.targetKind === 'compartment' ? 'in' : 'equals';
-        newGroups[groupIndex].conditions[conditionIndex].value = selectedAttr.targetKind === 'compartment' ? [] : '';
+        newGroups[groupIndex].conditions[conditionIndex].operator = nextOperator;
+        newGroups[groupIndex].conditions[conditionIndex].value = (selectedAttr.targetKind === 'compartment' || enumValues.length > 0) ? [] : '';
         newGroups[groupIndex].conditions[conditionIndex].valueType = 'fixed';
         newGroups[groupIndex].conditions[conditionIndex].referenceAttributeId = undefined;
         newGroups[groupIndex].conditions[conditionIndex].referenceAttributeName = undefined;
       }
+    } else if (field === 'operator') {
+      const currentCondition = newGroups[groupIndex].conditions[conditionIndex];
+      const enumValues = getConditionEnumValues(currentCondition);
+      const allowedOperators = getAvailableOperators(currentCondition.attributeType, enumValues).map((entry) => entry.value);
+      const nextOperator = allowedOperators.includes(value) ? value : allowedOperators[0] ?? 'equals';
+      currentCondition.operator = nextOperator;
     } else {
       (newGroups[groupIndex].conditions[conditionIndex] as any)[field] = value;
     }
@@ -382,6 +437,9 @@ export function FilterDialog({
                       .filter((attr) => attr.type === condition.attributeType && condition.targetKind !== 'compartment')
                       .sort((a, b) => normalizeSortKey(a.columnName || a.name).localeCompare(normalizeSortKey(b.columnName || b.name), 'fr'));
                     const selectedCompartmentTarget = compartmentFilterAttributes.find((attr) => attr.id === condition.attributeId);
+                    const enumValues = getConditionEnumValues(condition);
+                    const hasEnumValues = enumValues.length > 0;
+                    const availableOperators = getAvailableOperators(condition.attributeType, enumValues);
 
                     return (
                   <div key={conditionIndex} className="flex items-start gap-2">
@@ -431,7 +489,7 @@ export function FilterDialog({
                           onChange={(e) => updateCondition(groupIndex, conditionIndex, 'operator', e.target.value)}
                           className="w-full rounded border border-gray-300 px-2 py-2 text-sm"
                         >
-                          {getAvailableOperators(condition.attributeType).map((op) => (
+                          {availableOperators.map((op) => (
                             <option key={op.value} value={op.value}>
                               {op.label}
                             </option>
@@ -499,6 +557,28 @@ export function FilterDialog({
                                 </option>
                               ))}
                             </select>
+                          ) : hasEnumValues && (condition.valueType || 'fixed') === 'fixed' ? (
+                            <div className="max-h-40 space-y-1 overflow-y-auto rounded border border-gray-200 p-2">
+                              {enumValues.map((value) => {
+                                const currentValues = Array.isArray(condition.value) ? condition.value : [];
+                                const checked = currentValues.includes(value);
+                                return (
+                                  <label key={value} className="flex items-center gap-2 text-sm text-gray-700">
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={() => {
+                                        const nextValues = checked
+                                          ? currentValues.filter((current) => current !== value)
+                                          : [...currentValues, value];
+                                        updateCondition(groupIndex, conditionIndex, 'value', nextValues);
+                                      }}
+                                    />
+                                    <span>{value}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
                           ) : condition.targetKind === 'compartment' && selectedCompartmentTarget ? (
                             <div className="space-y-1 rounded border border-gray-200 p-2">
                               {selectedCompartmentTarget.values.map((value) => {

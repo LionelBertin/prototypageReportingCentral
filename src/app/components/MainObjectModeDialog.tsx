@@ -343,7 +343,7 @@ export function MainObjectModeDialog({
                           onChange={() => setReferenceType('today')}
                           className="size-4"
                         />
-                        <span className="text-sm text-gray-700">Date du jour</span>
+                        <span className="text-sm text-gray-700">Date de valeur du rapport</span>
                       </label>
                       <label className="flex items-center gap-2">
                         <input

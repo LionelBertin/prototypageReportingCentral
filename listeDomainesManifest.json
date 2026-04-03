@@ -2355,6 +2355,12 @@
               "dataType": "string"
             },
             {
+              "id": "type-de-compte",
+              "name": "Type de compte",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
               "id": "date-demande",
               "name": "Date demande",
               "magicSel": false,
@@ -2480,7 +2486,13 @@
               "id": "type-compte",
               "name": "Type compte",
               "magicSel": true,
-              "dataType": "string"
+              "dataType": "string",
+              "enum": [
+                "RTT",
+                "CP",
+                "Congés exceptionnels",
+                "Autres"
+              ]
             },
             {
               "id": "solde",
@@ -2700,6 +2712,7 @@
         {
           "id": "historique-des-syntheses-d-entretiens",
           "name": "Synthèses d'entretiens",
+          "tooltip": "Donne la liste des synthèses des entretiens annuels et professionnels.",
           "relations": [
             {
               "targetObject": "Collaborateur",

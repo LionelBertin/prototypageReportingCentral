@@ -68,8 +68,7 @@ export function DateReferenceDialog({
 
         <div className="mb-4">
           <p className="mt-2 text-xs text-gray-500">
-            Les objets applicables nécessitent une date de référence pour déterminer
-            quelle version de l'objet afficher dans le rapport.
+            La date de référence détermine quelle information afficher dans le rapport.
           </p>
         </div>
 
@@ -89,7 +88,7 @@ export function DateReferenceDialog({
                   className="mt-0.5 size-4"
                 />
                 <div>
-                  <span className="text-sm text-gray-700">Date du jour</span>
+                  <span className="text-sm text-gray-700">Date de valeur du rapport</span>
                 </div>
               </label>
 
