@@ -1,4 +1,4 @@
-import { X, Filter, Calendar, Edit2, Layers, MoreHorizontal } from 'lucide-react';
+import { X, Filter, Calendar, Edit2, Layers, MoreHorizontal, ArrowUpDown } from 'lucide-react';
 import { SelectedAttribute } from '../types/selection';
 import { useState } from 'react';
 import { dataStructure } from '../data';
@@ -29,6 +29,7 @@ interface SelectionPanelProps {
   showCalculatedColumns: boolean;
   showColumnRename: boolean;
   filterInvolvedAttributeIds?: string[];
+  sortInvolvedAttributeIds?: string[];
 }
 
 export function SelectionPanel({
@@ -48,6 +49,7 @@ export function SelectionPanel({
   showCalculatedColumns,
   showColumnRename,
   filterInvolvedAttributeIds = [],
+  sortInvolvedAttributeIds = [],
 }: SelectionPanelProps) {
   const [editingColumnId, setEditingColumnId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
@@ -275,6 +277,7 @@ export function SelectionPanel({
           {selectedAttributes.map((attr, index) => {
             const isDragged = draggedId === attr.id;
             const isFilterInvolved = filterInvolvedAttributeIds.includes(attr.id);
+            const isSortInvolved = sortInvolvedAttributeIds.includes(attr.id);
             const groupedCount = groupedAttributeIds.length;
             const showGroupingDivider = groupedCount > 0 && index === groupedCount;
             const showGroupedHeader = groupedCount > 0 && index === 0;
@@ -343,6 +346,9 @@ export function SelectionPanel({
                                     </span>
                                     {isFilterInvolved && (
                                       <Filter className="size-3 text-orange-600" title="Utilisé dans le filtrage" />
+                                    )}
+                                    {isSortInvolved && (
+                                      <ArrowUpDown className="size-3 text-blue-600" title="Utilisé dans le tri" />
                                     )}
                                     {showColumnRename && (
                                       <button

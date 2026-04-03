@@ -101,12 +101,14 @@ export function AttributeSelector() {
   const [showCalculatedColumns, setShowCalculatedColumns] = useState(false);
   const [showColumnRename, setShowColumnRename] = useState(false);
   const [showLinkedObjectCardinalities, setShowLinkedObjectCardinalities] = useState(true);
+  const [showSelectAllButton, setShowSelectAllButton] = useState(true);
   const [prototypeConfigOpen, setPrototypeConfigOpen] = useState(false);
   const [draftShowCompartmenting, setDraftShowCompartmenting] = useState(false);
   const [draftShowConditionalColumns, setDraftShowConditionalColumns] = useState(false);
   const [draftShowCalculatedColumns, setDraftShowCalculatedColumns] = useState(false);
   const [draftShowColumnRename, setDraftShowColumnRename] = useState(false);
   const [draftShowLinkedObjectCardinalities, setDraftShowLinkedObjectCardinalities] = useState(true);
+  const [draftShowSelectAllButton, setDraftShowSelectAllButton] = useState(true);
   const [availableAttributeSearchTerm, setAvailableAttributeSearchTerm] = useState('');
 
   const buildSelectedAttribute = ({
@@ -1242,6 +1244,7 @@ export function AttributeSelector() {
     setDraftShowCalculatedColumns(showCalculatedColumns);
     setDraftShowColumnRename(showColumnRename);
     setDraftShowLinkedObjectCardinalities(showLinkedObjectCardinalities);
+    setDraftShowSelectAllButton(showSelectAllButton);
     setPrototypeConfigOpen(true);
   };
 
@@ -1251,6 +1254,7 @@ export function AttributeSelector() {
     setShowCalculatedColumns(draftShowCalculatedColumns);
     setShowColumnRename(draftShowColumnRename);
     setShowLinkedObjectCardinalities(draftShowLinkedObjectCardinalities);
+    setShowSelectAllButton(draftShowSelectAllButton);
     setPrototypeConfigOpen(false);
   };
 
@@ -1327,6 +1331,16 @@ export function AttributeSelector() {
           [condition.attributeId, condition.referenceAttributeId].filter((value): value is string => !!value)
         )
       )
+    )
+  );
+
+  const globalSortInvolvedAttributeIds = Array.from(
+    new Set(
+      [
+        ...sortColumnIds,
+        ...selectedAttributes
+          .flatMap((attr) => [attr.sortAttributeId].filter((value): value is string => !!value)),
+      ]
     )
   );
 
@@ -1737,6 +1751,24 @@ export function AttributeSelector() {
 
   const getMainObjectAttributeDisplayLabel = (attr: AvailableObjectAttribute) => attr.rawName;
 
+  const selectAllVisibleAttributes = () => {
+    const availableAttributes = getMainObjectAvailableAttributes();
+    const selectedIds = getMainObjectSelectedAttributeIds(availableAttributes);
+    for (const group of filteredMainObjectStage2Groups) {
+      if (!group.isSelectable) continue;
+      for (const attr of group.attributes) {
+        selectedIds.add(attr.id);
+      }
+    }
+    const nextAttributes = availableAttributes.filter((attr) => selectedIds.has(attr.id));
+    replaceMainObjectSelection(nextAttributes);
+  };
+
+  const deselectAllSelectedAttributes = () => {
+    setSelectedAttributes([]);
+    setGlobalFilterGroups(undefined);
+  };
+
   const normalizeSearchText = (value: string) => value
     .toLocaleLowerCase()
     .normalize('NFD')
@@ -1836,12 +1868,6 @@ export function AttributeSelector() {
               >
                 Changer le type de rapport
               </button>
-              <button
-                onClick={handleResetSelections}
-                className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
-              >
-                Tout réinitialiser
-              </button>
             </div>
           )}
         </div>
@@ -1882,7 +1908,18 @@ export function AttributeSelector() {
             <div className="w-1/2">
               <div className="h-full overflow-y-auto border-r bg-gray-50">
                 <div className="sticky top-0 z-10 border-b bg-gray-50 px-4 py-4">
-                  <h2 className="font-semibold text-gray-900">Attributs disponibles</h2>
+                  <div className="flex items-center justify-between gap-2">
+                    <h2 className="font-semibold text-gray-900">Attributs disponibles</h2>
+                    {showSelectAllButton && (
+                      <button
+                        onClick={selectAllVisibleAttributes}
+                        title="[Debug] Sélectionner tous les attributs visibles"
+                        className="rounded border border-dashed border-gray-400 px-2 py-0.5 text-[11px] text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                      >
+                        Tout sélectionner
+                      </button>
+                    )}
+                  </div>
                   <div className="mt-3">
                     <input
                       type="text"
@@ -2024,8 +2061,19 @@ export function AttributeSelector() {
 
             <div className="flex w-1/2 flex-col border-l bg-white">
               <div className="border-b px-4 py-4">
-                <div className="text-lg font-semibold text-gray-900">
-                  Attributs sélectionnés
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-lg font-semibold text-gray-900">
+                    Attributs sélectionnés
+                  </div>
+                  {showSelectAllButton && (
+                    <button
+                      onClick={deselectAllSelectedAttributes}
+                      title="[Debug] Désélectionner tous les attributs"
+                      className="rounded border border-dashed border-gray-400 px-2 py-0.5 text-[11px] text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                    >
+                      Tout désélectionner
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -2046,49 +2094,43 @@ export function AttributeSelector() {
                 showCalculatedColumns={showCalculatedColumns}
                 showColumnRename={showColumnRename}
                 filterInvolvedAttributeIds={globalFilterInvolvedAttributeIds}
+                sortInvolvedAttributeIds={globalSortInvolvedAttributeIds}
               />
 
               <div className="border-t bg-gray-50 px-4 py-3">
                 <div className="space-y-3">
-                  {globalFilterGroups && globalFilterGroups.length > 0 ? (
-                    <>
-                      <div className="text-sm font-medium text-gray-700">Filtrage</div>
-                      <button
-                        onClick={() => setGlobalFilterDialogOpen(true)}
-                        className="w-full rounded border border-orange-200 bg-orange-50 p-2 text-left text-xs text-orange-800 hover:bg-orange-100"
-                        title="Modifier le filtrage global"
-                      >
-                        <div className="mb-1 font-medium">Filtres actifs :</div>
-                        <div className="space-y-1">
-                          {getGlobalFilterGroupLines().map((line, index) => (
-                            <div key={index}>
-                              {index > 0 && <div className="my-1 font-bold text-orange-900">OU</div>}
-                              <div className="ml-2">{line}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </button>
-                    </>
-                  ) : (
-                    <div className="flex flex-nowrap items-center gap-2">
-                      <div className="shrink-0 text-sm font-medium text-gray-700">Filtrage</div>
-                      <button
-                        onClick={() => setGlobalFilterDialogOpen(true)}
-                        className="min-w-0 flex-1 whitespace-nowrap rounded border border-orange-200 bg-orange-50 px-2 py-1.5 text-left text-xs text-orange-700 hover:bg-orange-100"
-                        title="Configurer le filtrage global"
-                      >
-                        Aucun filtre global défini
-                      </button>
-                    </div>
-                  )}
+                  <div className="rounded border border-gray-200 bg-white p-2 text-xs text-gray-800">
+                    <div className="mb-1 text-[11px] font-medium leading-none text-gray-700">Filtrage</div>
+                    <button
+                      onClick={() => setGlobalFilterDialogOpen(true)}
+                      className="w-full rounded border border-orange-200 bg-orange-50 p-2 text-left text-xs text-orange-800 hover:bg-orange-100"
+                      title={globalFilterGroups && globalFilterGroups.length > 0 ? 'Modifier le filtrage global' : 'Configurer le filtrage global'}
+                    >
+                      {globalFilterGroups && globalFilterGroups.length > 0 ? (
+                        <>
+                          <div className="mb-1 font-medium">Filtres actifs :</div>
+                          <div className="space-y-1">
+                            {getGlobalFilterGroupLines().map((line, index) => (
+                              <div key={index}>
+                                {index > 0 && <div className="my-1 font-bold text-orange-900">OU</div>}
+                                <div className="ml-2">{line}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      ) : (
+                        <span>Aucun filtre global défini</span>
+                      )}
+                    </button>
+                  </div>
 
                   <div className="rounded border border-gray-200 bg-white p-2 text-xs text-gray-800">
-                    <div className="mb-2 flex flex-wrap items-center gap-2">
-                      <div className="text-sm font-medium text-gray-700">Tri</div>
+                    <div className="mb-2 flex flex-col items-start gap-2">
+                      <div className="text-[11px] font-medium leading-none text-gray-700">Tri</div>
                       <select
                         value={pendingSortColumnId}
                         onChange={(event) => handleSortColumnSelect(event.target.value)}
-                        className="min-w-[220px] rounded border border-gray-300 px-2 py-1.5 text-xs"
+                        className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs"
                       >
                         <option value="">Sélectionner une colonne</option>
                         {availableSortPickers.map((attr) => (
@@ -2134,12 +2176,12 @@ export function AttributeSelector() {
                   </div>
 
                   <div className="rounded border border-gray-200 bg-white p-2 text-xs text-gray-800">
-                    <div className="mb-2 flex flex-wrap items-center gap-2">
-                      <div className="text-sm font-medium text-gray-700">Grouper les lignes</div>
+                    <div className="mb-2 flex flex-col items-start gap-2">
+                      <div className="text-[11px] font-medium leading-none text-gray-700">Grouper les lignes</div>
                       <select
                         value={pendingGroupColumnId}
                         onChange={(event) => handleGroupColumnSelect(event.target.value)}
-                        className="min-w-[220px] rounded border border-gray-300 px-2 py-1.5 text-xs"
+                        className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs"
                       >
                         <option value="">Sélectionner une colonne</option>
                         {availableGroupPickers.map((attr) => (
@@ -2402,9 +2444,14 @@ export function AttributeSelector() {
                   setEnabled: setDraftShowColumnRename,
                 },
                 {
-                  label: 'Cardinalites objets lies',
+                  label: 'Afficher les cardinalités',
                   enabled: draftShowLinkedObjectCardinalities,
                   setEnabled: setDraftShowLinkedObjectCardinalities,
+                },
+                {
+                  label: 'Bouton débug "Tout (dé)sélectionner"',
+                  enabled: draftShowSelectAllButton,
+                  setEnabled: setDraftShowSelectAllButton,
                 },
               ].map((toggle) => (
                 <div key={toggle.label} className="flex items-center justify-between rounded border border-gray-200 px-3 py-2">
