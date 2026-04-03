@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SelectionPanel } from './SelectionPanel';
 import MainObjectPicker from './MainObjectPicker';
 import { ObjectInsertionDialog, ObjectInsertionConfig } from './ObjectInsertionDialog';
@@ -80,6 +80,10 @@ export function AttributeSelector() {
   const [pendingObjectInsertion, setPendingObjectInsertion] = useState<PendingObjectInsertion | null>(null);
   const [globalFilterDialogOpen, setGlobalFilterDialogOpen] = useState(false);
   const [globalFilterGroups, setGlobalFilterGroups] = useState<FilterGroup[] | undefined>(undefined);
+  const [sortColumnIds, setSortColumnIds] = useState<string[]>([]);
+  const [pendingSortColumnId, setPendingSortColumnId] = useState<string>('');
+  const [draggedSortColumnId, setDraggedSortColumnId] = useState<string | null>(null);
+  const [dragOverSortColumnId, setDragOverSortColumnId] = useState<string | null>(null);
   const [compartmentDialogOpen, setCompartmentDialogOpen] = useState(false);
   const [dateReferenceDialogOpen, setDateReferenceDialogOpen] = useState(false);
   const [conditionalColumnDialogOpen, setConditionalColumnDialogOpen] = useState(false);
@@ -1182,6 +1186,8 @@ export function AttributeSelector() {
     setPendingMainObject(null);
     setPendingObjectInsertion(null);
     setObjectInsertionDialogOpen(false);
+    setSortColumnIds([]);
+    setPendingSortColumnId('');
   };
 
   const handleResetSelections = () => {
@@ -1192,7 +1198,15 @@ export function AttributeSelector() {
     setSelectedAttributes([]);
     setGlobalFilterGroups(undefined);
     setGlobalFilterDialogOpen(false);
+    setSortColumnIds([]);
+    setPendingSortColumnId('');
   };
+
+  useEffect(() => {
+    const selectedIds = new Set(selectedAttributes.map((attr) => attr.id));
+    setSortColumnIds((prev) => prev.filter((id) => selectedIds.has(id)));
+    setPendingSortColumnId((prev) => (prev && !selectedIds.has(prev) ? '' : prev));
+  }, [selectedAttributes]);
 
   const openPrototypeConfig = () => {
     setDraftShowCompartmenting(showCompartmenting);
@@ -1332,6 +1346,62 @@ export function AttributeSelector() {
         ? `(${group.conditions.map(getGlobalFilterConditionLabel).join(` ${group.logicalOperator} `)})`
         : group.conditions.map(getGlobalFilterConditionLabel).join(` ${group.logicalOperator} `)
     );
+  };
+
+  const getSortableSelectedAttributes = () => {
+    return selectedAttributes.filter((attr) => attr.insertionType !== 'conditional' && attr.insertionType !== 'calculated');
+  };
+
+  const handleSortColumnSelect = (attributeId: string) => {
+    if (!attributeId) {
+      setPendingSortColumnId('');
+      return;
+    }
+
+    setSortColumnIds((prev) => (prev.includes(attributeId) ? prev : [...prev, attributeId]));
+    setPendingSortColumnId('');
+  };
+
+  const removeSortColumn = (attributeId: string) => {
+    setSortColumnIds((prev) => prev.filter((id) => id !== attributeId));
+  };
+
+  const handleSortDragStart = (attributeId: string) => {
+    setDraggedSortColumnId(attributeId);
+  };
+
+  const handleSortDragOver = (event: React.DragEvent<HTMLDivElement>, attributeId: string) => {
+    event.preventDefault();
+    if (attributeId !== draggedSortColumnId) {
+      setDragOverSortColumnId(attributeId);
+    }
+  };
+
+  const handleSortDrop = (targetAttributeId: string) => {
+    if (!draggedSortColumnId || draggedSortColumnId === targetAttributeId) {
+      setDraggedSortColumnId(null);
+      setDragOverSortColumnId(null);
+      return;
+    }
+
+    setSortColumnIds((prev) => {
+      const fromIndex = prev.indexOf(draggedSortColumnId);
+      const toIndex = prev.indexOf(targetAttributeId);
+      if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return prev;
+
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+
+    setDraggedSortColumnId(null);
+    setDragOverSortColumnId(null);
+  };
+
+  const handleSortDragEnd = () => {
+    setDraggedSortColumnId(null);
+    setDragOverSortColumnId(null);
   };
 
   const getSelectedDateAttributesForFilter = (currentAttributeId: string) => {
@@ -1630,6 +1700,9 @@ export function AttributeSelector() {
   const mainObjectSelectedAttributeIds = selectingMainObject
     ? new Set<string>()
     : getMainObjectSelectedAttributeIds(mainObjectAvailableAttributes);
+  const sortableSelectedAttributes = getSortableSelectedAttributes();
+  const sortableById = new Map(sortableSelectedAttributes.map((attr) => [attr.id, attr] as const));
+  const availableSortPickers = sortableSelectedAttributes.filter((attr) => !sortColumnIds.includes(attr.id));
 
   return (
     <div className="flex h-screen flex-col">
@@ -1849,20 +1922,8 @@ export function AttributeSelector() {
               />
 
               <div className="border-t bg-gray-50 px-4 py-3">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-sm font-medium text-gray-700">Filtrage</div>
-                    <button
-                      onClick={() => setGlobalFilterDialogOpen(true)}
-                      className={`flex items-center gap-1 rounded px-3 py-1.5 text-sm ${
-                        globalFilterGroups && globalFilterGroups.length > 0
-                          ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
-                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                      }`}
-                    >
-                      Configurer le filtrage
-                    </button>
-                  </div>
+                <div className="space-y-3">
+                  <div className="text-sm font-medium text-gray-700">Filtrage</div>
 
                   {globalFilterGroups && globalFilterGroups.length > 0 ? (
                     <button
@@ -1889,6 +1950,57 @@ export function AttributeSelector() {
                       Aucun filtre global défini
                     </button>
                   )}
+
+                  <div className="rounded border border-gray-200 bg-white p-2 text-xs text-gray-800">
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <div className="text-sm font-medium text-gray-700">Tri</div>
+                      <select
+                        value={pendingSortColumnId}
+                        onChange={(event) => handleSortColumnSelect(event.target.value)}
+                        className="min-w-[220px] rounded border border-gray-300 px-2 py-1.5 text-xs"
+                      >
+                        <option value="">Sélectionner une colonne</option>
+                        {availableSortPickers.map((attr) => (
+                          <option key={attr.id} value={attr.id}>
+                            {getSelectedAttributeDisplayName(attr)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {sortColumnIds.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {sortColumnIds.map((id, index) => {
+                          const attr = sortableById.get(id);
+                          if (!attr) return null;
+
+                          return (
+                            <div
+                              key={id}
+                              draggable
+                              onDragStart={() => handleSortDragStart(id)}
+                              onDragOver={(event) => handleSortDragOver(event, id)}
+                              onDrop={() => handleSortDrop(id)}
+                              onDragEnd={handleSortDragEnd}
+                              className={`flex cursor-grab items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-1 ${dragOverSortColumnId === id ? 'ring-2 ring-blue-300' : ''}`}
+                              title="Glissez-déposez pour changer la priorité"
+                            >
+                              <span className="text-[11px] font-medium text-blue-800">
+                                {index + 1}. {getSelectedAttributeDisplayName(attr)}
+                              </span>
+                              <button
+                                onClick={() => removeSortColumn(id)}
+                                className="rounded px-1 text-[11px] text-red-600 hover:bg-red-50"
+                                title="Retirer cette colonne du tri"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

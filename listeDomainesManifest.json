@@ -572,7 +572,7 @@
             },
             {
               "targetObject": "Collaborateur",
-              "relationName": "Refuseur",
+              "relationName": "Refusant",
               "cardinalityFrom": "many",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
@@ -647,10 +647,10 @@
                 "type compte",
                 "date début",
                 "date fin",
-                "Collaborateur_Absence.nom",
-                "Collaborateur_Absence.prénom",
-                "Collaborateur_Approbation.nom",
-                "Collaborateur_Approbation.prénom"
+                "Bénéficiaire.nom",
+                "Bénéficiaire.prénom",
+                "Approbateur.nom",
+                "Approbateur.prénom"
               ],
               "filters": "statut='approuvé' and 'date début' > dateDuJour"
             },
@@ -660,10 +660,10 @@
                 "type compte",
                 "date début",
                 "date fin",
-                "Collaborateur_Absence.nom",
-                "Collaborateur_Absence.prénom",
-                "Collaborateur_Approbation.nom",
-                "Collaborateur_Approbation.prénom"
+                "Bénéficiaire.nom",
+                "Bénéficiaire.prénom",
+                "Approbateur.nom",
+                "Approbateur.prénom"
               ],
               "filters": "statut='approuvé' and 'date début' <= dateDuJour"
             },
@@ -673,10 +673,10 @@
                 "date demande",
                 "type compte",
                 "durée ouvrée",
-                "Collaborateur_Absence.nom",
-                "Collaborateur_Absence.prénom",
-                "Collaborateur_Absence.poste[applicable].manager.nom",
-                "Collaborateur_Absence.poste[applicable].manager.prénom"
+                "Bénéficiaire.nom",
+                "Bénéficiaire.prénom",
+                "Bénéficiaire.poste[applicable].manager.nom",
+                "Bénéficiaire.poste[applicable].manager.prénom"
               ],
               "filters": "statut='à traiter'"
             },
@@ -686,10 +686,10 @@
                 "date refus",
                 "motivation du refus",
                 "durée ouvrée",
-                "Collaborateur_Absence.nom",
-                "Collaborateur_Absence.prénom",
-                "Collaborateur_Refus.nom",
-                "Collaborateur_Refus.prénom"
+                "Bénéficiaire.nom",
+                "Bénéficiaire.prénom",
+                "Refusant.nom",
+                "Refusant.prénom"
               ],
               "filters": "statut='refusé' and 'date début' > dateDuJour"
             }
