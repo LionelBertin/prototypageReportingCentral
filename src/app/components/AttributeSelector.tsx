@@ -1440,6 +1440,12 @@ export function AttributeSelector() {
 
   const getGlobalFilterConditionLabel = (condition: FilterGroup['conditions'][number]) => {
     const op = getGlobalFilterOperatorLabel(condition.operator);
+    const formatFilterValue = (value: string | number | boolean) => {
+      if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return getFormattedReportDate(value);
+      }
+      return String(value);
+    };
 
     if (condition.operator === 'isEmpty' || condition.operator === 'isNotEmpty') {
       return `${condition.attributeName} ${op}`;
@@ -1450,8 +1456,8 @@ export function AttributeSelector() {
     }
 
     const renderedValue = Array.isArray(condition.value)
-      ? `[${condition.value.join(', ')}]`
-      : `"${condition.value}"`;
+      ? `[${condition.value.map((value) => formatFilterValue(value)).join(', ')}]`
+      : `"${formatFilterValue(condition.value)}"`;
 
     return `${condition.attributeName} ${op} ${renderedValue}`;
   };
@@ -2399,7 +2405,7 @@ export function AttributeSelector() {
                           return (
                             <div key={id} className="flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-2 py-1">
                               <span className="text-[11px] font-medium text-emerald-800">
-                                Groupe {index + 1}: {getSelectedAttributeDisplayName(attr)}
+                                {index + 1}: {getSelectedAttributeDisplayName(attr)}
                               </span>
                               <button
                                 onClick={() => removeGroupedColumn(id)}
