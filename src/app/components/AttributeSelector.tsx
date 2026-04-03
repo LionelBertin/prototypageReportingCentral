@@ -107,6 +107,7 @@ export function AttributeSelector() {
   const [draftShowCalculatedColumns, setDraftShowCalculatedColumns] = useState(false);
   const [draftShowColumnRename, setDraftShowColumnRename] = useState(false);
   const [draftShowLinkedObjectCardinalities, setDraftShowLinkedObjectCardinalities] = useState(true);
+  const [availableAttributeSearchTerm, setAvailableAttributeSearchTerm] = useState('');
 
   const buildSelectedAttribute = ({
     themeId,
@@ -1736,6 +1737,11 @@ export function AttributeSelector() {
 
   const getMainObjectAttributeDisplayLabel = (attr: AvailableObjectAttribute) => attr.rawName;
 
+  const normalizeSearchText = (value: string) => value
+    .toLocaleLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
   const openStage2MultiObjectDialog = (
     group: Stage2ObjectGroup,
     preset: 'aggregation' | 'first' | 'last' | 'applicable'
@@ -1781,6 +1787,26 @@ export function AttributeSelector() {
   const mainObjectSelectedAttributeIds = selectingMainObject
     ? new Set<string>()
     : getMainObjectSelectedAttributeIds(mainObjectAvailableAttributes);
+  const normalizedAvailableAttributeSearch = normalizeSearchText(availableAttributeSearchTerm.trim());
+  const filteredMainObjectStage2Groups = normalizedAvailableAttributeSearch
+    ? mainObjectStage2Groups
+        .map((group) => {
+          const groupNameMatches =
+            normalizeSearchText(group.label).includes(normalizedAvailableAttributeSearch) ||
+            normalizeSearchText(group.objectName).includes(normalizedAvailableAttributeSearch);
+
+          if (groupNameMatches) return group;
+          if (!group.isSelectable) return null;
+
+          const filteredAttributes = group.attributes.filter((attr) =>
+            normalizeSearchText(getMainObjectAttributeDisplayLabel(attr)).includes(normalizedAvailableAttributeSearch)
+          );
+
+          if (filteredAttributes.length === 0) return null;
+          return { ...group, attributes: filteredAttributes };
+        })
+        .filter((group): group is Stage2ObjectGroup => group !== null)
+    : mainObjectStage2Groups;
   const groupableSelectedAttributes = getGroupableSelectedAttributes();
   const groupableById = new Map(groupableSelectedAttributes.map((attr) => [attr.id, attr] as const));
   const availableGroupPickers = groupableSelectedAttributes.filter((attr) => !groupedColumnIds.includes(attr.id));
@@ -1823,8 +1849,8 @@ export function AttributeSelector() {
 
       {!selectingMainObject && mainObjectSmartObjects.length > 0 && (
         <div className="border-b bg-indigo-50/40 px-6 py-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="text-sm font-medium text-indigo-900">Sélections et filtres rapide</div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="shrink-0 text-sm font-medium text-indigo-900">Sélections et filtres rapide</div>
             <div className="flex flex-wrap gap-2">
               {mainObjectSmartObjects.map((smartObject) => (
                 <button
@@ -1854,13 +1880,22 @@ export function AttributeSelector() {
         ) : (
           <>
             <div className="w-1/2">
-              <div className="h-full overflow-y-auto border-r bg-gray-50 p-4">
-                <div className="mb-3">
+              <div className="h-full overflow-y-auto border-r bg-gray-50">
+                <div className="sticky top-0 z-10 border-b bg-gray-50 px-4 py-4">
                   <h2 className="font-semibold text-gray-900">Attributs disponibles</h2>
+                  <div className="mt-3">
+                    <input
+                      type="text"
+                      value={availableAttributeSearchTerm}
+                      onChange={(event) => setAvailableAttributeSearchTerm(event.target.value)}
+                      placeholder="Rechercher un attribut..."
+                      className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:border-indigo-400 focus:outline-none"
+                    />
+                  </div>
                 </div>
 
-                <div className="space-y-3">
-                  {mainObjectStage2Groups.map((group) => (
+                <div className="space-y-3 p-4">
+                  {filteredMainObjectStage2Groups.map((group) => (
                     <div key={group.key} className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
                       <div className="mb-3 flex items-center justify-between gap-3">
                         <div>
@@ -1976,9 +2011,11 @@ export function AttributeSelector() {
                     </div>
                   ))}
 
-                  {mainObjectStage2Groups.length === 0 && (
+                  {filteredMainObjectStage2Groups.length === 0 && (
                     <div className="rounded border bg-white px-3 py-2 text-sm text-gray-500">
-                      Aucun attribut disponible.
+                      {normalizedAvailableAttributeSearch
+                        ? 'Aucun attribut ne correspond à la recherche.'
+                        : 'Aucun attribut disponible.'}
                     </div>
                   )}
                 </div>

@@ -484,126 +484,6 @@
           ]
         },
         {
-          "id": "historique-des-syntheses-d-entretiens",
-          "name": "Historique des synthèses d'entretiens",
-          "relations": [
-            {
-              "targetObject": "Collaborateur",
-              "relationName": "Collaborateur",
-              "cardinalityFrom": "many",
-              "cardinalityTo": "one",
-              "recursiveMagicSel": false,
-              "magicSel": true
-            }
-          ],
-          "attributes": [
-            {
-              "id": "date",
-              "name": "Date",
-              "magicSel": false,
-              "dataType": "date"
-            },
-            {
-              "id": "nom",
-              "name": "Nom",
-              "magicSel": false,
-              "dataType": "string"
-            },
-            {
-              "id": "synthese",
-              "name": "Synthèse",
-              "magicSel": false,
-              "dataType": "string"
-            },
-            {
-              "id": "commentaires",
-              "name": "Commentaires",
-              "magicSel": false,
-              "dataType": "string"
-            }
-          ]
-        },
-        {
-          "id": "historique-des-syntheses-d-entretiens-annuels",
-          "name": "Historique des synthèses d'entretiens annuels",
-          "relations": [
-            {
-              "targetObject": "Collaborateur",
-              "relationName": "Collaborateur",
-              "cardinalityFrom": "many",
-              "cardinalityTo": "one",
-              "recursiveMagicSel": false,
-              "magicSel": true
-            }
-          ],
-          "attributes": [
-            {
-              "id": "date",
-              "name": "Date",
-              "magicSel": false,
-              "dataType": "date"
-            },
-            {
-              "id": "nom",
-              "name": "Nom",
-              "magicSel": false,
-              "dataType": "string"
-            },
-            {
-              "id": "synthese",
-              "name": "Synthèse",
-              "magicSel": false,
-              "dataType": "string"
-            },
-            {
-              "id": "commentaires",
-              "name": "Commentaires",
-              "magicSel": false,
-              "dataType": "string"
-            }
-          ]
-        },
-        {
-          "id": "historique-des-syntheses-d-entretiens-professionnels",
-          "name": "Historique des synthèses d'entretiens professionnels",
-          "relations": [
-            {
-              "targetObject": "Collaborateur",
-              "relationName": "Collaborateur",
-              "cardinalityFrom": "many",
-              "cardinalityTo": "one",
-              "recursiveMagicSel": false,
-              "magicSel": true
-            }
-          ],
-          "attributes": [
-            {
-              "id": "date",
-              "name": "Date",
-              "magicSel": false,
-              "dataType": "date"
-            },
-            {
-              "id": "nom",
-              "name": "Nom",
-              "magicSel": false,
-              "dataType": "string"
-            },
-            {
-              "id": "synthese",
-              "name": "Synthèse",
-              "magicSel": false,
-              "dataType": "string"
-            },
-            {
-              "id": "commentaires",
-              "name": "Commentaires",
-              "magicSel": false,
-              "dataType": "string"
-            }
-          ]
-        },
-        {
           "id": "langue-s",
           "name": "Langue(s)",
           "relations": [
@@ -2808,6 +2688,70 @@
               "name": "Commentaire final",
               "magicSel": true,
               "dataType": "string"
+            }
+          ]
+        },
+        {
+          "id": "historique-des-syntheses-d-entretiens",
+          "name": "Historique des synthèses d'entretiens",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": true
+            }
+          ],
+          "attributes": [
+            {
+              "id": "nature",
+              "name": "Nature",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "date",
+              "name": "Date",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "synthese",
+              "name": "Synthèse",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "commentaires",
+              "name": "Commentaires",
+              "magicSel": false,
+              "dataType": "string"
+            }
+          ],
+          "smartObjects": [
+            {
+              "title": "Entretiens annuels",
+              "columns": [
+                "Date",
+                "Synthèse",
+                "Commentaires",
+                "Collaborateur.nom",
+                "Collaborateur.prénom"
+              ],
+              "filters": "'Nature' = 'Annuel'"
+            },
+            {
+              "title": "Entretiens professionnels",
+              "columns": [
+                "Date",
+                "Synthèse",
+                "Commentaires",
+                "Collaborateur.nom",
+                "Collaborateur.prénom"
+              ],
+              "filters": "'Nature' = 'Professionnel'"
             }
           ]
         },

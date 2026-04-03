@@ -337,8 +337,9 @@ export function SelectionPanel({
                                   </div>
                                 ) : (
                                   <>
-                                    <span className="flex-1 text-sm font-medium text-gray-900">
-                                      {`${getDisplayColumnName(attr)} – ${getObjectGroupTitle(attr)}`}
+                                    <span className="flex-1 text-sm text-gray-900">
+                                      <span className="font-semibold">{getDisplayColumnName(attr)}</span>
+                                      <span className="font-normal text-gray-500">{` – ${getObjectGroupTitle(attr)}`}</span>
                                     </span>
                                     {isFilterInvolved && (
                                       <Filter className="size-3 text-orange-600" title="Utilisé dans le filtrage" />
