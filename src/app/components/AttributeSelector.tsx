@@ -72,6 +72,105 @@ type Stage2ObjectGroup = {
   attributes: AvailableObjectAttribute[];
 };
 
+type DepartmentNode = {
+  name: string;
+  children: DepartmentNode[];
+};
+
+const parseDepartmentHierarchy = (raw: string): DepartmentNode[] => {
+  const lines = raw
+    .split(/\r?\n/)
+    .map((line) => ({
+      label: line.trim(),
+      indent: (line.match(/^\s*/) ?? [''])[0].length,
+    }))
+    .filter((entry) => entry.label.length > 0 && entry.label.toLocaleLowerCase() !== 'lucca');
+
+  const roots: DepartmentNode[] = [];
+  const stack: Array<{ indent: number; node: DepartmentNode }> = [];
+
+  for (const line of lines) {
+    const currentNode: DepartmentNode = { name: line.label, children: [] };
+
+    while (stack.length > 0 && stack[stack.length - 1].indent >= line.indent) {
+      stack.pop();
+    }
+
+    const parent = stack[stack.length - 1]?.node;
+    if (parent) {
+      parent.children.push(currentNode);
+    } else {
+      roots.push(currentNode);
+    }
+
+    stack.push({ indent: line.indent, node: currentNode });
+  }
+
+  return roots;
+};
+
+const parseEstablishmentOptions = (raw: string) => Array.from(
+  new Set(
+    raw
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+  )
+).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+
+function DepartmentTreeItem({
+  node,
+  level,
+  disabled,
+  selectedDepartmentFilters,
+  onToggle,
+  path,
+}: {
+  node: DepartmentNode;
+  level: number;
+  disabled: boolean;
+  selectedDepartmentFilters: string[];
+  onToggle: (node: DepartmentNode, checked: boolean) => void;
+  path?: string;
+}) {
+  const checkboxId = `${path ?? 'dept'}-${node.name}`;
+
+  return (
+    <div>
+      <label
+        htmlFor={checkboxId}
+        className="flex items-center gap-2 whitespace-nowrap"
+        style={{ paddingLeft: `${level * 14}px` }}
+      >
+        <input
+          id={checkboxId}
+          type="checkbox"
+          checked={selectedDepartmentFilters.includes(node.name)}
+          disabled={disabled}
+          onChange={(event) => onToggle(node, event.target.checked)}
+        />
+        <span className="font-light whitespace-nowrap">{node.name}</span>
+      </label>
+
+      {node.children.length > 0 && (
+        <div>
+          {node.children.map((child) => (
+            <DepartmentTreeItem
+              key={`${checkboxId}-${child.name}`}
+              node={child}
+              level={level + 1}
+              disabled={disabled}
+              selectedDepartmentFilters={selectedDepartmentFilters}
+              onToggle={onToggle}
+              path={checkboxId}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AttributeSelector() {
   const [selectedAttributes, setSelectedAttributes] = useState<SelectedAttribute[]>([]);
   const [selectingMainObject, setSelectingMainObject] = useState(true);
@@ -113,6 +212,10 @@ export function AttributeSelector() {
   const [includeDepartedCollaborators, setIncludeDepartedCollaborators] = useState(false);
   const [includePresentCollaborators, setIncludePresentCollaborators] = useState(true);
   const [includeFutureCollaborators, setIncludeFutureCollaborators] = useState(false);
+  const [selectedDepartmentFilters, setSelectedDepartmentFilters] = useState<string[]>([]);
+  const [selectedEstablishmentFilters, setSelectedEstablishmentFilters] = useState<string[]>([]);
+  const [departmentTree, setDepartmentTree] = useState<DepartmentNode[]>([]);
+  const [establishmentOptions, setEstablishmentOptions] = useState<string[]>([]);
   const [collaboratorStatusFilterExpanded, setCollaboratorStatusFilterExpanded] = useState(false);
   const [prototypeConfigOpen, setPrototypeConfigOpen] = useState(false);
   const [draftShowCompartmenting, setDraftShowCompartmenting] = useState(false);
@@ -122,6 +225,33 @@ export function AttributeSelector() {
   const [draftShowLinkedObjectCardinalities, setDraftShowLinkedObjectCardinalities] = useState(true);
   const [draftShowSelectAllButton, setDraftShowSelectAllButton] = useState(true);
   const [availableAttributeSearchTerm, setAvailableAttributeSearchTerm] = useState('');
+
+  useEffect(() => {
+    const loadCollaboratorOrgLists = async () => {
+      try {
+        const [departmentsResponse, establishmentsResponse] = await Promise.all([
+          fetch('/arboSimpleDepartements.md'),
+          fetch('/mock_listeEtablissements.md'),
+        ]);
+
+        if (!departmentsResponse.ok || !establishmentsResponse.ok) {
+          return;
+        }
+
+        const [departmentsRaw, establishmentsRaw] = await Promise.all([
+          departmentsResponse.text(),
+          establishmentsResponse.text(),
+        ]);
+
+        setDepartmentTree(parseDepartmentHierarchy(departmentsRaw));
+        setEstablishmentOptions(parseEstablishmentOptions(establishmentsRaw));
+      } catch (error) {
+        console.warn('Impossible de charger les listes DE/ETAB.', error);
+      }
+    };
+
+    loadCollaboratorOrgLists();
+  }, []);
 
   const buildSelectedAttribute = ({
     themeId,
@@ -1282,6 +1412,8 @@ export function AttributeSelector() {
     setIncludeDepartedCollaborators(false);
     setIncludePresentCollaborators(true);
     setIncludeFutureCollaborators(false);
+    setSelectedDepartmentFilters([]);
+    setSelectedEstablishmentFilters([]);
     setCollaboratorStatusFilterExpanded(false);
   };
 
@@ -1358,15 +1490,20 @@ export function AttributeSelector() {
       return '';
     }
 
-    const lastPathItem = attr.navigationPath?.at(-1);
-    if (lastPathItem) {
-      const relationLabel = lastPathItem.relationLabel?.trim();
-      const objectName = lastPathItem.objectName?.trim();
-      if (relationLabel) return relationLabel;
-      if (objectName) return objectName;
+    const navigationPath = attr.navigationPath ?? [];
+    if (navigationPath.length === 0) {
+      return attr.objectName;
     }
 
-    return attr.objectName;
+    const firstStep = navigationPath[0];
+    const rootRelationLabel = firstStep.relationLabel?.trim() || firstStep.objectName?.trim() || '';
+
+    if (!rootRelationLabel || rootRelationLabel === attr.objectName) {
+      return attr.objectName;
+    }
+
+    return `${attr.objectName} · ${rootRelationLabel}`;
+
   };
 
   const getSelectedAttributeDisplayName = (attr: SelectedAttribute) => {
@@ -1377,13 +1514,40 @@ export function AttributeSelector() {
     return `${baseName} – ${groupTitle}`;
   };
 
+  const compareSelectedAttributesByAttributeThenContext = (a: SelectedAttribute, b: SelectedAttribute) => {
+    const normalizeSortKey = (value: string) =>
+      value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLocaleLowerCase();
+
+    const aAttributeName = a.attributeName;
+    const bAttributeName = b.attributeName;
+    const byAttributeName = normalizeSortKey(aAttributeName).localeCompare(normalizeSortKey(bAttributeName), 'fr');
+    if (byAttributeName !== 0) return byAttributeName;
+
+    const byObjectName = normalizeSortKey(a.objectName ?? '').localeCompare(normalizeSortKey(b.objectName ?? ''), 'fr');
+    if (byObjectName !== 0) return byObjectName;
+
+    const aFirstStep = a.navigationPath?.[0];
+    const bFirstStep = b.navigationPath?.[0];
+    const aRelationName = aFirstStep?.relationLabel?.trim() || aFirstStep?.objectName?.trim() || '';
+    const bRelationName = bFirstStep?.relationLabel?.trim() || bFirstStep?.objectName?.trim() || '';
+    const byRelationName = normalizeSortKey(aRelationName).localeCompare(normalizeSortKey(bRelationName), 'fr');
+    if (byRelationName !== 0) return byRelationName;
+
+    return normalizeSortKey(getSelectedAttributeDisplayName(a)).localeCompare(normalizeSortKey(getSelectedAttributeDisplayName(b)), 'fr');
+  };
+
   const getGlobalSelectedAttributesForFilter = () => {
-    return selectedAttributes.map((attr) => ({
+    return [...selectedAttributes]
+      .sort(compareSelectedAttributesByAttributeThenContext)
+      .map((attr) => ({
       id: attr.id,
       name: attr.attributeName,
       columnName: getSelectedAttributeDisplayName(attr),
       type: attr.attributeType,
-    }));
+      }));
   };
 
   const getGlobalCompartmentFilterAttributes = () => {
@@ -1494,6 +1658,52 @@ export function AttributeSelector() {
     }
 
     return lines;
+  };
+
+  const getCollaboratorOrgFilterLine = () => {
+    const formatOrgFilterList = (values: string[], maxVisibleItems = 5) => {
+      if (values.length <= maxVisibleItems) {
+        return values.join(', ');
+      }
+
+      return [
+        ...values.slice(0, 2),
+        '...',
+        ...values.slice(values.length - 2),
+      ].join(', ');
+    };
+
+    const clauses: string[] = [];
+
+    if (selectedDepartmentFilters.length > 0) {
+      clauses.push(`Départements dans (${formatOrgFilterList(selectedDepartmentFilters)})`);
+    }
+
+    if (selectedEstablishmentFilters.length > 0) {
+      clauses.push(`Etablissements dans (${selectedEstablishmentFilters.join(', ')})`);
+    }
+
+    if (clauses.length === 0) return null;
+    return clauses.join(' et ');
+  };
+
+  const getDepartmentBranchNames = (node: DepartmentNode): string[] => {
+    return [node.name, ...node.children.flatMap(getDepartmentBranchNames)];
+  };
+
+  const toggleDepartmentBranch = (node: DepartmentNode, isChecked: boolean) => {
+    const branchNames = getDepartmentBranchNames(node);
+    setSelectedDepartmentFilters((prev) => {
+      const next = new Set(prev);
+      for (const name of branchNames) {
+        if (isChecked) {
+          next.add(name);
+        } else {
+          next.delete(name);
+        }
+      }
+      return Array.from(next).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+    });
   };
 
   const getSortableSelectedAttributes = () => {
@@ -1877,6 +2087,8 @@ export function AttributeSelector() {
     setIncludeDepartedCollaborators(false);
     setIncludePresentCollaborators(true);
     setIncludeFutureCollaborators(false);
+    setSelectedDepartmentFilters([]);
+    setSelectedEstablishmentFilters([]);
   };
 
   const normalizeSearchText = (value: string) => value
@@ -1951,12 +2163,14 @@ export function AttributeSelector() {
     : mainObjectStage2Groups;
   const groupableSelectedAttributes = getGroupableSelectedAttributes();
   const groupableById = new Map(groupableSelectedAttributes.map((attr) => [attr.id, attr] as const));
-  const availableGroupPickers = groupableSelectedAttributes.filter((attr) => !groupedColumnIds.includes(attr.id));
+  const availableGroupPickers = groupableSelectedAttributes
+    .filter((attr) => !groupedColumnIds.includes(attr.id))
+    .sort(compareSelectedAttributesByAttributeThenContext);
   const sortableSelectedAttributes = getSortableSelectedAttributes();
   const sortableById = new Map(sortableSelectedAttributes.map((attr) => [attr.id, attr] as const));
-  const availableSortPickers = sortableSelectedAttributes.filter(
-    (attr) => !sortColumnIds.includes(attr.id) && !groupedColumnIds.includes(attr.id)
-  );
+  const availableSortPickers = sortableSelectedAttributes
+    .filter((attr) => !sortColumnIds.includes(attr.id) && !groupedColumnIds.includes(attr.id))
+    .sort(compareSelectedAttributesByAttributeThenContext);
   const mainObjectLinkedToCollaborateur = !!(
     !selectingMainObject
     && mainObject
@@ -1973,6 +2187,21 @@ export function AttributeSelector() {
       : activeCollaboratorStatusLabels.length === 1
       ? activeCollaboratorStatusLabels[0]
       : `${activeCollaboratorStatusLabels.slice(0, -1).join(', ')} et ${activeCollaboratorStatusLabels[activeCollaboratorStatusLabels.length - 1]}`;
+  const collaboratorDepartmentSummary =
+    selectedDepartmentFilters.length === 0
+      ? 'Dpt. tous'
+      : `${selectedDepartmentFilters.length} Dpt.`;
+  const collaboratorEstablishmentSummary =
+    selectedEstablishmentFilters.length === 0
+      ? 'Etab. tous'
+      : `${selectedEstablishmentFilters.length} Etab.`;
+  const collaboratorOrgFilterSummaryLabel = `${collaboratorDepartmentSummary} - ${collaboratorEstablishmentSummary}`;
+  const collaboratorStatusFilterLines = getCollaboratorStatusFilterLines();
+  const collaboratorOrgFilterLine = getCollaboratorOrgFilterLine();
+  const collaboratorGeneratedFilterLines = [
+    ...collaboratorStatusFilterLines,
+    ...(collaboratorOrgFilterLine ? [collaboratorOrgFilterLine] : []),
+  ];
 
   return (
     <div className="flex h-screen flex-col">
@@ -2031,7 +2260,7 @@ export function AttributeSelector() {
           </div>
         ) : (
           <>
-            <div className="w-5/12">
+            <div className="w-4/12">
               <div className="h-full overflow-y-auto border-r bg-gray-50">
                 <div className="sticky top-0 z-10 border-b bg-gray-50 px-4 py-4">
                   <div className="flex items-center justify-between gap-2">
@@ -2185,7 +2414,7 @@ export function AttributeSelector() {
               </div>
             </div>
 
-            <div className="flex w-4/12 flex-col border-l bg-white">
+            <div className="flex w-3/12 flex-col border-l bg-white">
               <div className="border-b px-4 py-4">
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-lg font-semibold text-gray-900">
@@ -2225,7 +2454,7 @@ export function AttributeSelector() {
               </div>
             </div>
 
-            <div className="flex w-3/12 flex-col border-l bg-gray-50">
+            <div className="flex w-5/12 flex-col border-l bg-gray-50">
               <div className="border-b px-4 py-4">
                 <div className="text-lg font-semibold text-gray-900">
                   Filtrage / Tri / Groupe
@@ -2245,7 +2474,7 @@ export function AttributeSelector() {
                         <span className="font-medium">Statuts collaborateurs</span>
                         <span>
                           {mainObjectLinkedToCollaborateur
-                            ? `${activeCollaboratorStatusSummary} · Date ${getFormattedReportDate(reportDate)}`
+                            ? `${activeCollaboratorStatusSummary} · ${collaboratorOrgFilterSummaryLabel} · ${getFormattedReportDate(reportDate)}`
                             : 'Non applicable'}
                         </span>
                       </button>
@@ -2302,13 +2531,78 @@ export function AttributeSelector() {
                             </label>
                           </div>
 
-                          {mainObjectLinkedToCollaborateur && getCollaboratorStatusFilterLines().length > 0 && (
-                            <div className="space-y-1 rounded border border-orange-200 bg-white p-2 text-[11px] text-orange-900">
-                              {getCollaboratorStatusFilterLines().map((line, index) => (
-                                <div key={index}>• {line}</div>
-                              ))}
-                            </div>
-                          )}
+                          <div className="grid gap-2 md:grid-cols-2">
+                            <label className="space-y-1 text-[11px] text-orange-900">
+                              <span className="font-medium">Départements</span>
+                              <div className="h-48 w-full overflow-y-auto overflow-x-auto rounded border border-orange-300 bg-white px-2 py-1 text-[10px] font-light text-orange-900">
+                                {departmentTree.length === 0 ? (
+                                  <div className="text-orange-700">Aucun département chargé.</div>
+                                ) : (
+                                  <div className="space-y-0.5">
+                                    {departmentTree.map((rootNode) => (
+                                      <DepartmentTreeItem
+                                        key={rootNode.name}
+                                        node={rootNode}
+                                        level={0}
+                                        disabled={!mainObjectLinkedToCollaborateur}
+                                        selectedDepartmentFilters={selectedDepartmentFilters}
+                                        onToggle={toggleDepartmentBranch}
+                                      />
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </label>
+
+                            <label className="space-y-1 text-[11px] text-orange-900">
+                              <span className="font-medium">Etablissements</span>
+                              <div className="h-48 w-full overflow-y-auto overflow-x-auto rounded border border-orange-300 bg-white px-2 py-1 text-[10px] font-light text-orange-900">
+                                {establishmentOptions.length === 0 ? (
+                                  <div className="text-orange-700">Aucun établissement chargé.</div>
+                                ) : (
+                                  <div className="space-y-0.5">
+                                    {establishmentOptions.map((establishment) => {
+                                      const isChecked = selectedEstablishmentFilters.includes(establishment);
+                                      return (
+                                        <label
+                                          key={establishment}
+                                          className="flex items-center gap-2 whitespace-nowrap"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={isChecked}
+                                            disabled={!mainObjectLinkedToCollaborateur}
+                                            onChange={(event) => {
+                                              const shouldCheck = event.target.checked;
+                                              setSelectedEstablishmentFilters((prev) => {
+                                                const next = new Set(prev);
+                                                if (shouldCheck) {
+                                                  next.add(establishment);
+                                                } else {
+                                                  next.delete(establishment);
+                                                }
+                                                return Array.from(next).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+                                              });
+                                            }}
+                                          />
+                                          <span className="font-light whitespace-nowrap">{establishment}</span>
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            </label>
+                          </div>
+
+                        </div>
+                      )}
+
+                      {mainObjectLinkedToCollaborateur && collaboratorGeneratedFilterLines.length > 0 && (
+                        <div className="space-y-1 border-t border-orange-200 bg-white/80 p-2 text-[11px] text-orange-900">
+                          {collaboratorGeneratedFilterLines.map((line, index) => (
+                            <div key={index}>• {line}</div>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -2320,12 +2614,12 @@ export function AttributeSelector() {
                     >
                       {globalFilterGroups && globalFilterGroups.length > 0 ? (
                         <>
-                          <div className="mb-1 font-medium">Filtres actifs :</div>
-                          <div className="space-y-1">
+                          <div className="mb-1 font-normal">Filtres actifs :</div>
+                          <div className="space-y-1 font-normal">
                             {getGlobalFilterGroupLines().map((line, index) => (
                               <div key={index}>
-                                {index > 0 && <div className="my-1 font-bold text-orange-900">OU</div>}
-                                <div className="ml-2">{line}</div>
+                                {index > 0 && <div className="my-1 font-normal text-orange-900">OU</div>}
+                                <div className="ml-2 font-normal">{line}</div>
                               </div>
                             ))}
                           </div>
@@ -2624,7 +2918,9 @@ export function AttributeSelector() {
                           includeDepartedCollaborators,
                           includePresentCollaborators,
                           includeFutureCollaborators,
-                          generatedLines: mainObjectLinkedToCollaborateur ? getCollaboratorStatusFilterLines() : [],
+                          selectedDepartmentFilters,
+                          selectedEstablishmentFilters,
+                          generatedLines: mainObjectLinkedToCollaborateur ? collaboratorGeneratedFilterLines : [],
                         },
                       });
                       alert('Configuration sauvegardée ! Voir la console pour les détails.');

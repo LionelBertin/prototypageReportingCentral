@@ -30,16 +30,32 @@ export function FilterDialog({
   compartmentFilterAttributes = [],
   showCompartmenting = false,
 }: FilterDialogProps) {
+  const normalizeSortKey = (value: string) =>
+    value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLocaleLowerCase();
+
+  const sortedObjectAttributes = useMemo(
+    () => [...(objectAttributes ?? [])].sort((a, b) => normalizeSortKey(a.name).localeCompare(normalizeSortKey(b.name), 'fr')),
+    [objectAttributes]
+  );
+
+  const sortedCompartmentFilterAttributes = useMemo(
+    () => [...compartmentFilterAttributes].sort((a, b) => normalizeSortKey(a.name).localeCompare(normalizeSortKey(b.name), 'fr')),
+    [compartmentFilterAttributes]
+  );
+
   const filterTargets = useMemo(
     () => [
-      ...(objectAttributes ?? []).map((attr) => ({
+      ...sortedObjectAttributes.map((attr) => ({
         id: attr.id,
         name: attr.name,
         type: attr.type,
         targetKind: 'native' as const,
       })),
       ...(showCompartmenting
-        ? compartmentFilterAttributes.map((attr) => ({
+        ? sortedCompartmentFilterAttributes.map((attr) => ({
             id: attr.id,
             name: attr.name,
             type: 'string' as AttributeType,
@@ -49,7 +65,7 @@ export function FilterDialog({
           }))
         : []),
     ],
-    [objectAttributes, showCompartmenting, compartmentFilterAttributes]
+      [sortedObjectAttributes, showCompartmenting, sortedCompartmentFilterAttributes]
   );
 
   const [filterGroups, setFilterGroups] = useState<FilterGroup[]>(
@@ -362,9 +378,9 @@ export function FilterDialog({
               <div className="space-y-3">
                 {group.conditions.map((condition, conditionIndex) => (
                   (() => {
-                    const comparableAttributes = (selectedFilterAttributes ?? []).filter(
-                      (attr) => attr.type === condition.attributeType && condition.targetKind !== 'compartment'
-                    );
+                    const comparableAttributes = (selectedFilterAttributes ?? [])
+                      .filter((attr) => attr.type === condition.attributeType && condition.targetKind !== 'compartment')
+                      .sort((a, b) => normalizeSortKey(a.columnName || a.name).localeCompare(normalizeSortKey(b.columnName || b.name), 'fr'));
                     const selectedCompartmentTarget = compartmentFilterAttributes.find((attr) => attr.id === condition.attributeId);
 
                     return (
@@ -387,14 +403,14 @@ export function FilterDialog({
                             onChange={(e) => updateCondition(groupIndex, conditionIndex, 'attributeId', e.target.value)}
                             className="w-full rounded border border-gray-300 px-2 py-2 text-sm"
                           >
-                            {(objectAttributes ?? []).map((attr) => (
+                            {sortedObjectAttributes.map((attr) => (
                               <option key={attr.id} value={attr.id}>
                                 {attr.name}
                               </option>
                             ))}
                             {showCompartmenting && compartmentFilterAttributes.length > 0 && (
                               <optgroup label="Attributs compartimentés">
-                                {compartmentFilterAttributes.map((attr) => (
+                                {sortedCompartmentFilterAttributes.map((attr) => (
                                   <option key={attr.id} value={attr.id}>
                                     {attr.name}
                                   </option>

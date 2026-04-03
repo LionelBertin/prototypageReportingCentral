@@ -13,10 +13,6 @@ pouvoir filtrer facilement
 "mes managés"
 "mon département" 
 
-## date du rapport
-une notion de date/période de rapport serait utile
-
-
 
 ###########################################################
 # P2

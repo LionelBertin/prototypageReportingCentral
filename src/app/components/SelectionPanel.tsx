@@ -260,16 +260,13 @@ export function SelectionPanel({
     }
 
     const firstStep = navigationPath[0];
-    const rootRelationLabel = firstStep.relationLabel?.trim() || firstStep.objectName?.trim() || attr.objectName;
+    const rootRelationLabel = firstStep.relationLabel?.trim() || firstStep.objectName?.trim() || '';
 
-    if (navigationPath.length === 1) {
-      // Un seul saut : "Bénéficiaire", "Approbateur", etc.
-      return rootRelationLabel;
+    if (!rootRelationLabel || rootRelationLabel === attr.objectName) {
+      return attr.objectName;
     }
 
-    // Plusieurs sauts : montrer l'objet source + le contexte racine
-    // ex: "Matricules et Login – Approbateur"
-    return `${attr.objectName} – ${rootRelationLabel}`;
+    return `${attr.objectName} · ${rootRelationLabel}`;
   };
 
   return (

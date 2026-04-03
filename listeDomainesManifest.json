@@ -701,6 +701,12 @@
               "dataType": "string"
             },
             {
+              "id": "age",
+              "name": "Âge",
+              "magicSel": false,
+              "dataType": "number"
+            },
+            {
               "id": "revenu",
               "name": "revenu",
               "magicSel": false,
