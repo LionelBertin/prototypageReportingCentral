@@ -1,0 +1,1725 @@
+﻿{
+  "format": "reporting-central-manifest",
+  "version": "2.0.0",
+  "domains": [
+    {
+      "id": "les-collaborateurs",
+      "name": "Les collaborateurs",
+      "objects": [
+        {
+          "id": "collaborateur",
+          "name": "Collaborateur",
+          "magicSel": true,
+          "attributes": [
+            {
+              "id": "photo",
+              "name": "Photo",
+              "magicSel": false,
+              "dataType": "file"
+            },
+            {
+              "id": "titre",
+              "name": "Titre",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "nom",
+              "name": "Nom",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "pr-nom",
+              "name": "Prénom",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "genre",
+              "name": "Genre",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "date-de-naissance",
+              "name": "Date de naissance",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "age",
+              "name": "Âge",
+              "magicSel": false,
+              "dataType": "number"
+            }
+          ]
+        },
+        {
+          "id": "matricules-et-login",
+          "name": "Matricules et Login",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "one",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "userid",
+              "name": "UserId",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "login",
+              "name": "Login",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "matricule-de-paie",
+              "name": "Matricule de paie",
+              "magicSel": false,
+              "dataType": "string"
+            }
+          ]
+        },
+        {
+          "id": "adresse-de-r-sidence",
+          "name": "Adresse de résidence",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "one",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "rue",
+              "name": "Rue",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "compl-ment",
+              "name": "Complément",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "code-postal",
+              "name": "Code postal",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "ville",
+              "name": "Ville",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "pays",
+              "name": "Pays",
+              "magicSel": false,
+              "dataType": "string"
+            }
+          ]
+        },
+        {
+          "id": "informations-contact",
+          "name": "Informations contact",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "one",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "email-personnel",
+              "name": "Email personnel",
+              "magicSel": false,
+              "dataType": "email"
+            },
+            {
+              "id": "t-l-phone-personnel",
+              "name": "Téléphone personnel",
+              "magicSel": true,
+              "dataType": "phone"
+            }
+          ]
+        },
+        {
+          "id": "contact-d-urgence",
+          "name": "Contact d'urgence",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "one",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "nom",
+              "name": "Nom",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "relation",
+              "name": "Relation",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "t-l-phone",
+              "name": "Téléphone",
+              "magicSel": true,
+              "dataType": "phone"
+            }
+          ]
+        },
+        {
+          "id": "documents-d-identit",
+          "name": "Documents d'identité",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": true
+            }
+          ],
+          "attributes": [
+            {
+              "id": "type-de-document",
+              "name": "Type de document",
+              "magicSel": false,
+              "dataType": "String"
+            },
+            {
+              "id": "document",
+              "name": "Document",
+              "magicSel": true,
+              "dataType": "file"
+            },
+            {
+              "id": "date-mission",
+              "name": "Date émission",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "date-expiration",
+              "name": "Date expiration",
+              "magicSel": true,
+              "dataType": "date"
+            }
+          ]
+        },
+        {
+          "id": "enfants-charge",
+          "name": "Enfants à charge",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": true
+            }
+          ],
+          "attributes": [
+            {
+              "id": "nom",
+              "name": "Nom",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "pr-nom",
+              "name": "Prénom",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "genre",
+              "name": "Genre",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "date-de-naissance",
+              "name": "Date de naissance",
+              "magicSel": true,
+              "dataType": "date"
+            }
+          ]
+        },
+        {
+          "id": "taille-goodies",
+          "name": "Taille goodies",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "one",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "taille-en-cm",
+              "name": "Taille en cm",
+              "magicSel": false,
+              "dataType": "number"
+            },
+            {
+              "id": "taille-tshirt",
+              "name": "Taille tshirt",
+              "magicSel": true,
+              "dataType": "string"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "les-contrats",
+      "name": "Les contrats",
+      "objects": [
+        {
+          "id": "contrats",
+          "name": "Contrats",
+          "applicationDate": {
+            "startAttributeId": "date-d-but",
+            "endAttributeId": "date-fin"
+          },
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "type-de-contrat",
+              "name": "Type de contrat",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "document",
+              "name": "Document",
+              "magicSel": false,
+              "dataType": "file"
+            },
+            {
+              "id": "date-signature",
+              "name": "Date signature",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "date-d-but",
+              "name": "Date début",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "date-fin",
+              "name": "Date fin",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "motif-d-but",
+              "name": "Motif début",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "motif-fin",
+              "name": "Motif fin",
+              "magicSel": false,
+              "dataType": "string"
+            }
+          ],
+          "smartObjects": [
+            {
+              "title": "Contrats passés",
+              "columns": [
+                "type de contrat",
+                "date début",
+                "date fin",
+                "Collaborateur.nom",
+                "Collaborateur.prénom"
+              ],
+              "filters": "'date fin' < dateDuJour"
+            },
+            {
+              "title": "Contrats actifs",
+              "columns": [
+                "type de contrat",
+                "date début",
+                "date fin",
+                "Collaborateur.nom",
+                "Collaborateur.prénom"
+              ],
+              "filters": "'date début' <= dateDuJour and ('date fin' >= dateDuJour or 'date fin' is null)"
+            },
+            {
+              "title": "Contrats futurs",
+              "columns": [
+                "type de contrat",
+                "date début",
+                "date fin",
+                "Collaborateur.nom",
+                "Collaborateur.prénom"
+              ],
+              "filters": "'date début' > dateDuJour"
+            }
+          ]
+        },
+        {
+          "id": "postes",
+          "name": "Postes",
+          "applicationDate": {
+            "startAttributeId": "date-d-but",
+            "endAttributeId": "date-fin"
+          },
+          "relations": [
+            {
+              "targetObject": "Contrats",
+              "relationName": "Contrat",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+            },
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Manager",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+            },
+            {
+              "targetObject": "Département",
+              "relationName": "Département",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+            },
+            {
+              "targetObject": "Etablissement",
+              "relationName": "Etablissement",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "intitul",
+              "name": "Intitulé",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "document",
+              "name": "Document",
+              "magicSel": false,
+              "dataType": "file"
+            },
+            {
+              "id": "date-d-but",
+              "name": "Date début",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "date-fin",
+              "name": "Date fin",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "qualifications",
+              "name": "Qualifications",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "csp",
+              "name": "Csp",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "modalit-de-temps-de-travail",
+              "name": "Modalité de temps de travail",
+              "magicSel": false,
+              "dataType": "string"
+            }
+          ],
+          "smartObjects": [
+            {
+              "title": "Postes passés",
+              "columns": [
+                "intitulé",
+                "date début",
+                "date fin",
+                "Manager.nom",
+                "Manager.prénom",
+                "Département.nom"
+              ],
+              "filters": "'date fin' < dateDuJour"
+            },
+            {
+              "title": "Postes actifs",
+              "columns": [
+                "intitulé",
+                "date début",
+                "date fin",
+                "Manager.nom",
+                "Manager.prénom",
+                "Département.nom"
+              ],
+              "filters": "('date début' <= dateDuJour and 'date fin' >= dateDuJour) or ('date début' <= dateDuJour and 'date fin' is null)"
+            },
+            {
+              "title": "Postes futurs",
+              "columns": [
+                "intitulé",
+                "date début",
+                "date fin",
+                "Manager.nom",
+                "Manager.prénom",
+                "Département.nom"
+              ],
+              "filters": "'date début' > dateDuJour"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "les-absences",
+      "name": "Les absences",
+      "objects": [
+        {
+          "id": "absences",
+          "name": "Absences",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Demandeur",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            },
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Bénéficiaire",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+            },
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Approbateur",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            },
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Refuseur",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": true
+            }
+          ],
+          "attributes": [
+            {
+              "id": "statut",
+              "name": "Statut",
+              "magicSel": true,
+              "enum": [
+                "à traiter",
+                "refusé",
+                "approuvé"
+              ],
+              "dataType": "string"
+            },
+            {
+              "id": "date-demande",
+              "name": "Date demande",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "date-refus",
+              "name": "Date refus",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "motivation-du-refus",
+              "name": "Motivation du refus",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "date-approbation",
+              "name": "Date approbation",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "date-d-but",
+              "name": "Date début",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "date-fin",
+              "name": "Date fin",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "dur-e-r-elle",
+              "name": "Durée réelle",
+              "magicSel": false,
+              "dataType": "number"
+            },
+            {
+              "id": "dur-e-ouvr-e",
+              "name": "Durée ouvrée",
+              "magicSel": true,
+              "dataType": "number"
+            }
+          ],
+          "smartObjects": [
+            {
+              "title": "Absences approuvées à venir",
+              "columns": [
+                "type compte",
+                "date début",
+                "date fin",
+                "Collaborateur_Absence.nom",
+                "Collaborateur_Absence.prénom",
+                "Collaborateur_Approbation.nom",
+                "Collaborateur_Approbation.prénom"
+              ],
+              "filters": "statut='approuvé' and 'date début' > dateDuJour"
+            },
+            {
+              "title": "Absences passées",
+              "columns": [
+                "type compte",
+                "date début",
+                "date fin",
+                "Collaborateur_Absence.nom",
+                "Collaborateur_Absence.prénom",
+                "Collaborateur_Approbation.nom",
+                "Collaborateur_Approbation.prénom"
+              ],
+              "filters": "statut='approuvé' and 'date début' <= dateDuJour"
+            },
+            {
+              "title": "Absences à traiter",
+              "columns": [
+                "date demande",
+                "type compte",
+                "durée ouvrée",
+                "Collaborateur_Absence.nom",
+                "Collaborateur_Absence.prénom",
+                "Collaborateur_Absence.poste[applicable].manager.nom",
+                "Collaborateur_Absence.poste[applicable].manager.prénom"
+              ],
+              "filters": "statut='à traiter'"
+            },
+            {
+              "title": "Absences refusées futures",
+              "columns": [
+                "date refus",
+                "motivation du refus",
+                "durée ouvrée",
+                "Collaborateur_Absence.nom",
+                "Collaborateur_Absence.prénom",
+                "Collaborateur_Refus.nom",
+                "Collaborateur_Refus.prénom"
+              ],
+              "filters": "statut='refusé' and 'date début' > dateDuJour"
+            }
+          ]
+        },
+        {
+          "id": "solde-de-cong-s",
+          "name": "Solde de congés",
+          "applicationDate": true,
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "type-compte",
+              "name": "Type compte",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "solde",
+              "name": "Solde",
+              "magicSel": true,
+              "dataType": "number"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "les-d-penses",
+      "name": "Les dépenses",
+      "objects": [
+        {
+          "id": "d-penses",
+          "name": "Dépenses",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur dépense",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+            },
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Refus dépense",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            },
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Approbation dépense",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "statut",
+              "name": "Statut",
+              "magicSel": true,
+              "enum": [
+                "à traiter",
+                "refusé",
+                "approuvé"
+              ],
+              "dataType": "string"
+            },
+            {
+              "id": "date-d-pense",
+              "name": "Date dépense",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "date-refus",
+              "name": "Date refus",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "motif-de-refus",
+              "name": "Motif de refus",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "date-approbation",
+              "name": "Date approbation",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "nature-de-d-pense",
+              "name": "Nature de dépense",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "devise",
+              "name": "Devise",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "montant-ht",
+              "name": "Montant HT",
+              "magicSel": false,
+              "dataType": "number"
+            },
+            {
+              "id": "montant-ttc",
+              "name": "Montant TTC",
+              "magicSel": true,
+              "dataType": "number"
+            }
+          ],
+          "smartObjects": [
+            {
+              "title": "Dépenses approuvées",
+              "columns": [
+                "nature de dépense",
+                "date dépense",
+                "Collaborateur dépense.nom",
+                "Collaborateur dépense.prénom",
+                "Approbation dépense.nom",
+                "Approbation dépense.prénom"
+              ],
+              "filters": "statut='approuvé'"
+            },
+            {
+              "title": "Dépenses refusées",
+              "columns": [
+                "date refus",
+                "motif de refus",
+                "Collaborateur dépense.nom",
+                "Collaborateur dépense.prénom",
+                "Refus dépense.nom",
+                "Refus dépense.prénom"
+              ],
+              "filters": "statut='refusé'"
+            },
+            {
+              "title": "Dépenses en attente de validation",
+              "columns": [
+                "date dépense",
+                "nature de dépense",
+                "Collaborateur dépense.nom",
+                "Collaborateur dépense.prénom",
+                "Collaborateur dépense.poste[applicable].manager.nom",
+                "Collaborateur dépense.poste[applicable].manager.prénom"
+              ],
+              "filters": "statut='à traiter'"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "les-entretiens",
+      "name": "Les entretiens",
+      "objects": [
+        {
+          "id": "entretiens",
+          "name": "Entretiens",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+            },
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Manager",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "type-d-entretien",
+              "name": "Type d'entretien",
+              "magicSel": true,
+              "enum": [
+                "Entretien préalable",
+                "Entretien annuel",
+                "Entretien retour maternité"
+              ],
+              "dataType": "string"
+            },
+            {
+              "id": "date-de-pr-paration-collaborateur",
+              "name": "Date de préparation collaborateur",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "date-de-pr-paration-manager",
+              "name": "Date de préparation manager",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "date-de-validation-collaborateur",
+              "name": "Date de validation collaborateur",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "date-de-validation-manager",
+              "name": "Date de validation manager",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "commentaire-final",
+              "name": "Commentaire final",
+              "magicSel": true,
+              "dataType": "string"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "les-formations",
+      "name": "Les formations",
+      "objects": [
+        {
+          "id": "formations",
+          "name": "Formations",
+          "relations": [
+            {
+              "targetObject": "Catalogue de formation",
+              "relationName": "Catalogue de formation",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+            },
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Bénficiaire",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+            },
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Demandeur",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            },
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Responsable approbation",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            },
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Responsable refus",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "statut",
+              "name": "Statut",
+              "magicSel": true,
+              "enum": [
+                "en attente",
+                "approuvée",
+                "refusée"
+              ],
+              "dataType": "string"
+            },
+            {
+              "id": "date-demande",
+              "name": "Date demande",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "date-refus",
+              "name": "Date refus",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "date-approbation",
+              "name": "Date approbation",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "date-de-d-but",
+              "name": "Date de début",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "date-de-fin",
+              "name": "Date de fin",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "date-certification",
+              "name": "Date certification",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "date-expiration",
+              "name": "Date expiration",
+              "magicSel": false,
+              "dataType": "date"
+            }
+          ],
+          "smartObjects": [
+            {
+              "title": "Formations refusées",
+              "columns": [
+                "date demande",
+                "date refus",
+                "Catalogue de formation.nom",
+                "Demandeur.nom",
+                "Demandeur.prénom",
+                "Bénficiaire.nom",
+                "Bénficiaire.prénom",
+                "Responsable refus.nom",
+                "Responsable refus.prénom"
+              ],
+              "filters": "statut='refusée'"
+            },
+            {
+              "title": "Formations approuvées",
+              "columns": [
+                "date demande",
+                "date approbation",
+                "date de début",
+                "date de fin",
+                "Catalogue de formation.nom",
+                "Bénficiaire.nom",
+                "Bénficiaire.prénom",
+                "Responsable approbation.nom",
+                "Responsable approbation.prénom"
+              ],
+              "filters": "statut='approuvée'"
+            },
+            {
+              "title": "Formations en attente",
+              "columns": [
+                "date demande",
+                "Catalogue de formation.nom",
+                "Demandeur.nom",
+                "Demandeur.prénom",
+                "Bénficiaire.nom",
+                "Bénficiaire.prénom"
+              ],
+              "filters": "statut='en attente'"
+            },
+            {
+              "title": "Formations certifiées valides",
+              "columns": [
+                "date certification",
+                "date expiration",
+                "Catalogue de formation.nom",
+                "Bénficiaire.nom",
+                "Bénficiaire.prénom"
+              ],
+              "filters": "statut='approuvée' and 'date expiration' > dateDuJour"
+            }
+          ]
+        },
+        {
+          "id": "catalogue-de-formation",
+          "name": "Catalogue de formation",
+          "attributes": [
+            {
+              "id": "nom",
+              "name": "Nom",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "description",
+              "name": "Description",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "organisme",
+              "name": "Organisme",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "obligatoire",
+              "name": "Obligatoire",
+              "magicSel": true,
+              "dataType": "booleen"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "les-objectifs",
+      "name": "Les objectifs",
+      "objects": [
+        {
+          "id": "objectifs",
+          "name": "Objectifs",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+            },
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Manager",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "description",
+              "name": "Description",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "date-d-but",
+              "name": "Date début",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "date-fin",
+              "name": "Date fin",
+              "magicSel": true,
+              "dataType": "date"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "les-r-mun-rations",
+      "name": "Les rémunérations",
+      "objects": [
+        {
+          "id": "r-mun-ration-th-orique-fixe",
+          "name": "Rémunération théorique fixe",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "date-d-but",
+              "name": "Date début",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "date-fin",
+              "name": "Date fin",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "montant",
+              "name": "Montant",
+              "magicSel": true,
+              "dataType": "number"
+            },
+            {
+              "id": "p-riodicit",
+              "name": "Périodicité",
+              "magicSel": true,
+              "dataType": "string"
+            }
+          ]
+        },
+        {
+          "id": "r-mun-ration-th-orique-variable",
+          "name": "Rémunération théorique variable",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "date-d-but",
+              "name": "Date début",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "date-fin",
+              "name": "Date fin",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "montant",
+              "name": "Montant",
+              "magicSel": true,
+              "dataType": "number"
+            },
+            {
+              "id": "p-riodicit",
+              "name": "Périodicité",
+              "magicSel": true,
+              "dataType": "string"
+            }
+          ]
+        },
+        {
+          "id": "r-mun-ration-r-elle",
+          "name": "Rémunération réelle",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "type-de-r-mun-ration",
+              "name": "Type de rémunération",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "date-d-but",
+              "name": "Date début",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "date-fin",
+              "name": "Date fin",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "montant",
+              "name": "Montant",
+              "magicSel": true,
+              "dataType": "number"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "les-documents-partag-s",
+      "name": "Les documents partagés",
+      "objects": [
+        {
+          "id": "documents-partag-s",
+          "name": "Documents partagés",
+          "relations": [
+            {
+              "targetObject": "Département",
+              "relationName": "Département",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+            },
+            {
+              "targetObject": "Etablissement",
+              "relationName": "Etablissement",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "date-publication",
+              "name": "Date publication",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "document",
+              "name": "Document",
+              "magicSel": false,
+              "dataType": "file"
+            },
+            {
+              "id": "nom-du-document",
+              "name": "Nom du document",
+              "magicSel": true,
+              "dataType": "string"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "les-enqu-te-engagement",
+      "name": "Les enquête engagement",
+      "objects": [
+        {
+          "id": "enqu-te-engagement",
+          "name": "Enquête engagement",
+          "relations": [
+            {
+              "targetObject": "Département",
+              "relationName": "Département",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+            },
+            {
+              "targetObject": "Etablissement",
+              "relationName": "Etablissement",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "date-enqu-te",
+              "name": "Date enquête",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "titre-enqu-te",
+              "name": "Titre enquête",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "nombre-interrog-s",
+              "name": "Nombre interrogés",
+              "magicSel": false,
+              "dataType": "number"
+            },
+            {
+              "id": "nombre-r-pondants",
+              "name": "Nombre répondants",
+              "magicSel": false,
+              "dataType": "number"
+            },
+            {
+              "id": "score-moyen",
+              "name": "Score moyen",
+              "magicSel": true,
+              "dataType": "number"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "les-factures",
+      "name": "Les factures",
+      "objects": [
+        {
+          "id": "factures",
+          "name": "Factures",
+          "attributes": [
+            {
+              "id": "date-facture",
+              "name": "Date facture",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "date-r-ception",
+              "name": "Date réception",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "date-r-glement",
+              "name": "Date règlement",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "statut",
+              "name": "Statut",
+              "magicSel": true,
+              "enum": [
+                "à vérifier",
+                "rejetée",
+                "à régler",
+                "réglée"
+              ],
+              "dataType": "string"
+            },
+            {
+              "id": "devise",
+              "name": "Devise",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "montant-ht",
+              "name": "Montant HT",
+              "magicSel": false,
+              "dataType": "number"
+            },
+            {
+              "id": "montant-ttc",
+              "name": "Montant TTC",
+              "magicSel": true,
+              "dataType": "number"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "le-recrutement",
+      "name": "Le Recrutement",
+      "objects": [
+        {
+          "id": "postes-pourvoir",
+          "name": "Postes à pourvoir",
+          "relations": [
+            {
+              "targetObject": "Département",
+              "relationName": "Département",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+            },
+            {
+              "targetObject": "Etablissement",
+              "relationName": "Etablissement",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "intitul",
+              "name": "Intitulé",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "date-ouverture-poste",
+              "name": "Date ouverture poste",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "date-fermeture-poste",
+              "name": "Date fermeture poste",
+              "magicSel": false,
+              "dataType": "date"
+            }
+          ]
+        },
+        {
+          "id": "candidats",
+          "name": "Candidats",
+          "relations": [
+            {
+              "targetObject": "Candidatures",
+              "relationName": "Candidatures",
+              "cardinalityFrom": "one",
+              "cardinalityTo": "many",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "nom",
+              "name": "Nom",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "pr-nom",
+              "name": "Prénom",
+              "magicSel": false,
+              "dataType": "string"
+            }
+          ]
+        },
+        {
+          "id": "candidature",
+          "name": "Candidature",
+          "relations": [
+            {
+              "targetObject": "Postes à pourvoir",
+              "relationName": "Postes à pourvoir",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "many",
+              "recursiveMagicSel": true,
+              "magicSel": false
+            },
+            {
+              "targetObject": "Historique de Candidature",
+              "relationName": "Historique de Candidature",
+              "cardinalityFrom": "one",
+              "cardinalityTo": "many",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "date-candidature",
+              "name": "Date candidature",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "statut-candidature",
+              "name": "Statut candidature",
+              "magicSel": true,
+              "dataType": "string"
+            }
+          ]
+        },
+        {
+          "id": "historique-de-candidature",
+          "name": "Historique de Candidature",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Recruteur",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "statut",
+              "name": "Statut",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "commentaire",
+              "name": "Commentaire",
+              "magicSel": false,
+              "dataType": "string"
+            }
+          ]
+        },
+        {
+          "id": "entretiens",
+          "name": "Entretiens",
+          "relations": [
+            {
+              "targetObject": "Candidature",
+              "relationName": "Candidature",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "date-entretien",
+              "name": "Date entretien",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "type-d-entretien",
+              "name": "Type d'entretien",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "score",
+              "name": "Score",
+              "magicSel": true,
+              "dataType": "number"
+            },
+            {
+              "id": "synth-se",
+              "name": "Synthèse",
+              "magicSel": false,
+              "dataType": "string"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "r-f-rentiels",
+      "name": "Référentiels",
+      "objects": [
+        {
+          "id": "d-partement",
+          "name": "Département",
+          "attributes": [
+            {
+              "id": "nom",
+              "name": "Nom",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "code",
+              "name": "Code",
+              "magicSel": false,
+              "dataType": "string"
+            }
+          ]
+        },
+        {
+          "id": "etablissement",
+          "name": "Etablissement",
+          "relations": [
+            {
+              "targetObject": "Organisation",
+              "relationName": "Organisation",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "nom",
+              "name": "Nom",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "code",
+              "name": "Code",
+              "magicSel": false,
+              "dataType": "string"
+            }
+          ]
+        },
+        {
+          "id": "organisation",
+          "name": "Organisation",
+          "attributes": [
+            {
+              "id": "nom",
+              "name": "Nom",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "code",
+              "name": "Code",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "pays",
+              "name": "Pays",
+              "magicSel": false,
+              "dataType": "string"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+
+
+

@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import type { AttributeType, SmartObjectDefinition } from '../data/dataStructure';
 import type { AggregationType, DateReference, FilterGroup, InsertionType } from '../types/selection';
+import { InfoHint } from './InfoHint';
 
 type ObjectInsertionMode = 'detailed' | 'operation' | 'aggregation' | 'special';
 
@@ -27,6 +28,7 @@ interface ObjectInsertionDialogProps {
     id: string;
     name: string;
     rawName?: string;
+    description?: string;
     type: AttributeType;
     magicSel?: boolean;
     smartSel?: boolean;
@@ -44,6 +46,7 @@ type GroupedAttribute = {
   id: string;
   name: string;
   displayName: string;
+  description?: string;
   type: AttributeType;
   magicSel?: boolean;
   smartSel?: boolean;
@@ -198,6 +201,7 @@ export function ObjectInsertionDialog({
         id: attr.id,
         name: attr.name,
         displayName: attr.rawName?.trim() || attr.name,
+        description: attr.description,
         type: attr.type,
         magicSel: attr.magicSel,
         smartSel: attr.smartSel,
@@ -640,6 +644,7 @@ export function ObjectInsertionDialog({
                         className="size-4"
                       />
                       <span>{attr.displayName}</span>
+                      <InfoHint text={attr.description} />
                     </label>
                   ))}
                 </div>

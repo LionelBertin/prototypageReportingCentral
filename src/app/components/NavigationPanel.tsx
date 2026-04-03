@@ -3,6 +3,7 @@ import type { ReactElement } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { dataStructure } from '../data/dataStructure';
 import type { SelectedAttribute } from '../types/selection';
+import { InfoHint } from './InfoHint';
 
 type NavigationPath = NonNullable<SelectedAttribute['navigationPath']>;
 
@@ -67,7 +68,7 @@ export function NavigationPanel({
       const objects = theme.objects.filter((obj) => {
         if (obj.name.toLowerCase().includes(term)) return true;
         if (obj.attributes && obj.attributes.some((a) => a.name.toLowerCase().includes(term))) return true;
-        if (obj.relations && obj.relations.some((r) => r.label.toLowerCase().includes(term))) return true;
+        if (obj.relations && obj.relations.some((r) => (r.label ?? '').toLowerCase().includes(term))) return true;
         return themeMatches;
       });
 
@@ -743,9 +744,11 @@ export function NavigationPanel({
                       <ChevronDown className="size-3 text-blue-600" />
                     ))}
                   <span className="text-blue-700">{relatedObj.name}</span>
+                  <InfoHint text={relatedObj.description} className="inline-flex items-center text-blue-400 hover:text-blue-600" />
                   {relation.label !== relatedObj.name && (
                     <span className="text-blue-500">- {relation.label}</span>
                   )}
+                  <InfoHint text={relation.description} className="inline-flex items-center text-blue-400 hover:text-blue-600" />
                   {showLinkedObjectCardinalities && relation.cardinality && (
                     <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700">
                       {relation.cardinality}
@@ -814,6 +817,7 @@ export function NavigationPanel({
                                         <ChevronDown className="size-3 text-blue-600" />
                                       ))}
                                     <span className="text-blue-700">{src.objectName}</span>
+                                    <InfoHint text={obj.description} className="inline-flex items-center text-blue-400 hover:text-blue-600" />
                                     {src.sourceLabel && src.sourceLabel !== src.objectName && (
                                       <span className="text-blue-500">- {src.sourceLabel}</span>
                                     )}
@@ -914,14 +918,14 @@ export function NavigationPanel({
 
   return (
     <div className="h-full overflow-y-auto border-r bg-gray-50 p-4">
-      <h2 className="mb-2 font-semibold text-gray-900">Structure des données</h2>
+      <h2 className="mb-2 font-semibold text-gray-900">Données disponibles</h2>
 
       <div className="mb-3">
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Rechercher une donnée..."
+          placeholder="Rechercher un objet ou un attribut"
           className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm placeholder-gray-400 focus:border-blue-500 focus:outline-none"
         />
       </div>

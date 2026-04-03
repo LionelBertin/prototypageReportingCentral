@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { dataStructure } from '../data/dataStructure';
+import { InfoHint } from './InfoHint';
 
 type Props = {
   onSelect: (
@@ -97,7 +98,10 @@ export function MainObjectPicker({ onSelect }: Props) {
                       key={obj.id}
                       className="flex items-center justify-between gap-3 rounded border bg-gray-50 px-3 py-2"
                     >
-                      <div className="text-sm text-gray-800">{obj.name}</div>
+                      <div className="flex items-center gap-1.5 text-sm text-gray-800">
+                        <span>{obj.name}</span>
+                        <InfoHint text={obj.description} />
+                      </div>
                       {renderObjectInsertionButtons(theme.id, theme.name, obj.id, obj.name)}
                     </div>
                   ))}

@@ -102,28 +102,32 @@ export function FilterDialog({
         { value: 'contains' as const, label: 'Contient' },
         { value: 'startsWith' as const, label: 'Commence par' },
         { value: 'endsWith' as const, label: 'Termine par' },
+        { value: 'isEmpty' as const, label: 'Vide' },
+        { value: 'isNotEmpty' as const, label: 'Renseignée' },
         { value: 'in' as const, label: 'Appartient à' },
       ];
     }
 
-    if (attrType === 'number' || attrType === 'date') {
-      const operators = [
+    if (attrType === 'number') {
+      return [
         ...common,
         { value: 'greaterThan' as const, label: 'Supérieur à' },
         { value: 'lessThan' as const, label: 'Inférieur à' },
         { value: 'greaterOrEqual' as const, label: 'Supérieur ou égal à' },
         { value: 'lessOrEqual' as const, label: 'Inférieur ou égal à' },
       ];
-      
-      // Ajouter les opérateurs isEmpty et isNotEmpty uniquement pour les dates
-      if (attrType === 'date') {
-        operators.push(
-          { value: 'isEmpty' as const, label: 'Vide' },
-          { value: 'isNotEmpty' as const, label: 'Renseignée' }
-        );
-      }
-      
-      return operators;
+    }
+
+    if (attrType === 'date') {
+      return [
+        ...common,
+        { value: 'greaterThan' as const, label: 'Après le' },
+        { value: 'lessThan' as const, label: 'Avant le' },
+        { value: 'greaterOrEqual' as const, label: 'Le ou après le' },
+        { value: 'lessOrEqual' as const, label: 'Le ou avant le' },
+        { value: 'isEmpty' as const, label: 'Vide' },
+        { value: 'isNotEmpty' as const, label: 'Renseignée' },
+      ];
     }
 
     return common;

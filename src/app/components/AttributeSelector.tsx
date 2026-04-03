@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { NavigationPanel } from './NavigationPanel';
 import { SelectionPanel } from './SelectionPanel';
 import MainObjectPicker from './MainObjectPicker';
 import { ObjectInsertionDialog, ObjectInsertionConfig } from './ObjectInsertionDialog';
@@ -8,6 +7,7 @@ import { CompartmentDialog } from './CompartmentDialog';
 import { ConditionalColumnDialog } from './ConditionalColumnDialog';
 import { CalculatedColumnDialog } from './CalculatedColumnDialog';
 import { DateReferenceDialog } from './DateReferenceDialog';
+import { InfoHint } from './InfoHint';
 import { SelectedAttribute, AggregationType, InsertionType, FilterGroup, CompartmentConfig, DateReference, ConditionalColumnConfig, CalculatedColumnConfig } from '../types/selection';
 import { AttributeType, SmartObjectDefinition, dataStructure } from '../data/dataStructure';
 
@@ -33,21 +33,38 @@ type PendingObjectInsertion = {
   smartObjects?: SmartObjectDefinition[];
   navigationPath?: NavigationPath;
   directMagicOnly?: boolean;
+  initialConfig?: Partial<ObjectInsertionConfig>;
 };
 
 type AvailableObjectAttribute = {
   id: string;
   name: string;
   rawName: string;
+  description?: string;
   type: AttributeType;
   magicSel?: boolean;
   smartSel?: boolean;
+  autoSmartSel?: boolean;
   sourceObjectSupportsApplicable: boolean;
   sourceThemeId: string;
   sourceThemeName: string;
   sourceObjectId: string;
   sourceObjectName: string;
   relativeNavigationPath: NavigationPath;
+};
+
+type Stage2ObjectGroup = {
+  key: string;
+  label: string;
+  objectName: string;
+  themeId: string;
+  themeName: string;
+  objectId: string;
+  cardinality: string;
+  navigationPath: NavigationPath;
+  isSelectable: boolean;
+  objectSupportsApplicable: boolean;
+  attributes: AvailableObjectAttribute[];
 };
 
 export function AttributeSelector() {
@@ -72,13 +89,13 @@ export function AttributeSelector() {
   const [showConditionalColumns, setShowConditionalColumns] = useState(false);
   const [showCalculatedColumns, setShowCalculatedColumns] = useState(false);
   const [showColumnRename, setShowColumnRename] = useState(false);
-  const [showLinkedObjectCardinalities, setShowLinkedObjectCardinalities] = useState(false);
+  const [showLinkedObjectCardinalities, setShowLinkedObjectCardinalities] = useState(true);
   const [prototypeConfigOpen, setPrototypeConfigOpen] = useState(false);
   const [draftShowCompartmenting, setDraftShowCompartmenting] = useState(false);
   const [draftShowConditionalColumns, setDraftShowConditionalColumns] = useState(false);
   const [draftShowCalculatedColumns, setDraftShowCalculatedColumns] = useState(false);
   const [draftShowColumnRename, setDraftShowColumnRename] = useState(false);
-  const [draftShowLinkedObjectCardinalities, setDraftShowLinkedObjectCardinalities] = useState(false);
+  const [draftShowLinkedObjectCardinalities, setDraftShowLinkedObjectCardinalities] = useState(true);
 
   const buildSelectedAttribute = ({
     themeId,
@@ -113,6 +130,9 @@ export function AttributeSelector() {
   }): SelectedAttribute => {
     const effectiveApplicable = insertionType === 'applicable' || !!isApplicable;
 
+    const sourceTheme = dataStructure.find((t) => t.id === themeId);
+    const sourceObj = sourceTheme?.objects.find((o) => o.id === objectId);
+
     return {
       id: `${Date.now()}-${Math.random()}`,
       attributeId,
@@ -130,6 +150,7 @@ export function AttributeSelector() {
       dateReference: insertionType === 'applicable'
         ? (dateReference ?? { type: 'today' })
         : (effectiveApplicable ? { type: 'today' } : undefined),
+      applicationDateConfig: sourceObj?.applicationDateConfig,
       navigationPath,
     };
   };
@@ -141,6 +162,11 @@ export function AttributeSelector() {
       String(today.getMonth() + 1).padStart(2, '0'),
       String(today.getDate()).padStart(2, '0'),
     ].join('-');
+  };
+
+  const isSingleRelationCardinality = (cardinality?: string) => {
+    if (!cardinality) return true;
+    return !cardinality.includes('n');
   };
 
   const getDefaultSortAttributeId = (attributes: AvailableObjectAttribute[]) => {
@@ -172,35 +198,44 @@ export function AttributeSelector() {
 
     const collected: AvailableObjectAttribute[] = [];
     const collectedById = new Map<string, AvailableObjectAttribute>();
-    const visitedSmartByObject = new Map<string, boolean>();
 
     const collect = (
       currentThemeId: string,
       currentObjectId: string,
       relationPath: string[],
       relativeNavigationPath: NavigationPath,
-      shouldSmartSelect: boolean
+      shouldAutoSelect: boolean,
+      recursiveAutoEnabled: boolean,
+      branchVisited: Set<string>
     ) => {
       const currentKey = `${currentThemeId}::${currentObjectId}`;
-      const wasSmartVisited = visitedSmartByObject.get(currentKey);
-      if (wasSmartVisited === true) return;
-      if (wasSmartVisited === false && !shouldSmartSelect) return;
+      if (branchVisited.has(currentKey)) return;
 
       const currentObject = objectByKey.get(currentKey);
       const currentTheme = themeById.get(currentThemeId);
       if (!currentObject) return;
 
-      visitedSmartByObject.set(currentKey, shouldSmartSelect || wasSmartVisited === true);
+      const nextBranchVisited = new Set(branchVisited);
+      nextBranchVisited.add(currentKey);
 
       for (const attr of currentObject.attributes) {
+        const navigationSignature = relativeNavigationPath
+          .map((step) => `${step.sourceObjectName ?? ''}:${step.relationLabel ?? ''}:${step.objectName}`)
+          .join('>');
+
         const compositeId = relationPath.length > 0
-          ? `${currentKey}::${attr.id}`
+          ? `${currentKey}::${attr.id}::${navigationSignature}`
           : attr.id;
 
         const existing = collectedById.get(compositeId);
+        const shouldMarkAsDefault = !!attr.magicSel;
+        const shouldMarkForAutoInsert = shouldAutoSelect && !!attr.magicSel;
         if (existing) {
-          if (shouldSmartSelect && !!attr.magicSel && !existing.smartSel) {
+          if (shouldMarkAsDefault && !existing.smartSel) {
             existing.smartSel = true;
+          }
+          if (shouldMarkForAutoInsert && !existing.autoSmartSel) {
+            existing.autoSmartSel = true;
           }
           continue;
         }
@@ -211,9 +246,11 @@ export function AttributeSelector() {
             ? `${relationPath.join(' > ')} > ${attr.name}`
             : attr.name,
           rawName: attr.name,
+          description: attr.description,
           type: attr.type,
           magicSel: attr.magicSel,
-          smartSel: shouldSmartSelect && !!attr.magicSel,
+          smartSel: shouldMarkAsDefault,
+          autoSmartSel: shouldMarkForAutoInsert,
           sourceObjectSupportsApplicable: !!(currentObject.applicationDate || currentObject.isApplicable),
           sourceThemeId: currentThemeId,
           sourceThemeName: currentTheme?.name ?? currentThemeId,
@@ -228,6 +265,14 @@ export function AttributeSelector() {
 
       for (const relation of currentObject.relations ?? []) {
         if (!isSingleCardinality(relation.cardinality)) continue;
+
+        const isFromRoot = relationPath.length === 0;
+        const nextShouldAutoSelect = isFromRoot
+          ? (!!relation.magicSel || !!relation.recursiveMagicSel)
+          : (recursiveAutoEnabled && !!relation.recursiveMagicSel);
+        const nextRecursiveAutoEnabled = isFromRoot
+          ? !!relation.recursiveMagicSel
+          : (recursiveAutoEnabled && !!relation.recursiveMagicSel);
 
         const nextNavigationPath = [
           ...relativeNavigationPath,
@@ -244,12 +289,59 @@ export function AttributeSelector() {
           relation.targetObjectId,
           [...relationPath, relation.targetObjectName],
           nextNavigationPath,
-          !!relation.recursiveMagicSel
+          nextShouldAutoSelect,
+          nextRecursiveAutoEnabled,
+          nextBranchVisited
         );
+      }
+
+      // Inbound traversal: find objects that point TO the current object via single cardinalityFrom
+      for (const inboundTheme of themeById.values()) {
+        for (const inboundObj of inboundTheme.objects) {
+          const inboundKey = `${inboundTheme.id}::${inboundObj.id}`;
+          if (nextBranchVisited.has(inboundKey)) continue;
+
+          const inboundRelation = (inboundObj.relations ?? []).find(
+            (relation) =>
+              relation.targetThemeId === currentThemeId
+              && relation.targetObjectId === currentObjectId
+              && isSingleCardinality(relation.cardinalityFrom)
+          );
+
+          if (!inboundRelation) continue;
+
+          const isFromRoot = relationPath.length === 0;
+          const nextShouldAutoSelect = isFromRoot
+            ? (!!inboundRelation.magicSel || !!inboundRelation.recursiveMagicSel)
+            : (recursiveAutoEnabled && !!inboundRelation.recursiveMagicSel);
+          const nextRecursiveAutoEnabled = isFromRoot
+            ? !!inboundRelation.recursiveMagicSel
+            : (recursiveAutoEnabled && !!inboundRelation.recursiveMagicSel);
+
+          const nextNavigationPath = [
+            ...relativeNavigationPath,
+            {
+              objectName: inboundObj.name,
+              cardinalityName: inboundRelation.cardinality,
+              relationLabel: inboundRelation.label,
+              sourceObjectName: currentObject.name,
+            },
+          ];
+
+          collect(
+            inboundTheme.id,
+            inboundObj.id,
+            [...relationPath, inboundObj.name],
+            nextNavigationPath,
+            nextShouldAutoSelect,
+            nextRecursiveAutoEnabled,
+            nextBranchVisited
+          );
+        }
       }
     };
 
-    collect(themeId, objectId, [], [], true);
+    collect(themeId, objectId, [], [], true, true, new Set<string>());
 
     return collected;
   };
@@ -265,6 +357,7 @@ export function AttributeSelector() {
         id: attr.id,
         name: attr.name,
         rawName: attr.name,
+        description: attr.description,
         type: attr.type,
         magicSel: attr.magicSel,
         smartSel: !!attr.magicSel,
@@ -315,26 +408,204 @@ export function AttributeSelector() {
     const obj = theme?.objects.find((o) => o.id === objectId);
     if (!obj) return;
 
-    setPendingMainObject({
-      themeId,
-      themeName,
-      objectId,
-      objectName,
-      cardinality: obj.cardinality,
-      isApplicable: obj.applicationDate || obj.isApplicable,
-    });
+    const objectAttributes = getObjectAttributes(themeId, objectId);
+    const defaultAttributes = objectAttributes.filter((attr) => !!attr.autoSmartSel);
+    const todayDate = getTodayIsoDate();
+    const mainObjectSupportsApplicable = !!(obj.applicationDate || obj.isApplicable);
 
-    setPendingObjectInsertion({
+    const autoInserted = defaultAttributes.map((attr) =>
+      buildSelectedAttribute({
+        themeId: attr.sourceThemeId,
+        themeName: attr.sourceThemeName,
+        objectId: attr.sourceObjectId,
+        objectName: attr.sourceObjectName,
+        attributeId: attr.id,
+        attributeName: attr.rawName,
+        attributeType: attr.type,
+        insertionType: attr.sourceObjectSupportsApplicable ? 'applicable' : 'normal',
+        isApplicable: attr.sourceObjectSupportsApplicable,
+        dateReference: attr.sourceObjectSupportsApplicable
+          ? { type: 'custom', customDate: todayDate }
+          : undefined,
+        navigationPath: attr.relativeNavigationPath,
+      })
+    );
+
+    setMainObject({
       themeId,
       themeName,
       objectId,
       objectName,
-      cardinality: obj.cardinality,
-      mode: 'detailed',
-      isApplicable: obj.applicationDate || obj.isApplicable,
-      smartObjects: obj.smartObjects,
     });
-    setObjectInsertionDialogOpen(true);
+    setMainObjectConfig(
+      mainObjectSupportsApplicable
+        ? {
+            insertionType: 'applicable',
+            dateReference: { type: 'custom', customDate: todayDate },
+            applyApplicableToday: true,
+          }
+        : { insertionType: 'normal' }
+    );
+    setSelectingMainObject(false);
+    setPendingMainObject(null);
+    setPendingObjectInsertion(null);
+    setObjectInsertionDialogOpen(false);
+    setSelectedAttributes(autoInserted);
+  };
+
+  const normalizeSmartText = (value: string) =>
+    value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLocaleLowerCase()
+      .replace(/\[applicable\]/g, ' applicable ')
+      .replace(/[_.>]/g, ' ')
+      .replace(/['’]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const getSmartTokens = (value: string) => normalizeSmartText(value).split(' ').filter(Boolean);
+
+  const isSmartTokenSubset = (needle: string, haystack: string) => {
+    const needleTokens = getSmartTokens(needle);
+    const haystackTokens = new Set(getSmartTokens(haystack));
+    if (needleTokens.length === 0) return true;
+    return needleTokens.every((token) => haystackTokens.has(token));
+  };
+
+  const matchSmartPathToAttribute = (attribute: AvailableObjectAttribute, columnPath: string) => {
+    const columnParts = columnPath
+      .split('.')
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (columnParts.length === 0) return false;
+
+    const requestedAttributeName = columnParts[columnParts.length - 1];
+    if (!isSmartTokenSubset(requestedAttributeName, attribute.rawName)) {
+      return false;
+    }
+
+    const requestedPath = columnParts.slice(0, -1);
+    if (requestedPath.length === 0) {
+      return true;
+    }
+
+    const pathSteps = (attribute.relativeNavigationPath ?? []).map((step) =>
+      [step.relationLabel, step.objectName].filter(Boolean).join(' ')
+    );
+
+    if (requestedPath.length > pathSteps.length) {
+      return false;
+    }
+
+    return requestedPath.every((requestedPart, index) => {
+      const pathStep = pathSteps[index];
+      return isSmartTokenSubset(requestedPart, pathStep);
+    });
+  };
+
+  const resolveSmartPresetGlobalFilters = (
+    smartObject: SmartObjectDefinition,
+    availableAttributes: AvailableObjectAttribute[],
+    presetSelectedAttributes: SelectedAttribute[]
+  ): FilterGroup[] | undefined => {
+    if (!smartObject.filters || smartObject.filters.groups.length === 0) {
+      return undefined;
+    }
+
+    const todayDate = getTodayIsoDate();
+    const groups = smartObject.filters.groups
+      .map((filterGroup) => {
+        const conditions = filterGroup.conditions
+          .map((condition) => {
+            const matched = availableAttributes.find((attribute) =>
+              matchSmartPathToAttribute(attribute, condition.attributePath)
+            );
+            if (!matched) return null;
+
+            const selectedMatch = presetSelectedAttributes.find(
+              (selectedAttribute) => selectedAttribute.attributeId === matched.id
+            );
+
+            const value = condition.value === 'dateDuJour' ? todayDate : condition.value;
+
+            return {
+              attributeId: selectedMatch?.id ?? matched.id,
+              attributeName: selectedMatch
+                ? getSelectedAttributeDisplayName(selectedMatch)
+                : matched.rawName,
+              attributeType: matched.type,
+              operator: condition.operator,
+              value,
+              valueType: 'fixed' as const,
+            };
+          })
+          .filter((condition): condition is NonNullable<typeof condition> => condition !== null);
+
+        if (conditions.length === 0) return null;
+
+        return {
+          logicalOperator: filterGroup.logicalOperator,
+          conditions,
+        };
+      })
+      .filter((group): group is FilterGroup => group !== null);
+
+    return groups.length > 0 ? groups : undefined;
+  };
+
+  const getMainObjectSmartObjects = (): SmartObjectDefinition[] => {
+    if (!mainObject) return [];
+    const theme = dataStructure.find((candidate) => candidate.id === mainObject.themeId);
+    const obj = theme?.objects.find((candidate) => candidate.id === mainObject.objectId);
+    return obj?.smartObjects ?? [];
+  };
+
+  const applyMainObjectSmartPreset = (smartObject: SmartObjectDefinition) => {
+    if (!mainObject) return;
+
+    const availableAttributes = getObjectAttributes(mainObject.themeId, mainObject.objectId);
+    const selectedAttributeIds = Array.from(
+      new Set(
+        smartObject.columns.flatMap((columnPath) => {
+          const matched = availableAttributes.find((attribute) =>
+            matchSmartPathToAttribute(attribute, columnPath)
+          );
+          return matched ? [matched.id] : [];
+        })
+      )
+    );
+
+    if (selectedAttributeIds.length === 0) {
+      alert('Aucune colonne du preset n\'a pu être associée aux attributs disponibles.');
+      return;
+    }
+
+    const todayDate = getTodayIsoDate();
+    const presetAttributes = availableAttributes
+      .filter((attribute) => selectedAttributeIds.includes(attribute.id))
+      .map((attribute) =>
+        buildSelectedAttribute({
+          themeId: attribute.sourceThemeId,
+          themeName: attribute.sourceThemeName,
+          objectId: attribute.sourceObjectId,
+          objectName: attribute.sourceObjectName,
+          attributeId: attribute.id,
+          attributeName: attribute.rawName,
+          attributeType: attribute.type,
+          insertionType: attribute.sourceObjectSupportsApplicable ? 'applicable' : 'normal',
+          isApplicable: attribute.sourceObjectSupportsApplicable,
+          dateReference: attribute.sourceObjectSupportsApplicable
+            ? { type: 'custom', customDate: todayDate }
+            : undefined,
+          navigationPath: attribute.relativeNavigationPath,
+        })
+      );
+
+    setSelectedAttributes(presetAttributes);
+    setGlobalFilterGroups(
+      resolveSmartPresetGlobalFilters(smartObject, availableAttributes, presetAttributes)
+    );
   };
 
   const handleObjectInsert = (
@@ -893,6 +1164,8 @@ export function AttributeSelector() {
     }
 
     setSelectedAttributes([]);
+    setGlobalFilterGroups(undefined);
+    setGlobalFilterDialogOpen(false);
     setSelectingMainObject(true);
     setMainObject(null);
     setMainObjectConfig(null);
@@ -907,6 +1180,8 @@ export function AttributeSelector() {
     }
 
     setSelectedAttributes([]);
+    setGlobalFilterGroups(undefined);
+    setGlobalFilterDialogOpen(false);
   };
 
   const openPrototypeConfig = () => {
@@ -947,11 +1222,35 @@ export function AttributeSelector() {
     return selectedAttributes.filter((attr) => attr.attributeType === 'date');
   };
 
+  const getSelectedAttributeObjectGroupTitle = (attr: SelectedAttribute) => {
+    if (attr.insertionType === 'conditional' || attr.insertionType === 'calculated') {
+      return '';
+    }
+
+    const lastPathItem = attr.navigationPath?.at(-1);
+    if (lastPathItem) {
+      const relationLabel = lastPathItem.relationLabel?.trim();
+      const objectName = lastPathItem.objectName?.trim();
+      if (relationLabel) return relationLabel;
+      if (objectName) return objectName;
+    }
+
+    return attr.objectName;
+  };
+
+  const getSelectedAttributeDisplayName = (attr: SelectedAttribute) => {
+    const baseName = attr.columnName || attr.attributeName;
+    const groupTitle = getSelectedAttributeObjectGroupTitle(attr);
+
+    if (!groupTitle) return baseName;
+    return `${baseName} – ${groupTitle}`;
+  };
+
   const getGlobalSelectedAttributesForFilter = () => {
     return selectedAttributes.map((attr) => ({
       id: attr.id,
       name: attr.attributeName,
-      columnName: attr.columnName || `${attr.attributeName} (${attr.objectName})`,
+      columnName: getSelectedAttributeDisplayName(attr),
       type: attr.attributeType,
     }));
   };
@@ -1037,7 +1336,290 @@ export function AttributeSelector() {
       }));
   };
 
+  const getMainObjectAvailableAttributes = () => {
+    if (!mainObject) return [] as AvailableObjectAttribute[];
+    return getObjectAttributes(mainObject.themeId, mainObject.objectId);
+  };
+
+  const getNavigationPathKey = (path: NavigationPath = []) =>
+    path
+      .map((item) => `${item.sourceObjectName ?? ''}:${item.relationLabel ?? ''}:${item.objectName}:${item.cardinalityName ?? ''}`)
+      .join('>');
+
+  const getMainObjectStage2Groups = (availableAttributes: AvailableObjectAttribute[]) => {
+    if (!mainObject) return [] as Stage2ObjectGroup[];
+
+    const themeById = new Map(dataStructure.map((theme) => [theme.id, theme] as const));
+    const objectByKey = new Map(
+      dataStructure.flatMap((theme) =>
+        theme.objects.map((obj) => [`${theme.id}::${obj.id}`, { theme, obj }] as const)
+      )
+    );
+
+    const groups: Array<Omit<Stage2ObjectGroup, 'attributes'>> = [];
+
+    const getRelationDisplayLabel = (relationLabel: string | undefined, objectName: string, currentObjectName: string) => {
+      const trimmed = relationLabel?.trim();
+      if (!trimmed) return objectName;
+      if (trimmed.toLocaleLowerCase() === currentObjectName.trim().toLocaleLowerCase()) {
+        return objectName;
+      }
+      return trimmed;
+    };
+
+    const walk = (
+      themeId: string,
+      objectId: string,
+      label: string,
+      navigationPath: NavigationPath,
+      cardinality: string,
+      isSelectable: boolean,
+      branchVisited: Set<string>
+    ) => {
+      const currentKey = `${themeId}::${objectId}`;
+      const found = objectByKey.get(currentKey);
+      if (!found) return;
+
+      groups.push({
+        key: navigationPath.length === 0 ? currentKey : `${currentKey}::${getNavigationPathKey(navigationPath)}`,
+        label,
+        objectName: found.obj.name,
+        themeId,
+        themeName: found.theme.name,
+        objectId,
+        cardinality,
+        navigationPath,
+        isSelectable,
+        objectSupportsApplicable: !!(found.obj.applicationDate || found.obj.isApplicable),
+      });
+
+      if (!isSelectable) return;
+
+      const nextVisited = new Set(branchVisited);
+      nextVisited.add(currentKey);
+
+      for (const relation of found.obj.relations ?? []) {
+        if (!isSingleRelationCardinality(relation.cardinality)) continue;
+
+        const relationTargetKey = `${relation.targetThemeId}::${relation.targetObjectId}`;
+        if (nextVisited.has(relationTargetKey)) continue;
+
+        const childFound = objectByKey.get(relationTargetKey);
+        if (!childFound) continue;
+
+        const childPath = [
+          ...navigationPath,
+          {
+            objectName: relation.targetObjectName,
+            cardinalityName: relation.cardinality,
+            relationLabel: relation.label,
+            sourceObjectName: found.obj.name,
+          },
+        ];
+
+        walk(
+          relation.targetThemeId,
+          relation.targetObjectId,
+          getRelationDisplayLabel(relation.label, relation.targetObjectName, found.obj.name),
+          childPath,
+          relation.cardinalityFrom ?? relation.cardinality,
+          true,
+          nextVisited
+        );
+      }
+
+      for (const [sourceKey, sourceEntry] of objectByKey.entries()) {
+        if (nextVisited.has(sourceKey)) continue;
+
+        const inboundRelation = (sourceEntry.obj.relations ?? []).find(
+          (relation) =>
+            relation.targetThemeId === themeId
+            && relation.targetObjectId === objectId
+            && isSingleRelationCardinality(relation.cardinalityFrom)
+        );
+
+        if (!inboundRelation) continue;
+
+        const childPath = [
+          ...navigationPath,
+          {
+            objectName: sourceEntry.obj.name,
+            cardinalityName: inboundRelation.cardinality,
+            relationLabel: inboundRelation.label,
+            sourceObjectName: found.obj.name,
+          },
+        ];
+
+        walk(
+          sourceEntry.theme.id,
+          sourceEntry.obj.id,
+          getRelationDisplayLabel(inboundRelation.label, sourceEntry.obj.name, found.obj.name),
+          childPath,
+          inboundRelation.cardinalityFrom ?? '1',
+          true,
+          nextVisited
+        );
+      }
+    };
+
+    const rootTheme = themeById.get(mainObject.themeId);
+    const rootObject = rootTheme?.objects.find((obj) => obj.id === mainObject.objectId);
+    if (!rootTheme || !rootObject) return [] as Stage2ObjectGroup[];
+
+    walk(
+      mainObject.themeId,
+      mainObject.objectId,
+      mainObject.objectName,
+      [],
+      rootObject.cardinality,
+      true,
+      new Set<string>()
+    );
+
+    return groups.map((group) => {
+      const pathKey = getNavigationPathKey(group.navigationPath);
+      return {
+        ...group,
+        attributes: group.isSelectable
+          ? availableAttributes
+              .filter(
+                (attr) =>
+                  attr.sourceThemeId === group.themeId
+                  && attr.sourceObjectId === group.objectId
+                  && getNavigationPathKey(attr.relativeNavigationPath) === pathKey
+              )
+              .sort((a, b) => a.rawName.localeCompare(b.rawName, 'fr', { sensitivity: 'base' }))
+          : [],
+      };
+    });
+  };
+
+  const getMainObjectSelectedAttributeIds = (availableAttributes: AvailableObjectAttribute[]) => {
+    const availableIds = new Set(availableAttributes.map((attr) => attr.id));
+    return new Set(
+      selectedAttributes
+        .filter(
+          (attr) =>
+            (attr.insertionType === 'normal' || attr.insertionType === 'applicable')
+            && availableIds.has(attr.attributeId)
+        )
+        .map((attr) => attr.attributeId)
+    );
+  };
+
+  const buildMainObjectSelectedAttributes = (attributesToSelect: AvailableObjectAttribute[]) => {
+    const todayDate = getTodayIsoDate();
+    return attributesToSelect.map((attr) =>
+      buildSelectedAttribute({
+        themeId: attr.sourceThemeId,
+        themeName: attr.sourceThemeName,
+        objectId: attr.sourceObjectId,
+        objectName: attr.sourceObjectName,
+        attributeId: attr.id,
+        attributeName: attr.rawName,
+        attributeType: attr.type,
+        insertionType: attr.sourceObjectSupportsApplicable ? 'applicable' : 'normal',
+        isApplicable: attr.sourceObjectSupportsApplicable,
+        dateReference: attr.sourceObjectSupportsApplicable
+          ? { type: 'custom', customDate: todayDate }
+          : undefined,
+        navigationPath: attr.relativeNavigationPath,
+      })
+    );
+  };
+
+  const replaceMainObjectSelection = (attributesToSelect: AvailableObjectAttribute[]) => {
+    const availableAttributes = getMainObjectAvailableAttributes();
+    const availableIds = new Set(availableAttributes.map((attr) => attr.id));
+
+    setSelectedAttributes((prev) => {
+      const preserved = prev.filter(
+        (attr) =>
+          !(attr.insertionType === 'normal' || attr.insertionType === 'applicable')
+          || !availableIds.has(attr.attributeId)
+      );
+      const nextSelection = buildMainObjectSelectedAttributes(attributesToSelect);
+      return appendUniqueAttributes(preserved, nextSelection);
+    });
+  };
+
+  const toggleMainObjectAttribute = (attribute: AvailableObjectAttribute, checked: boolean) => {
+    const availableAttributes = getMainObjectAvailableAttributes();
+    const selectedIds = getMainObjectSelectedAttributeIds(availableAttributes);
+    if (checked) selectedIds.add(attribute.id);
+    else selectedIds.delete(attribute.id);
+
+    const nextAttributes = availableAttributes.filter((candidate) => selectedIds.has(candidate.id));
+    replaceMainObjectSelection(nextAttributes);
+  };
+
+  const applyMainObjectQuickSelection = (
+    mode: 'smart' | 'all' | 'none',
+    groupAttributes: AvailableObjectAttribute[]
+  ) => {
+    const availableAttributes = getMainObjectAvailableAttributes();
+    const selectedIds = getMainObjectSelectedAttributeIds(availableAttributes);
+
+    for (const attr of groupAttributes) {
+      if (mode === 'none') {
+        selectedIds.delete(attr.id);
+      } else if (mode === 'all' || attr.smartSel) {
+        selectedIds.add(attr.id);
+      } else {
+        selectedIds.delete(attr.id);
+      }
+    }
+
+    const nextAttributes = availableAttributes.filter((attr) => selectedIds.has(attr.id));
+    replaceMainObjectSelection(nextAttributes);
+  };
+
+  const getMainObjectAttributeDisplayLabel = (attr: AvailableObjectAttribute) => attr.rawName;
+
+  const openStage2MultiObjectDialog = (
+    group: Stage2ObjectGroup,
+    preset: 'aggregation' | 'first' | 'last' | 'applicable'
+  ) => {
+    const theme = dataStructure.find((candidate) => candidate.id === group.themeId);
+    const obj = theme?.objects.find((candidate) => candidate.id === group.objectId);
+    if (!theme || !obj) return;
+
+    const todayDate = getTodayIsoDate();
+    const initialConfig = preset === 'aggregation'
+      ? undefined
+      : preset === 'applicable'
+      ? {
+          insertionType: 'applicable' as const,
+          dateReference: { type: 'custom' as const, customDate: todayDate },
+        }
+      : {
+          insertionType: preset,
+        };
+
+    setPendingObjectInsertion({
+      themeId: group.themeId,
+      themeName: group.themeName,
+      objectId: group.objectId,
+      objectName: group.objectName,
+      cardinality: group.cardinality,
+      mode: preset === 'aggregation' ? 'aggregation' : preset === 'applicable' ? 'special' : 'operation',
+      isApplicable: group.objectSupportsApplicable,
+      smartObjects: obj.smartObjects,
+      navigationPath: group.navigationPath,
+      initialConfig,
+    });
+    setObjectInsertionDialogOpen(true);
+  };
+
   const editingAttribute = selectedAttributes.find((attr) => attr.id === editingAttributeId);
+  const mainObjectSmartObjects = selectingMainObject ? [] : getMainObjectSmartObjects();
+  const mainObjectAvailableAttributes = selectingMainObject ? [] : getMainObjectAvailableAttributes();
+  const mainObjectStage2Groups = selectingMainObject
+    ? [] as Stage2ObjectGroup[]
+    : getMainObjectStage2Groups(mainObjectAvailableAttributes);
+  const mainObjectSelectedAttributeIds = selectingMainObject
+    ? new Set<string>()
+    : getMainObjectSelectedAttributeIds(mainObjectAvailableAttributes);
 
   return (
     <div className="flex h-screen flex-col">
@@ -1045,7 +1627,11 @@ export function AttributeSelector() {
       <div className="border-b bg-white px-6 py-4">
         <div className="flex items-center justify-between gap-4">
           <h1 className="text-xl font-semibold text-gray-900">
-            {selectingMainObject ? 'Quelle est la donnée principale du rapport ?' : 'Ajoutez des données et configurez le rapport.'}
+            {selectingMainObject
+              ? 'Quelle est la donnée principale du rapport ?'
+              : mainObject
+                ? `Rapport : ${mainObject.objectName}`
+                : 'Rapport'}
           </h1>
           {!selectingMainObject && (
             <div className="flex items-center gap-2">
@@ -1066,6 +1652,26 @@ export function AttributeSelector() {
         </div>
       </div>
 
+      {!selectingMainObject && mainObjectSmartObjects.length > 0 && (
+        <div className="border-b bg-indigo-50/40 px-6 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-sm font-medium text-indigo-900">Sélections et filtres rapide</div>
+            <div className="flex flex-wrap gap-2">
+              {mainObjectSmartObjects.map((smartObject) => (
+                <button
+                  key={smartObject.title}
+                  onClick={() => applyMainObjectSmartPreset(smartObject)}
+                  className="rounded border border-indigo-200 bg-white px-3 py-1.5 text-sm text-indigo-700 hover:bg-indigo-100"
+                  title="Appliquer la sélection et les filtres du preset"
+                >
+                  {smartObject.title}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main content */}
       <div className="flex flex-1 overflow-hidden">
         {selectingMainObject ? (
@@ -1079,17 +1685,138 @@ export function AttributeSelector() {
         ) : (
           <>
             <div className="w-1/2">
-              <NavigationPanel
-                onObjectInsert={handleObjectInsert}
-                mainObject={mainObject ? { themeId: mainObject.themeId, objectId: mainObject.objectId } : undefined}
-                showLinkedObjectCardinalities={showLinkedObjectCardinalities}
-              />
+              <div className="h-full overflow-y-auto border-r bg-gray-50 p-4">
+                <div className="mb-3">
+                  <h2 className="font-semibold text-gray-900">Attributs disponibles</h2>
+                </div>
+
+                <div className="space-y-3">
+                  {mainObjectStage2Groups.map((group) => (
+                    <div key={group.key} className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <div>
+                          <h3 className="text-sm font-semibold text-gray-900">
+                            {group.label !== group.objectName
+                              ? `${group.label} (${group.objectName})`
+                              : group.label}
+                          </h3>
+                          {showLinkedObjectCardinalities && group.navigationPath.length > 0 && (
+                            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600">
+                              {group.navigationPath.length === 1
+                                ? group.navigationPath[0].sourceObjectName
+                                : (group.navigationPath[0].relationLabel ?? group.navigationPath[0].sourceObjectName)
+                              } · {group.cardinality}
+                            </span>
+                          )}
+                        </div>
+                        {group.isSelectable ? (
+                          <div className="flex items-center gap-1 text-[10px] text-gray-400">
+                            <button
+                              onClick={() => applyMainObjectQuickSelection('smart', group.attributes)}
+                              className="rounded px-1.5 py-0.5 hover:bg-gray-100 hover:text-gray-600"
+                            >
+                              par défaut
+                            </button>
+                            <span className="text-gray-200">|</span>
+                            <button
+                              onClick={() => applyMainObjectQuickSelection('all', group.attributes)}
+                              className="rounded px-1.5 py-0.5 hover:bg-gray-100 hover:text-gray-600"
+                            >
+                              tous
+                            </button>
+                            <span className="text-gray-200">|</span>
+                            <button
+                              onClick={() => applyMainObjectQuickSelection('none', group.attributes)}
+                              className="rounded px-1.5 py-0.5 hover:bg-gray-100 hover:text-gray-600"
+                            >
+                              aucun
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="text-xs text-gray-500">Relation multiple</div>
+                        )}
+                      </div>
+
+                      {group.isSelectable ? (
+                        <div className="space-y-2">
+                          {group.attributes.map((attr) => {
+                            const checked = mainObjectSelectedAttributeIds.has(attr.id);
+                            return (
+                              <label
+                                key={attr.id}
+                                className="flex cursor-pointer items-center justify-between gap-2 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm hover:bg-gray-100"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={(event) => toggleMainObjectAttribute(attr, event.target.checked)}
+                                  />
+                                  <span className="text-gray-800">{getMainObjectAttributeDisplayLabel(attr)}</span>
+                                  <InfoHint text={attr.description} />
+                                </div>
+                                {!!attr.smartSel && (
+                                  <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700">
+                                    par défaut
+                                  </span>
+                                )}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                          <div className="mb-2">
+                            {group.objectSupportsApplicable
+                              ? 'Cet objet est multi-instance. Le choix par défaut est Applicable à la date du jour.'
+                              : 'Cet objet est multi-instance. Choisissez un mode pour retomber sur une instance exploitable.'}
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              onClick={() => openStage2MultiObjectDialog(group, 'aggregation')}
+                              className="rounded border border-amber-300 bg-white px-3 py-1.5 text-sm text-amber-800 hover:bg-amber-100"
+                            >
+                              Opération
+                            </button>
+                            <button
+                              onClick={() => openStage2MultiObjectDialog(group, 'first')}
+                              className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+                            >
+                              Première
+                            </button>
+                            <button
+                              onClick={() => openStage2MultiObjectDialog(group, 'last')}
+                              className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+                            >
+                              Dernière
+                            </button>
+                            {group.objectSupportsApplicable && (
+                              <button
+                                onClick={() => openStage2MultiObjectDialog(group, 'applicable')}
+                                className="rounded border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm text-indigo-800 hover:bg-indigo-100"
+                              >
+                                Applicable (date du jour)
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  {mainObjectStage2Groups.length === 0 && (
+                    <div className="rounded border bg-white px-3 py-2 text-sm text-gray-500">
+                      Aucun attribut disponible.
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="flex w-1/2 flex-col border-l bg-white">
               <div className="border-b px-4 py-4">
                 <div className="text-lg font-semibold text-gray-900">
-                  {mainObject ? `Attributs sélectionnés pour le rapport sur les ${mainObject.objectName}` : 'Attributs sélectionnés'}
+                  Attributs sélectionnés
                 </div>
               </div>
 
@@ -1201,7 +1928,7 @@ export function AttributeSelector() {
                     sortDirection: edited.sortDirection,
                   };
                 })()
-              : undefined
+              : pendingObjectInsertion.initialConfig
           }
           onConfirm={handleObjectInsertionConfirm}
         />
@@ -1289,7 +2016,7 @@ export function AttributeSelector() {
         onConfirm={handleGlobalFilterConfirm}
         objectAttributes={selectedAttributes.map((attr) => ({
           id: attr.id,
-          name: `${attr.columnName || attr.attributeName} < ${attr.objectName}`,
+          name: getSelectedAttributeDisplayName(attr),
           type: attr.attributeType,
         }))}
         selectedFilterAttributes={getGlobalSelectedAttributesForFilter()}

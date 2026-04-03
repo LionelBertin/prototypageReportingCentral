@@ -117,7 +117,7 @@ export function SelectionPanel({
     if (!attributeId) return '';
 
     const parts = attributeId.split('::');
-    if (parts.length === 3) {
+    if (parts.length >= 3) {
       const [themeId, objectId, localAttributeId] = parts;
       const theme = dataStructure.find((candidate) => candidate.id === themeId);
       const dataObject = theme?.objects.find((candidate) => candidate.id === objectId);
@@ -243,21 +243,23 @@ export function SelectionPanel({
       return getDisplayColumnName(attr);
     }
 
-    const lastPathItem = attr.navigationPath?.at(-1);
+    const navigationPath = attr.navigationPath ?? [];
 
-    if (lastPathItem) {
-      const objectName = lastPathItem.objectName?.trim();
-      const relationLabel = lastPathItem.relationLabel?.trim();
-
-      if (relationLabel && objectName && relationLabel !== objectName) {
-        return `${objectName} — ${relationLabel}`;
-      }
-      if (objectName) {
-        return objectName;
-      }
+    if (navigationPath.length === 0) {
+      return attr.objectName;
     }
 
-    return attr.objectName;
+    const firstStep = navigationPath[0];
+    const rootRelationLabel = firstStep.relationLabel?.trim() || firstStep.objectName?.trim() || attr.objectName;
+
+    if (navigationPath.length === 1) {
+      // Un seul saut : "Bénéficiaire", "Approbateur", etc.
+      return rootRelationLabel;
+    }
+
+    // Plusieurs sauts : montrer l'objet source + le contexte racine
+    // ex: "Matricules et Login – Approbateur"
+    return `${attr.objectName} – ${rootRelationLabel}`;
   };
 
   return (
@@ -389,10 +391,9 @@ export function SelectionPanel({
                                   <button
                                     onClick={() => onEditDateReference(attr.id)}
                                     className="flex items-center gap-1 rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-700 hover:bg-purple-200"
-                                    title="Modifier la date de référence"
+                                    title={getDateReferenceLabel(attr)}
                                   >
                                     <Calendar className="size-3" />
-                                    {getDateReferenceLabel(attr)}
                                   </button>
                                 )}
 

@@ -1,3 +1,5 @@
+﻿import manifest from '../../../listeDomainesManifest.json';
+
 export type AttributeType = 'string' | 'number' | 'date' | 'boolean' | 'document';
 
 export interface Attribute {
@@ -6,6 +8,7 @@ export interface Attribute {
   type: AttributeType;
   required?: boolean;
   magicSel?: boolean;
+  description?: string;
 }
 
 export interface ObjectRelation {
@@ -13,17 +16,23 @@ export interface ObjectRelation {
   targetThemeId: string;
   targetObjectName: string;
   cardinality: string;
+  cardinalityFrom?: string;
   label: string;
+  magicSel?: boolean;
   recursiveMagicSel?: boolean;
+  description?: string;
 }
 
 export type SmartObjectFilterOperator =
   | 'equals'
+  | 'notEquals'
   | 'greaterThan'
   | 'lessThan'
   | 'greaterOrEqual'
   | 'lessOrEqual'
-  | 'contains';
+  | 'contains'
+  | 'isEmpty'
+  | 'isNotEmpty';
 
 export interface SmartObjectFilterCondition {
   attributePath: string;
@@ -31,12 +40,21 @@ export interface SmartObjectFilterCondition {
   value: string | number | boolean | 'dateDuJour';
 }
 
+export interface SmartObjectFilterGroupDefinition {
+  logicalOperator: 'ET' | 'OU';
+  conditions: SmartObjectFilterCondition[];
+}
+
+export interface ApplicationDateConfig {
+  startAttributeId?: string;
+  endAttributeId?: string;
+}
+
 export interface SmartObjectDefinition {
   title: string;
   columns: string[];
   filters?: {
-    logicalOperator: 'ET' | 'OU';
-    conditions: SmartObjectFilterCondition[];
+    groups: SmartObjectFilterGroupDefinition[];
   };
 }
 
@@ -46,698 +64,575 @@ export interface DataObject {
   cardinality: string;
   attributes: Attribute[];
   applicationDate?: boolean;
+  applicationDateConfig?: ApplicationDateConfig;
   isApplicable?: boolean;
   relations?: ObjectRelation[];
   smartObjects?: SmartObjectDefinition[];
+  description?: string;
 }
 
 export interface Theme {
   id: string;
   name: string;
   objects: DataObject[];
+  description?: string;
 }
 
-const rel = (
-  targetThemeId: string,
-  targetObjectId: string,
-  targetObjectName: string,
-  label: string,
-  cardinality = '1',
-  recursiveMagicSel = false
-): ObjectRelation => ({
-  targetThemeId,
-  targetObjectId,
-  targetObjectName,
-  label,
-  cardinality,
-  recursiveMagicSel,
-});
+type ManifestAttribute = {
+  id: string;
+  name: string;
+  dataType?: 'numeric' | 'number' | 'date' | 'string' | 'file' | 'booleen' | 'email' | 'phone';
+  type?: AttributeType;
+  magicSel?: boolean;
+  description?: string;
+};
 
-export const dataStructure: Theme[] = [
-  {
-    id: 'collaborateurs',
-    name: 'Les collaborateurs',
-    objects: [
+type ManifestRelation = {
+  targetObject?: string;
+  relationName?: string;
+  cardinalityFrom?: string;
+  cardinalityTo?: string;
+  recursiveMagicSel?: boolean;
+  magicSel?: boolean;
+  description?: string;
+};
+
+type ManifestObject = {
+  id: string;
+  name: string;
+  cardinality?: string;
+  applicationDate?: boolean | { startAttributeId?: string; endAttributeId?: string };
+  isApplicable?: boolean;
+  description?: string;
+  attributes?: ManifestAttribute[];
+  relations?: ManifestRelation[];
+  smartObjects?: Array<{
+    title?: string;
+    columns?: unknown;
+    filters?: unknown;
+  }>;
+};
+
+type ManifestDomain = {
+  id: string;
+  name: string;
+  description?: string;
+  objects?: ManifestObject[];
+};
+
+const typedManifest = manifest as {
+  domains?: ManifestDomain[];
+};
+
+const numberHints = ['montant', 'age', 'nombre', 'score', 'solde', 'duree', 'durée', 'taille'];
+
+const inferAttributeType = (name: string): AttributeType => {
+  const lowered = name.toLowerCase();
+  if (lowered.includes('date')) return 'date';
+  if (lowered.includes('document') || lowered.includes('photo')) return 'document';
+  if (lowered.includes('obligatoire') || lowered.startsWith('is ')) return 'boolean';
+  if (numberHints.some((hint) => lowered.includes(hint))) return 'number';
+  return 'string';
+};
+
+const normalizeAttributeType = (attribute: ManifestAttribute): AttributeType => {
+  if (attribute.dataType) {
+    const normalizeddataType = attribute.dataType.toLowerCase();
+    if (normalizeddataType === 'numeric' || normalizeddataType === 'number') return 'number';
+    if (normalizeddataType === 'date') return 'date';
+    if (normalizeddataType === 'string') return 'string';
+    if (normalizeddataType === 'file') return 'document';
+    if (normalizeddataType === 'booleen') return 'boolean';
+    if (normalizeddataType === 'email' || normalizeddataType === 'phone') return 'string';
+  }
+
+  if (attribute.type) return attribute.type;
+  return inferAttributeType(attribute.name);
+};
+
+const normalizeCardinality = (value?: string): string => {
+  if (!value || !value.trim()) return '1';
+  const trimmed = value.trim().toLowerCase();
+  if (trimmed === 'one') return '1';
+  if (trimmed === 'many') return 'n';
+  return trimmed;
+};
+
+const buildFallbackCardinality = (obj: ManifestObject): string => {
+  if (!obj.relations || obj.relations.length === 0) return '1';
+  return obj.relations
+    .map((relation) => {
+      const from = normalizeCardinality(relation.cardinalityFrom);
+      const to = normalizeCardinality(relation.cardinalityTo);
+      const target = relation.relationName || relation.targetObject || 'Objet';
+      return `${from} <> ${to} ${target}`;
+    })
+    .join(', ');
+};
+
+const buildObjectLookup = (domains: ManifestDomain[]) => {
+  const byKey = new Map<string, { themeId: string; objectId: string; objectName: string }>();
+  const byName = new Map<string, Array<{ themeId: string; objectId: string; objectName: string }>>();
+
+  for (const domain of domains) {
+    for (const obj of domain.objects ?? []) {
+      const entry = { themeId: domain.id, objectId: obj.id, objectName: obj.name };
+      byKey.set(`${domain.id}::${obj.id}`, entry);
+      const key = obj.name.trim().toLowerCase();
+      const list = byName.get(key) ?? [];
+      list.push(entry);
+      byName.set(key, list);
+    }
+  }
+
+  return { byKey, byName };
+};
+
+const resolveRelationTarget = (
+  relation: ManifestRelation,
+  domainId: string,
+  objectLookup: ReturnType<typeof buildObjectLookup>
+) => {
+  const targetName = relation.targetObject?.trim();
+  if (!targetName) return null;
+
+  const candidates = objectLookup.byName.get(targetName.toLowerCase()) ?? [];
+  if (candidates.length === 0) return null;
+
+  const inSameDomain = candidates.find((candidate) => candidate.themeId === domainId);
+  return inSameDomain ?? candidates[0];
+};
+
+const normalizeFilterOperator = (operator: string): SmartObjectFilterOperator | null => {
+  const cleaned = operator.trim().toLowerCase();
+  switch (cleaned) {
+    case '=':
+    case '==':
+    case 'equals':
+      return 'equals';
+    case '!=':
+    case '<>':
+    case 'notequals':
+      return 'notEquals';
+    case '>':
+    case 'greaterthan':
+      return 'greaterThan';
+    case '<':
+    case 'lessthan':
+      return 'lessThan';
+    case '>=':
+    case 'greaterorequal':
+      return 'greaterOrEqual';
+    case '<=':
+    case 'lessorequal':
+      return 'lessOrEqual';
+    case 'contains':
+      return 'contains';
+    case 'isempty':
+      return 'isEmpty';
+    case 'isnotempty':
+      return 'isNotEmpty';
+    default:
+      return null;
+  }
+};
+
+const stripOuterParens = (value: string): string => {
+  let current = value.trim();
+  while (current.startsWith('(') && current.endsWith(')')) {
+    let depth = 0;
+    let balanced = true;
+
+    for (let index = 0; index < current.length; index += 1) {
+      const char = current[index];
+      if (char === '(') depth += 1;
+      if (char === ')') depth -= 1;
+      if (depth === 0 && index < current.length - 1) {
+        balanced = false;
+        break;
+      }
+      if (depth < 0) {
+        balanced = false;
+        break;
+      }
+    }
+
+    if (!balanced || depth !== 0) break;
+    current = current.slice(1, -1).trim();
+  }
+  return current;
+};
+
+const splitTopLevelByKeyword = (expression: string, keyword: 'and' | 'or'): string[] => {
+  const result: string[] = [];
+  const normalized = expression.trim();
+  if (!normalized) return result;
+
+  const upperKeyword = ` ${keyword.toUpperCase()} `;
+  const lowerKeyword = ` ${keyword.toLowerCase()} `;
+
+  let depth = 0;
+  let quote: "'" | '"' | null = null;
+  let tokenStart = 0;
+
+  for (let index = 0; index < normalized.length; index += 1) {
+    const char = normalized[index];
+
+    if (quote) {
+      if (char === quote) quote = null;
+      continue;
+    }
+
+    if (char === '\'' || char === '"') {
+      quote = char;
+      continue;
+    }
+
+    if (char === '(') {
+      depth += 1;
+      continue;
+    }
+
+    if (char === ')') {
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+
+    if (depth !== 0) continue;
+
+    const remainingUpper = normalized.slice(index, index + upperKeyword.length).toUpperCase();
+    const remainingLower = normalized.slice(index, index + lowerKeyword.length).toLowerCase();
+    if (remainingUpper === upperKeyword || remainingLower === lowerKeyword) {
+      const token = normalized.slice(tokenStart, index).trim();
+      if (token) result.push(token);
+      tokenStart = index + upperKeyword.length;
+      index = tokenStart - 1;
+    }
+  }
+
+  const lastToken = normalized.slice(tokenStart).trim();
+  if (lastToken) result.push(lastToken);
+
+  return result;
+};
+
+const parseSingleFilterCondition = (rawCondition: string): SmartObjectFilterCondition | null => {
+  const cleaned = stripOuterParens(rawCondition).trim();
+  if (!cleaned) return null;
+
+  const notNullMatch = cleaned.match(/^(.*?)\s+is\s+not\s+null$/i);
+  if (notNullMatch) {
+    const attributePath = stripOuterParens(notNullMatch[1]).trim().replace(/^['"]|['"]$/g, '');
+    if (!attributePath) return null;
+    return {
+      attributePath,
+      operator: 'isNotEmpty',
+      value: '',
+    };
+  }
+
+  const nullMatch = cleaned.match(/^(.*?)\s+is\s+null$/i);
+  if (nullMatch) {
+    const attributePath = stripOuterParens(nullMatch[1]).trim().replace(/^['"]|['"]$/g, '');
+    if (!attributePath) return null;
+    return {
+      attributePath,
+      operator: 'isEmpty',
+      value: '',
+    };
+  }
+
+  const match = cleaned.match(/^(.*?)\s*(<=|>=|!=|=|<|>|contains)\s*(.*?)$/i);
+  if (!match) return null;
+
+  const [, rawPath, rawOperator, rawValue] = match;
+  const operator = normalizeFilterOperator(rawOperator);
+  if (!operator) return null;
+
+  const attributePath = stripOuterParens(rawPath).trim().replace(/^['"]|['"]$/g, '');
+  if (!attributePath) return null;
+
+  return {
+    attributePath,
+    operator,
+    value: parseFilterValue(rawValue),
+  };
+};
+
+const parseFilterValue = (rawValue: string): string | number | boolean | 'dateDuJour' => {
+  const trimmed = rawValue.trim();
+  if (/^dateDuJour$/i.test(trimmed)) return 'dateDuJour';
+
+  const unquoted =
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+    || (trimmed.startsWith('"') && trimmed.endsWith('"'))
+      ? trimmed.slice(1, -1)
+      : trimmed;
+
+  if (/^(true|false)$/i.test(unquoted)) {
+    return /^true$/i.test(unquoted);
+  }
+
+  const asNumber = Number(unquoted);
+  if (!Number.isNaN(asNumber) && unquoted !== '') {
+    return asNumber;
+  }
+
+  return unquoted;
+};
+
+const parseFilterExpression = (expression: string): SmartObjectDefinition['filters'] | undefined => {
+  // Convert expression to DNF: OR of groups, each group is an AND of conditions.
+  const buildDnf = (rawExpression: string): SmartObjectFilterCondition[][] => {
+    const normalized = stripOuterParens(rawExpression.trim());
+    if (!normalized) return [];
+
+    const orParts = splitTopLevelByKeyword(normalized, 'or');
+    if (orParts.length > 1) {
+      return orParts.flatMap((part) => buildDnf(part));
+    }
+
+    const andParts = splitTopLevelByKeyword(normalized, 'and');
+    if (andParts.length > 1) {
+      let accumulator: SmartObjectFilterCondition[][] = [[]];
+
+      for (const andPart of andParts) {
+        const partDnf = buildDnf(andPart);
+        if (partDnf.length === 0) return [];
+
+        const combined: SmartObjectFilterCondition[][] = [];
+        for (const baseGroup of accumulator) {
+          for (const partGroup of partDnf) {
+            combined.push([...baseGroup, ...partGroup]);
+          }
+        }
+        accumulator = combined;
+      }
+
+      return accumulator;
+    }
+
+    const single = parseSingleFilterCondition(normalized);
+    return single ? [[single]] : [];
+  };
+
+  const dnfGroups = buildDnf(expression);
+
+  const groups = dnfGroups
+    .filter((conditions) => conditions.length > 0)
+    .map((conditions) => ({
+      logicalOperator: (conditions.length > 1 ? 'ET' : 'OU') as 'ET' | 'OU',
+      conditions,
+    }));
+
+  if (groups.length === 0) return undefined;
+
+  return { groups };
+};
+
+const normalizeSmartFilter = (value: unknown): SmartObjectDefinition['filters'] | undefined => {
+  if (!value) return undefined;
+
+  if (typeof value === 'string') {
+    return parseFilterExpression(value);
+  }
+
+  if (typeof value !== 'object') return undefined;
+
+  const raw = value as {
+    logicalOperator?: unknown;
+    conditions?: unknown;
+    groups?: unknown;
+  };
+
+  if (Array.isArray(raw.groups) && raw.groups.length > 0) {
+    const groups = raw.groups
+      .map((groupItem) => {
+        if (!groupItem || typeof groupItem !== 'object') return null;
+        const group = groupItem as {
+          logicalOperator?: unknown;
+          conditions?: unknown;
+        };
+
+        if (!Array.isArray(group.conditions) || group.conditions.length === 0) return null;
+
+        const logicalOperator: 'ET' | 'OU' = String(group.logicalOperator).toUpperCase() === 'OU' ? 'OU' : 'ET';
+
+        const conditions = group.conditions
+          .map((item) => {
+            if (!item || typeof item !== 'object') return null;
+            const candidate = item as {
+              attributePath?: unknown;
+              operator?: unknown;
+              value?: unknown;
+            };
+
+            if (typeof candidate.attributePath !== 'string' || typeof candidate.operator !== 'string') {
+              return null;
+            }
+
+            const operator = normalizeFilterOperator(candidate.operator);
+            if (!operator) return null;
+
+            let valueResult: string | number | boolean | 'dateDuJour' = '';
+            if (candidate.value === 'dateDuJour') {
+              valueResult = 'dateDuJour';
+            } else if (
+              typeof candidate.value === 'string'
+              || typeof candidate.value === 'number'
+              || typeof candidate.value === 'boolean'
+            ) {
+              valueResult = candidate.value as string | number | boolean;
+            } else {
+              valueResult = String(candidate.value ?? '');
+            }
+
+            return {
+              attributePath: candidate.attributePath,
+              operator,
+              value: valueResult,
+            };
+          })
+          .filter((condition): condition is SmartObjectFilterCondition => condition !== null);
+
+        if (conditions.length === 0) return null;
+
+        return {
+          logicalOperator,
+          conditions,
+        };
+      })
+      .filter((group): group is SmartObjectFilterGroupDefinition => group !== null);
+
+    return groups.length > 0 ? { groups } : undefined;
+  }
+
+  if (!Array.isArray(raw.conditions) || raw.conditions.length === 0) return undefined;
+
+  const logicalOperator: 'ET' | 'OU' = String(raw.logicalOperator).toUpperCase() === 'OU' ? 'OU' : 'ET';
+
+  const conditions = raw.conditions
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null;
+      const candidate = item as {
+        attributePath?: unknown;
+        operator?: unknown;
+        value?: unknown;
+      };
+
+      if (typeof candidate.attributePath !== 'string' || typeof candidate.operator !== 'string') {
+        return null;
+      }
+
+      const operator = normalizeFilterOperator(candidate.operator);
+      if (!operator) return null;
+
+      let valueResult: string | number | boolean | 'dateDuJour' = '';
+      if (candidate.value === 'dateDuJour') {
+        valueResult = 'dateDuJour';
+      } else if (
+        typeof candidate.value === 'string'
+        || typeof candidate.value === 'number'
+        || typeof candidate.value === 'boolean'
+      ) {
+        valueResult = candidate.value as string | number | boolean;
+      } else {
+        valueResult = String(candidate.value ?? '');
+      }
+
+      return {
+        attributePath: candidate.attributePath,
+        operator,
+        value: valueResult,
+      };
+    })
+    .filter((condition): condition is SmartObjectFilterCondition => condition !== null);
+
+  if (conditions.length === 0) return undefined;
+
+  return {
+    groups: [
       {
-        id: 'collaborateur',
-        name: 'Collaborateur',
-        cardinality: '1',
-        attributes: [
-          { id: 'photo', name: 'photo', type: 'document' },
-          { id: 'titre', name: 'titre', type: 'string' },
-          { id: 'nom', name: 'nom', type: 'string', magicSel: true },
-          { id: 'prenom', name: 'prénom', type: 'string', magicSel: true },
-          { id: 'genre', name: 'genre', type: 'string' },
-          { id: 'date-naissance', name: 'date de naissance', type: 'date' },
-          { id: 'age', name: 'âge', type: 'number' },
-        ],
-        relations: [
-          rel('collaborateurs', 'matricules-login', 'Matricules et Login', 'Matricules et Login'),
-          rel('collaborateurs', 'adresse-residence', 'Adresse de résidence', 'Adresse de résidence'),
-          rel('collaborateurs', 'informations-contact', 'Informations contact', 'Informations contact'),
-          rel('collaborateurs', 'contact-urgence', "Contact d'urgence", "Contact d'urgence"),
-          rel('collaborateurs', 'documents-identite', "Documents d'identité", "Documents d'identité", '1..n'),
-          rel('collaborateurs', 'enfants-charge', 'Enfants à charge', 'Enfants à charge', '0..n'),
-          rel('collaborateurs', 'taille-goodies', 'Taille goodies', 'Taille goodies'),
-        ],
-      },
-      {
-        id: 'matricules-login',
-        name: 'Matricules et Login',
-        cardinality: '1 <> 1 Collaborateur',
-        attributes: [
-          { id: 'userId', name: 'userId', type: 'string' },
-          { id: 'login', name: 'login', type: 'string' },
-          { id: 'matricule-paie', name: 'matricule de paie', type: 'string' },
-        ],
-        relations: [rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur')],
-      },
-      {
-        id: 'adresse-residence',
-        name: 'Adresse de résidence',
-        cardinality: '1 <> 1 Collaborateur',
-        attributes: [
-          { id: 'rue', name: 'rue', type: 'string', magicSel: true },
-          { id: 'complement', name: 'complément', type: 'string' },
-          { id: 'code-postal', name: 'code postal', type: 'string', magicSel: true },
-          { id: 'ville', name: 'ville', type: 'string', magicSel: true },
-          { id: 'pays', name: 'pays', type: 'string' },
-        ],
-        relations: [rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur')],
-      },
-      {
-        id: 'informations-contact',
-        name: 'Informations contact',
-        cardinality: '1 <> 1 Collaborateur',
-        attributes: [
-          { id: 'email-personnel', name: 'email personnel', type: 'string' },
-          { id: 'telephone-personnel', name: 'téléphone personnel', type: 'string', magicSel: true },
-        ],
-        relations: [rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur')],
-      },
-      {
-        id: 'contact-urgence',
-        name: "Contact d'urgence",
-        cardinality: '1 <> 1 Collaborateur',
-        attributes: [
-          { id: 'nom-urgence', name: 'nom', type: 'string', magicSel: true },
-          { id: 'relation', name: 'relation', type: 'string' },
-          { id: 'telephone-urgence', name: 'téléphone', type: 'string', magicSel: true },
-        ],
-        relations: [rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur')],
-      },
-      {
-        id: 'documents-identite',
-        name: "Documents d'identité",
-        cardinality: '1..n <> 1 Collaborateur',
-        attributes: [
-          { id: 'type-document', name: 'type de document', type: 'string' },
-          { id: 'document', name: 'document', type: 'document', magicSel: true },
-          { id: 'date-emission', name: 'date émission', type: 'date' },
-          { id: 'date-expiration', name: 'date expiration', type: 'date', magicSel: true },
-        ],
-        relations: [rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur')],
-      },
-      {
-        id: 'enfants-charge',
-        name: 'Enfants à charge',
-        cardinality: '0..n <> 1 Collaborateur',
-        attributes: [
-          { id: 'nom-enfant', name: 'nom', type: 'string' },
-          { id: 'prenom-enfant', name: 'prénom', type: 'string', magicSel: true },
-          { id: 'genre-enfant', name: 'genre', type: 'string' },
-          { id: 'date-naissance-enfant', name: 'date de naissance', type: 'date', magicSel: true },
-        ],
-        relations: [rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur')],
-      },
-      {
-        id: 'taille-goodies',
-        name: 'Taille goodies',
-        cardinality: '1 <> 1 Collaborateur',
-        attributes: [
-          { id: 'taille-cm', name: 'taille en cm', type: 'number' },
-          { id: 'taille-tshirt', name: 'taille tshirt', type: 'string', magicSel: true },
-        ],
-        relations: [rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur')],
-      },
-    ],
-  },
-  {
-    id: 'contrats',
-    name: 'Les contrats',
-    objects: [
-      {
-        id: 'contrats',
-        name: 'Contrats',
-        cardinality: '1..n <> 1 Collaborateur',
-        applicationDate: true,
-        isApplicable: true,
-        attributes: [
-          { id: 'type-contrat', name: 'type de contrat', type: 'string', magicSel: true },
-          { id: 'document-contrat', name: 'document', type: 'document' },
-          { id: 'date-signature', name: 'date signature', type: 'date' },
-          { id: 'date-debut-contrat', name: 'date début', type: 'date', magicSel: true },
-          { id: 'date-fin-contrat', name: 'date fin', type: 'date', magicSel: true },
-          { id: 'motif-debut', name: 'motif début', type: 'string' },
-          { id: 'motif-fin', name: 'motif fin', type: 'string' },
-        ],
-        relations: [
-          rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur', '1', true),
-          rel('contrats', 'postes', 'Postes', 'Postes', '1..n'),
-        ],
-      },
-      {
-        id: 'postes',
-        name: 'Postes',
-        cardinality: '1..n <> 1 Contrat, 0..n <> 1 Collaborateur manager, 0..n <> 1 Département, 0..n <> 1 Etablissement',
-        applicationDate: true,
-        isApplicable: true,
-        attributes: [
-          { id: 'intitule-poste', name: 'intitulé', type: 'string', magicSel: true },
-          { id: 'document-poste', name: 'document', type: 'document' },
-          { id: 'date-debut-poste', name: 'date début', type: 'date', magicSel: true },
-          { id: 'date-fin-poste', name: 'date fin', type: 'date', magicSel: true },
-          { id: 'qualifications', name: 'qualifications', type: 'string' },
-          { id: 'csp', name: 'csp', type: 'string' },
-          { id: 'modalite-temps-travail', name: 'modalité de temps de travail', type: 'string' },
-        ],
-        relations: [
-          rel('contrats', 'contrats', 'Contrats', 'Contrat', '1', true),
-          rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur manager'),
-          rel('referentiels', 'departement', 'Département', 'Département', '1', true),
-          rel('referentiels', 'etablissement', 'Etablissement', 'Etablissement', '1', true),
-        ],
-      },
-    ],
-  },
-  {
-    id: 'absences',
-    name: 'Les absences',
-    objects: [
-      {
-        id: 'absences-mod-alt',
-        name: 'Absences',
-        cardinality:
-          "0..n <> 1 Collaborateur qui a posé l'absence, 0..n <> 1 Collaborateur qui bénéficie de l'absence, 0..n <> 1 Collaborateur qui a approuvé l'absence, 0..n <> 1 Collaborateur qui a refusé l'absence",
-        attributes: [
-          { id: 'type-compte-mod-alt', name: 'type compte', type: 'string', magicSel: true },
-          { id: 'statut-mod-alt', name: 'statut', type: 'string', magicSel: true },
-          { id: 'date-demande-mod-alt', name: 'date demande', type: 'date' },
-          { id: 'date-refus-mod-alt', name: 'date refus', type: 'date', magicSel: true },
-          { id: 'motivation-refus-mod-alt', name: 'motivation du refus', type: 'string', magicSel: true },
-          { id: 'date-approbation-mod-alt', name: 'date approbation', type: 'date' },
-          { id: 'date-debut-mod-alt', name: 'date début', type: 'date', magicSel: true },
-          { id: 'date-fin-mod-alt', name: 'date fin', type: 'date', magicSel: true },
-          { id: 'duree-reelle-mod-alt', name: 'durée réelle', type: 'number' },
-          { id: 'duree-ouvree-mod-alt', name: 'durée ouvrée', type: 'number', magicSel: true },
-        ],
-        relations: [
-          rel('collaborateurs', 'collaborateur', 'Collaborateur', "Collaborateur qui a posé l'absence"),
-          rel('collaborateurs', 'collaborateur', 'Collaborateur', "Collaborateur qui bénéficie de l'absence", '1', true),
-          rel('collaborateurs', 'collaborateur', 'Collaborateur', "Collaborateur qui a approuvé l'absence"),
-          rel('collaborateurs', 'collaborateur', 'Collaborateur', "Collaborateur qui a refusé l'absence"),
-        ],
-        smartObjects: [
-          {
-            title: 'Absences approuvées',
-            columns: [
-              'type compte',
-              'date début',
-              'date fin',
-              'Collaborateur_Absence.nom',
-              'Collaborateur_Absence.prénom',
-              'Collaborateur_Approbation.nom',
-              'Collaborateur_Approbation.prénom',
-            ],
-            filters: {
-              logicalOperator: 'ET',
-              conditions: [{ attributePath: 'statut', operator: 'equals', value: 'approuvé' }],
-            },
-          },
-          {
-            title: 'Absences à venir',
-            columns: [
-              'type compte',
-              'date début',
-              'date fin',
-              'Collaborateur_Absence.nom',
-              'Collaborateur_Absence.prénom',
-              'Collaborateur_Approbation.nom',
-              'Collaborateur_Approbation.prénom',
-            ],
-            filters: {
-              logicalOperator: 'ET',
-              conditions: [
-                { attributePath: 'statut', operator: 'equals', value: 'approuvé' },
-                { attributePath: 'date début', operator: 'greaterThan', value: 'dateDuJour' },
-              ],
-            },
-          },
-          {
-            title: 'Absences passées',
-            columns: [
-              'type compte',
-              'date début',
-              'date fin',
-              'Collaborateur_Absence.nom',
-              'Collaborateur_Absence.prénom',
-              'Collaborateur_Approbation.nom',
-              'Collaborateur_Approbation.prénom',
-            ],
-            filters: {
-              logicalOperator: 'ET',
-              conditions: [
-                { attributePath: 'statut', operator: 'equals', value: 'approuvé' },
-                { attributePath: 'date début', operator: 'lessOrEqual', value: 'dateDuJour' },
-              ],
-            },
-          },
-          {
-            title: 'Absences en attente de validation',
-            columns: [
-              'type compte',
-              'durée ouvrée',
-              'Collaborateur_Absence.nom',
-              'Collaborateur_Absence.prénom',
-              'Collaborateur_Absence.poste[applicable].manager.nom',
-              'Collaborateur_Absence.poste[applicable].manager.prénom',
-            ],
-            filters: {
-              logicalOperator: 'ET',
-              conditions: [{ attributePath: 'statut', operator: 'equals', value: 'à traiter' }],
-            },
-          },
-          {
-            title: 'Absences passées refusées',
-            columns: [
-              'date refus',
-              'motivation du refus',
-              'durée ouvrée',
-              'Collaborateur_Absence.nom',
-              'Collaborateur_Absence.prénom',
-              'Collaborateur_Refus.nom',
-              'Collaborateur_Refus.prénom',
-            ],
-            filters: {
-              logicalOperator: 'ET',
-              conditions: [
-                { attributePath: 'statut', operator: 'equals', value: 'refusé' },
-                { attributePath: 'date début', operator: 'lessOrEqual', value: 'dateDuJour' },
-              ],
-            },
-          },
-          {
-            title: 'Absences futures refusées',
-            columns: [
-              'date refus',
-              'motivation du refus',
-              'durée ouvrée',
-              'Collaborateur_Absence.nom',
-              'Collaborateur_Absence.prénom',
-              'Collaborateur_Refus.nom',
-              'Collaborateur_Refus.prénom',
-            ],
-            filters: {
-              logicalOperator: 'ET',
-              conditions: [
-                { attributePath: 'statut', operator: 'equals', value: 'refusé' },
-                { attributePath: 'date début', operator: 'greaterThan', value: 'dateDuJour' },
-              ],
-            },
-          },
-        ],
-      },
-      {
-        id: 'solde-conges',
-        name: 'Solde de congés',
-        cardinality: '0..n <> 1 Collaborateur',
-        applicationDate: true,
-        isApplicable: true,
-        attributes: [
-          { id: 'type-compte-solde', name: 'type compte', type: 'string', magicSel: true },
-          { id: 'solde', name: 'solde', type: 'number', magicSel: true },
-        ],
-        relations: [rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur', '1', true)],
-      },
-    ],
-  },
-  {
-    id: 'depenses',
-    name: 'Les dépenses',
-    objects: [
-      {
-        id: 'depenses-validees',
-        name: 'Dépenses validées',
-        cardinality: '0..n <> 1 Collaborateur de la dépense, 0..n <> 1 Collaborateur approbation',
-        attributes: [
-          { id: 'date-depense-validee', name: 'date dépense', type: 'date', magicSel: true },
-          { id: 'date-approbation-depense', name: 'date approbation', type: 'date', magicSel: true },
-          { id: 'nature-depense-validee', name: 'nature de dépense', type: 'string', magicSel: true },
-          { id: 'devise-validee', name: 'devise', type: 'string', magicSel: true },
-          { id: 'montant-ht-validee', name: 'montant HT', type: 'number' },
-          { id: 'montant-ttc-validee', name: 'montant TTC', type: 'number', magicSel: true },
-        ],
-        relations: [
-          rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur de la dépense', '1', true),
-          rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur approbation'),
-        ],
-      },
-      {
-        id: 'depenses-refusees',
-        name: 'Dépenses refusées',
-        cardinality: '0..n <> 1 Collaborateur de la dépense, 0..n <> 1 Collaborateur refus',
-        attributes: [
-          { id: 'date-depense-refusee', name: 'date dépense', type: 'date', magicSel: true },
-          { id: 'date-refus-depense', name: 'date refus', type: 'date', magicSel: true },
-          { id: 'motif-refus-depense', name: 'motif de refus', type: 'string', magicSel: true },
-          { id: 'nature-depense-refusee', name: 'nature de dépense', type: 'string', magicSel: true },
-          { id: 'devise-refusee', name: 'devise', type: 'string', magicSel: true },
-          { id: 'montant-ht-refusee', name: 'montant HT', type: 'number' },
-          { id: 'montant-ttc-refusee', name: 'montant TTC', type: 'number', magicSel: true },
-        ],
-        relations: [
-          rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur de la dépense', '1', true),
-          rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur refus'),
-        ],
-      },
-      {
-        id: 'depenses-mod-alt',
-        name: 'Dépenses',
-        cardinality: '0..n <> 1 Collaborateur de la dépense, 0..n <> 1 Collaborateur refus, 0..n <> 1 Collaborateur approbation',
-        attributes: [
-          { id: 'statut-depense-mod-alt', name: 'statut', type: 'string', magicSel: true },
-          { id: 'date-depense-mod-alt', name: 'date dépense', type: 'date', magicSel: true },
-          { id: 'date-refus-mod-alt', name: 'date refus', type: 'date', magicSel: true },
-          { id: 'motif-refus-mod-alt', name: 'motif de refus', type: 'string', magicSel: true },
-          { id: 'date-approbation-mod-alt', name: 'date approbation', type: 'date', magicSel: true },
-          { id: 'nature-depense-mod-alt', name: 'nature de dépense', type: 'string', magicSel: true },
-          { id: 'devise-mod-alt', name: 'devise', type: 'string', magicSel: true },
-          { id: 'montant-ht-mod-alt', name: 'montant HT', type: 'number' },
-          { id: 'montant-ttc-mod-alt', name: 'montant TTC', type: 'number', magicSel: true },
-        ],
-        relations: [
-          rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur de la dépense', '1', true),
-          rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur refus'),
-          rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur approbation'),
-        ],
-      },
-    ],
-  },
-  {
-    id: 'entretiens',
-    name: 'Les entretiens',
-    objects: [
-      {
-        id: 'entretiens',
-        name: 'Entretiens',
-        cardinality: '0..n <> 1 Collaborateur concerné, 0..n <> 1 Collaborateur manager',
-        attributes: [
-          { id: 'type-entretien', name: "type d'entretien", type: 'string', magicSel: true },
-          { id: 'date-preparation-collaborateur', name: 'date de préparation collaborateur', type: 'date' },
-          { id: 'date-preparation-manager', name: 'date de préparation manager', type: 'date' },
-          { id: 'date-validation-collaborateur', name: 'date de validation collaborateur', type: 'date' },
-          { id: 'date-validation-manager', name: 'date de validation manager', type: 'date', magicSel: true },
-          { id: 'commentaire-final', name: 'commentaire final', type: 'string', magicSel: true },
-        ],
-        relations: [
-          rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur concerné', '1', true),
-          rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur manager'),
-        ],
-      },
-    ],
-  },
-  {
-    id: 'formations',
-    name: 'Les formations',
-    objects: [
-      {
-        id: 'formations-refusees',
-        name: 'Formations refusées',
-        cardinality: '0..n <> 1 Collaborateur formé, 0..n <> 1 Collaborateur demande, 0..n <> 1 Collaborateur refus',
-        attributes: [
-          { id: 'date-demande-formation-refusee', name: 'date demande', type: 'date', magicSel: true },
-          { id: 'date-refus-formation', name: 'date refus', type: 'date', magicSel: true },
-        ],
-        relations: [
-          rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur formé', '1', true),
-          rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur demande'),
-          rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur refus'),
-        ],
-      },
-      {
-        id: 'formations-suivies',
-        name: 'Formations suivies',
-        cardinality: '0..n <> 1 Catalogue de formation, 0..n <> 1 Collaborateur formé, 0..n <> 1 Collaborateur demande, 0..n <> 1 Collaborateur approbation',
-        attributes: [
-          { id: 'date-demande-formation-suivie', name: 'date demande', type: 'date' },
-          { id: 'date-approbation-formation', name: 'date approbation', type: 'date' },
-          { id: 'date-debut-formation', name: 'date de début', type: 'date', magicSel: true },
-          { id: 'date-fin-formation', name: 'date de fin', type: 'date', magicSel: true },
-          { id: 'date-certification', name: 'date certification', type: 'date' },
-          { id: 'date-expiration-certification', name: 'date expiration', type: 'date' },
-        ],
-        relations: [
-          rel('formations', 'catalogue-formation', 'Catalogue de formation', 'Catalogue de formation', '1', true),
-          rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur formé', '1', true),
-          rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur demande'),
-          rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur approbation'),
-        ],
-      },
-      {
-        id: 'catalogue-formation',
-        name: 'Catalogue de formation',
-        cardinality: '1',
-        attributes: [
-          { id: 'nom-formation', name: 'nom', type: 'string', magicSel: true },
-          { id: 'description-formation', name: 'description', type: 'string' },
-          { id: 'organisme-formation', name: 'organisme', type: 'string' },
-          { id: 'obligatoire', name: 'obligatoire', type: 'boolean', magicSel: true },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'objectifs',
-    name: 'Les objectifs',
-    objects: [
-      {
-        id: 'objectifs',
-        name: 'Objectifs',
-        cardinality: '0..n <> 1 Collaborateur concerné, 0..n <> 1 Collaborateur manager',
-        attributes: [
-          { id: 'description-objectif', name: 'description', type: 'string', magicSel: true },
-          { id: 'date-debut-objectif', name: 'date début', type: 'date', magicSel: true },
-          { id: 'date-fin-objectif', name: 'date fin', type: 'date', magicSel: true },
-        ],
-        relations: [
-          rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur concerné', '1', true),
-          rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur manager'),
-        ],
-      },
-    ],
-  },
-  {
-    id: 'remunerations',
-    name: 'Les rémunérations',
-    objects: [
-      {
-        id: 'remuneration-theorique-fixe',
-        name: 'Rémunération théorique fixe',
-        cardinality: '0..n <> 1 Collaborateur',
-        attributes: [
-          { id: 'date-debut-rem-fixe', name: 'date début', type: 'date', magicSel: true },
-          { id: 'date-fin-rem-fixe', name: 'date fin', type: 'date', magicSel: true },
-          { id: 'montant-fixe', name: 'montant', type: 'number', magicSel: true },
-          { id: 'periodicite-fixe', name: 'périodicité', type: 'string', magicSel: true },
-        ],
-        relations: [rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur', '1', true)],
-      },
-      {
-        id: 'remuneration-theorique-variable',
-        name: 'Rémunération théorique variable',
-        cardinality: '0..n <> 1 Collaborateur',
-        attributes: [
-          { id: 'date-debut-rem-variable', name: 'date début', type: 'date', magicSel: true },
-          { id: 'date-fin-rem-variable', name: 'date fin', type: 'date', magicSel: true },
-          { id: 'montant-variable', name: 'montant', type: 'number', magicSel: true },
-          { id: 'periodicite-variable', name: 'périodicité', type: 'string', magicSel: true },
-        ],
-        relations: [rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur', '1', true)],
-      },
-      {
-        id: 'remuneration-reelle',
-        name: 'Rémunération réelle',
-        cardinality: '0..n <> 1 Collaborateur',
-        attributes: [
-          { id: 'type-remuneration', name: 'type de rémunération', type: 'string', magicSel: true },
-          { id: 'date-debut-rem-reelle', name: 'date début', type: 'date', magicSel: true },
-          { id: 'date-fin-rem-reelle', name: 'date fin', type: 'date', magicSel: true },
-          { id: 'montant-reelle', name: 'montant', type: 'number', magicSel: true },
-        ],
-        relations: [rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur', '1', true)],
+        logicalOperator,
+        conditions,
       },
     ],
-  },
-  {
-    id: 'documents-partages',
-    name: 'Les documents partagés',
-    objects: [
-      {
-        id: 'documents-partages',
-        name: 'Documents partagés',
-        cardinality: '0..n <> 1 Département, 0..n <> 1 Etablissement',
-        attributes: [
-          { id: 'date-publication', name: 'date publication', type: 'date', magicSel: true },
-          { id: 'document-partage', name: 'document', type: 'document' },
-          { id: 'nom-document', name: 'nom du document', type: 'string', magicSel: true },
-        ],
-        relations: [
-          rel('referentiels', 'departement', 'Département', 'Département', '1', true),
-          rel('referentiels', 'etablissement', 'Etablissement', 'Etablissement', '1', true),
-        ],
-      },
-    ],
-  },
-  {
-    id: 'enquete-engagement',
-    name: 'Les enquête engagement',
-    objects: [
-      {
-        id: 'enquete-engagement',
-        name: 'Enquête engagement',
-        cardinality: '0..n <> 1 Département, 0..n <> 1 Etablissement',
-        attributes: [
-          { id: 'date-enquete', name: 'date enquête', type: 'date', magicSel: true },
-          { id: 'titre-enquete', name: 'titre enquête', type: 'string', magicSel: true },
-          { id: 'nombre-interroges', name: 'nombre interrogés', type: 'number' },
-          { id: 'nombre-repondants', name: 'nombre répondants', type: 'number' },
-          { id: 'score-moyen', name: 'score moyen', type: 'number', magicSel: true },
-        ],
-        relations: [
-          rel('referentiels', 'departement', 'Département', 'Département', '1', true),
-          rel('referentiels', 'etablissement', 'Etablissement', 'Etablissement', '1', true),
-        ],
-      },
-    ],
-  },
-  {
-    id: 'facture',
-    name: 'Les factures',
-    objects: [
-      {
-        id: 'factures',
-        name: 'Factures',
-        cardinality: '1',
-        attributes: [
-          { id: 'date-facture', name: 'date facture', type: 'date', magicSel: true },
-          { id: 'date-reception', name: 'date réception', type: 'date' },
-          { id: 'date-reglement', name: 'date règlement', type: 'date' },
-          { id: 'statut-facture', name: 'statut', type: 'string', magicSel: true },
-          { id: 'devise-facture', name: 'devise', type: 'string', magicSel: true },
-          { id: 'montant-ht-facture', name: 'montant HT', type: 'number' },
-          { id: 'montant-ttc-facture', name: 'montant TTC', type: 'number', magicSel: true },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'recrutement',
-    name: 'Le Recrutement',
-    objects: [
-      {
-        id: 'postes-a-pourvoir',
-        name: 'Postes à pourvoir',
-        cardinality: '0..n <> 1 Département, 0..n <> 1 Etablissement',
-        attributes: [
-          { id: 'intitule-poste-pourvoir', name: 'Intitulé', type: 'string', magicSel: true },
-          { id: 'date-ouverture-poste', name: 'Date ouverture poste', type: 'date', magicSel: true },
-          { id: 'date-fermeture-poste', name: 'Date fermeture poste', type: 'date' },
-        ],
-        relations: [
-          rel('referentiels', 'departement', 'Département', 'Département', '1', true),
-          rel('referentiels', 'etablissement', 'Etablissement', 'Etablissement', '1', true),
-        ],
-      },
-      {
-        id: 'candidats',
-        name: 'Candidats',
-        cardinality: '1 <> 1..n Candidatures',
-        attributes: [
-          { id: 'nom-candidat', name: 'nom', type: 'string' },
-          { id: 'prenom-candidat', name: 'prénom', type: 'string' },
-        ],
-        relations: [rel('recrutement', 'candidature', 'Candidature', 'Candidatures', '1..n')],
-      },
-      {
-        id: 'candidature',
-        name: 'Candidature',
-        cardinality: '0..n <> 1..n Postes à pourvoir, 1 <> 1..n Historique de Candidature',
-        attributes: [
-          { id: 'date-candidature', name: 'date candidature', type: 'date', magicSel: true },
-          { id: 'statut-candidature', name: 'statut candidature', type: 'string', magicSel: true },
-        ],
-        relations: [
-          rel('recrutement', 'postes-a-pourvoir', 'Postes à pourvoir', 'Postes à pourvoir', '1..n', true),
-          rel('recrutement', 'historique-candidature', 'Historique de Candidature', 'Historique de Candidature', '1..n'),
-        ],
-      },
-      {
-        id: 'historique-candidature',
-        name: 'Historique de Candidature',
-        cardinality: '0..n <> 1 Collaborateur recruteur',
-        attributes: [
-          { id: 'statut-historique', name: 'statut', type: 'string' },
-          { id: 'commentaire-historique', name: 'commentaire', type: 'string' },
-        ],
-        relations: [rel('collaborateurs', 'collaborateur', 'Collaborateur', 'Collaborateur recruteur')],
-      },
-      {
-        id: 'entretiens-recrutement',
-        name: 'Entretiens',
-        cardinality: '0..n <> 1 Candidature',
-        attributes: [
-          { id: 'date-entretien-recrutement', name: 'date entretien', type: 'date', magicSel: true },
-          { id: 'type-entretien-recrutement', name: "type d'entretien", type: 'string', magicSel: true },
-          { id: 'score-entretien', name: 'score', type: 'number', magicSel: true },
-          { id: 'synthese-entretien', name: 'synthèse', type: 'string' },
-        ],
-        relations: [rel('recrutement', 'candidature', 'Candidature', 'Candidature')],
-      },
-    ],
-  },
-  {
-    id: 'referentiels',
-    name: 'Référentiels',
-    objects: [
-      {
-        id: 'departement',
-        name: 'Département',
-        cardinality: '1',
-        attributes: [
-          { id: 'nom-departement', name: 'Nom', type: 'string', magicSel: true },
-          { id: 'code-departement', name: 'Code', type: 'string' },
-        ],
-      },
-      {
-        id: 'etablissement',
-        name: 'Etablissement',
-        cardinality: '0..n <> 1 Organisation',
-        attributes: [
-          { id: 'nom-etablissement', name: 'Nom', type: 'string', magicSel: true },
-          { id: 'code-etablissement', name: 'Code', type: 'string' },
-        ],
-        relations: [rel('referentiels', 'organisation', 'Organisation', 'Organisation')],
-      },
-      {
-        id: 'organisation',
-        name: 'Organisation',
-        cardinality: '1',
-        attributes: [
-          { id: 'nom-organisation', name: 'Nom', type: 'string', magicSel: true },
-          { id: 'code-organisation', name: 'Code', type: 'string' },
-          { id: 'pays-organisation', name: 'Pays', type: 'string' },
-        ],
-      },
-    ],
-  },
-];
+  };
+};
+
+const normalizeSmartObjects = (value: ManifestObject['smartObjects']): SmartObjectDefinition[] | undefined => {
+  if (!Array.isArray(value) || value.length === 0) return undefined;
+  const valid = value
+    .map((item) => {
+      if (!item || typeof item.title !== 'string' || !Array.isArray(item.columns)) return null;
+
+      const columns = item.columns
+        .filter((column): column is string => typeof column === 'string' && !!column.trim())
+        .map((column) => column.trim());
+
+      if (columns.length === 0) return null;
+
+      return {
+        title: item.title,
+        columns,
+        filters: normalizeSmartFilter(item.filters),
+      } as SmartObjectDefinition;
+    })
+    .filter((item): item is SmartObjectDefinition => item !== null);
+  return valid.length > 0 ? valid : undefined;
+};
+
+const buildDataStructure = (): Theme[] => {
+  const domains = typedManifest.domains ?? [];
+  const objectLookup = buildObjectLookup(domains);
+
+  return domains.map((domain) => ({
+    id: domain.id,
+    name: domain.name,
+    description: domain.description,
+    objects: (domain.objects ?? []).map((obj) => {
+      const relations: ObjectRelation[] = (obj.relations ?? [])
+        .map((relation) => {
+          const target = resolveRelationTarget(relation, domain.id, objectLookup);
+          if (!target) return null;
+
+          return {
+            targetThemeId: target.themeId,
+            targetObjectId: target.objectId,
+            targetObjectName: target.objectName,
+            label: relation.relationName || target.objectName,
+            cardinality: normalizeCardinality(relation.cardinalityTo || relation.cardinalityFrom),
+            cardinalityFrom: normalizeCardinality(relation.cardinalityFrom || relation.cardinalityTo),
+            magicSel: !!relation.magicSel,
+            recursiveMagicSel: !!relation.recursiveMagicSel,
+            description: relation.description,
+          };
+        })
+        .filter((relation): relation is ObjectRelation => relation !== null);
+
+      return {
+        id: obj.id,
+        name: obj.name,
+        description: obj.description,
+        cardinality: obj.cardinality || buildFallbackCardinality(obj),
+        applicationDate: !!obj.applicationDate,
+        applicationDateConfig: (typeof obj.applicationDate === 'object' && obj.applicationDate !== null)
+          ? { startAttributeId: obj.applicationDate.startAttributeId, endAttributeId: obj.applicationDate.endAttributeId }
+          : undefined,
+        isApplicable: !!obj.isApplicable || !!obj.applicationDate,
+        attributes: (obj.attributes ?? []).map((attribute) => ({
+          id: attribute.id,
+          name: attribute.name,
+          type: normalizeAttributeType(attribute),
+          magicSel: !!attribute.magicSel,
+          description: attribute.description,
+        })),
+        relations: relations.length > 0 ? relations : undefined,
+        smartObjects: normalizeSmartObjects(obj.smartObjects),
+      } as DataObject;
+    }),
+  }));
+};
+
+export const dataStructure: Theme[] = buildDataStructure();
+

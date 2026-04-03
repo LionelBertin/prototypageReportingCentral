@@ -1,4 +1,4 @@
-import { AttributeType } from '../data/dataStructure';
+import { AttributeType, ApplicationDateConfig } from '../data/dataStructure';
 
 export type AggregationType = 'CONCAT' | 'COUNT' | 'SUM' | 'MIN' | 'MAX' | 'AVG';
 export type InsertionType = 'normal' | 'first' | 'last' | 'aggregation' | 'applicable' | 'conditional' | 'calculated';
@@ -101,6 +101,7 @@ export interface SelectedAttribute {
   filterGroups?: FilterGroup[]; // Groupes de filtres (combinés par ET entre les groupes)
   compartmentConfig?: CompartmentConfig; // Configuration des compartiments/tranches
   dateReference?: DateReference; // Pour objets applicables
+  applicationDateConfig?: ApplicationDateConfig; // Définition des attributs de début/fin de validité
   isApplicable?: boolean;
   columnName?: string; // Nom personnalisé de la colonne
   conditionalConfig?: ConditionalColumnConfig; // Pour les colonnes conditionnelles
