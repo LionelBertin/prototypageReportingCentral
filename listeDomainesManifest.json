@@ -306,6 +306,1881 @@
               "dataType": "string"
             }
           ]
+        },
+        {
+          "id": "caisse-d-assurance-maladie",
+          "name": "Caisse d'assurance-maladie",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "one",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "nom-de-l-assurance-maladie",
+              "name": "Nom de l'assurance-maladie",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "numero-d-identification-de-la-caisse-de-maladie",
+              "name": "Numéro d'identification de la caisse de maladie",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "type-d-assurance-maladie",
+              "name": "Type d'assurance maladie",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "numero-d-assure",
+              "name": "Numéro d'assuré",
+              "magicSel": false,
+              "dataType": "string"
+            }
+          ]
+        },
+        {
+          "id": "contact-en-cas-d-urgence",
+          "name": "Contact en cas d'urgence",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "one",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "nom",
+              "name": "Nom",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "telephone",
+              "name": "Téléphone",
+              "magicSel": false,
+              "dataType": "phone"
+            },
+            {
+              "id": "lien-de-parente",
+              "name": "Lien de parenté",
+              "magicSel": false,
+              "dataType": "string"
+            }
+          ]
+        },
+        {
+          "id": "dernier-diplome-de-reference",
+          "name": "Dernier diplôme de référence",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "one",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "nom-du-diplome",
+              "name": "Nom du diplôme",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "ecole-universite",
+              "name": "Ecole / université",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "scan-diplome",
+              "name": "Scan Diplôme",
+              "magicSel": false,
+              "dataType": "file"
+            }
+          ]
+        },
+        {
+          "id": "enfant-s",
+          "name": "Enfant(s)",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": true
+            }
+          ],
+          "attributes": [
+            {
+              "id": "date-de-naissance",
+              "name": "Date de naissance",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "prenom",
+              "name": "Prénom",
+              "magicSel": false,
+              "dataType": "string"
+            }
+          ]
+        },
+        {
+          "id": "handicap",
+          "name": "Handicap",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "one",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "piece-d-identite-recto",
+              "name": "Pièce d'identité - recto",
+              "magicSel": false,
+              "dataType": "file"
+            },
+            {
+              "id": "piece-d-identite-verso",
+              "name": "Pièce d'identité - verso",
+              "magicSel": false,
+              "dataType": "file"
+            },
+            {
+              "id": "expire-le",
+              "name": "Expire le",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "taux-d-incapacite",
+              "name": "Taux d'incapacité",
+              "magicSel": false,
+              "dataType": "number"
+            }
+          ]
+        },
+        {
+          "id": "historique-des-syntheses-d-entretiens",
+          "name": "Historique des synthèses d'entretiens",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": true
+            }
+          ],
+          "attributes": [
+            {
+              "id": "date",
+              "name": "Date",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "nom",
+              "name": "Nom",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "synthese",
+              "name": "Synthèse",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "commentaires",
+              "name": "Commentaires",
+              "magicSel": false,
+              "dataType": "string"
+            }
+          ]
+        },
+        {
+          "id": "historique-des-syntheses-d-entretiens-annuels",
+          "name": "Historique des synthèses d'entretiens annuels",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": true
+            }
+          ],
+          "attributes": [
+            {
+              "id": "date",
+              "name": "Date",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "nom",
+              "name": "Nom",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "synthese",
+              "name": "Synthèse",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "commentaires",
+              "name": "Commentaires",
+              "magicSel": false,
+              "dataType": "string"
+            }
+          ]
+        },
+        {
+          "id": "historique-des-syntheses-d-entretiens-professionnels",
+          "name": "Historique des synthèses d'entretiens professionnels",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": true
+            }
+          ],
+          "attributes": [
+            {
+              "id": "date",
+              "name": "Date",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "nom",
+              "name": "Nom",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "synthese",
+              "name": "Synthèse",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "commentaires",
+              "name": "Commentaires",
+              "magicSel": false,
+              "dataType": "string"
+            }
+          ]
+        },
+        {
+          "id": "langue-s",
+          "name": "Langue(s)",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": true
+            }
+          ],
+          "attributes": [
+            {
+              "id": "langue",
+              "name": "Langue",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "niveau-oral",
+              "name": "Niveau oral",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "niveau-ecrit",
+              "name": "Niveau écrit",
+              "magicSel": false,
+              "dataType": "string"
+            }
+          ]
+        },
+        {
+          "id": "lberdata",
+          "name": "LBERDATA",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "one",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "champ1",
+              "name": "champ1",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "champ2",
+              "name": "champ2",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "champ3",
+              "name": "champ3",
+              "magicSel": false,
+              "dataType": "string"
+            }
+          ],
+          "tooltip": "Objet technique regroupant des champs custom non standards."
+        },
+        {
+          "id": "numero-avs",
+          "name": "Numéro AVS",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "one",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "numero-d-avs",
+              "name": "Numéro d'AVS",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "scan-avs",
+              "name": "Scan AVS",
+              "magicSel": false,
+              "dataType": "file"
+            }
+          ]
+        },
+        {
+          "id": "pc-portable",
+          "name": "PC portable",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "one",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "modele-pc",
+              "name": "Modèle PC",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "attestation-de-remise",
+              "name": "Attestation de remise",
+              "magicSel": false,
+              "dataType": "file"
+            }
+          ]
+        },
+        {
+          "id": "partenaire",
+          "name": "Partenaire",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "one",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "canton-de-travail",
+              "name": "canton de travail",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "date-de-naissance",
+              "name": "date de naissance",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "debut-de-l-activite",
+              "name": "début de l'activité",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "emploi",
+              "name": "emploi",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "fin-de-l-activite",
+              "name": "fin de l'activité",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "genre",
+              "name": "genre",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "nationalite",
+              "name": "nationalité",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "nom",
+              "name": "nom",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "numero-de-securite-sociale",
+              "name": "numéro de sécurité sociale",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "pays-de-travail",
+              "name": "pays de travail",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "permis-de-sejour",
+              "name": "permis de séjour",
+              "magicSel": false,
+              "dataType": "file"
+            },
+            {
+              "id": "profession",
+              "name": "profession",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "prenom",
+              "name": "prénom",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "revenu",
+              "name": "revenu",
+              "magicSel": false,
+              "dataType": "string"
+            }
+          ]
+        },
+        {
+          "id": "permis-de-travail",
+          "name": "Permis de travail",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "one",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "type-de-permis",
+              "name": "Type de permis",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "copie-du-permis",
+              "name": "Copie du permis",
+              "magicSel": false,
+              "dataType": "file"
+            },
+            {
+              "id": "date-de-validite",
+              "name": "Date de validité",
+              "magicSel": false,
+              "dataType": "date"
+            }
+          ]
+        },
+        {
+          "id": "telephone-portable",
+          "name": "Téléphone portable",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "one",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "modele-du-telephone",
+              "name": "Modèle du téléphone",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "attestation-de-remise",
+              "name": "Attestation de remise",
+              "magicSel": false,
+              "dataType": "file"
+            }
+          ]
+        },
+        {
+          "id": "voiture-de-fonction",
+          "name": "Voiture de fonction",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "one",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "modele-de-voiture",
+              "name": "Modèle de voiture",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "carte-grise",
+              "name": "Carte grise",
+              "magicSel": false,
+              "dataType": "file"
+            }
+          ]
+        },
+        {
+          "id": "other-hr-data",
+          "name": "Autres données RH",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "one",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "prenom",
+              "name": "Prénom",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "nom",
+              "name": "Nom",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "abattement-fiscal-enfant",
+              "name": "Abattement fiscal enfant",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "adresse",
+              "name": "Adresse",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "approbateur-de-conges-personnalise",
+              "name": "Approbateur de congés personnalisé",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "arbeitszeugnis",
+              "name": "Arbeitszeugnis",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "assurance-maladie-complementaire-d-entreprise",
+              "name": "Assurance maladie complémentaire d'entreprise",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "attestation-d-ayant-droit",
+              "name": "Attestation d'ayant droit",
+              "magicSel": false,
+              "dataType": "file"
+            },
+            {
+              "id": "attestation-de-dispense",
+              "name": "Attestation de dispense",
+              "magicSel": false,
+              "dataType": "file"
+            },
+            {
+              "id": "aufgabe-i",
+              "name": "Aufgabe I",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "aufgabe-ii",
+              "name": "Aufgabe II",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "aufgabe-iii",
+              "name": "Aufgabe III",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "avantages-salariaux",
+              "name": "Avantages salariaux",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "avis-d-aptitude",
+              "name": "Avis d'aptitude",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "axe-de-developpement-principal",
+              "name": "Axe de développement principal",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "bic",
+              "name": "BIC",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "banque-adresse-du-beneficiaire-2",
+              "name": "Banque (adresse du bénéficiaire 2)",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "banque-adresse-du-beneficiaire",
+              "name": "Banque (adresse du bénéficiaire)",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "banque-code-postal-du-beneficaire",
+              "name": "Banque (code postal du bénéficaire)",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "banque-lieu-du-beneficiaire",
+              "name": "Banque (lieu du bénéficiaire)",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "banque-nom-du-beneficiaire",
+              "name": "Banque (nom du bénéficiaire)",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "banque-reglement-des-frais-generaux",
+              "name": "Banque (règlement des frais généraux)",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "banque-reference-de-paiement-1",
+              "name": "Banque (référence de paiement 1)",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "banque-reference-de-paiement-2",
+              "name": "Banque (référence de paiement 2)",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "bareme-impots-source",
+              "name": "Barème Impôts source",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "csp",
+              "name": "CSP",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "calendrier",
+              "name": "Calendrier",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "canton",
+              "name": "Canton",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "carte-societe-externe",
+              "name": "Carte société externe",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "carte-vitale",
+              "name": "Carte vitale",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "categorie-d-employes",
+              "name": "Catégorie d'employés",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "centre-de-cout",
+              "name": "Centre de coût",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "certificat-de-travail",
+              "name": "Certificat de travail",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "chevaux-fiscaux-voiture",
+              "name": "Chevaux fiscaux voiture",
+              "magicSel": false,
+              "dataType": "number"
+            },
+            {
+              "id": "choix-du-niveau-de-garantie",
+              "name": "Choix du niveau de garantie",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "citation",
+              "name": "Citation",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "classification-professionnelle",
+              "name": "Classification professionnelle",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "cle-d-association-du-bulletin-de-paie",
+              "name": "Clé d'association du bulletin de paie",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "code-pcs-ese",
+              "name": "Code PCS-ESE",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "code-de-convention-collective",
+              "name": "Code de convention collective",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "code-de-l-intitule-de-poste",
+              "name": "Code de l'intitulé de poste",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "code-postal",
+              "name": "Code postal",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "coefficient",
+              "name": "Coefficient",
+              "magicSel": false,
+              "dataType": "number"
+            },
+            {
+              "id": "commune-de-naissance",
+              "name": "Commune de naissance",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "complement-d-adresse",
+              "name": "Complément d'adresse",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "compte-de-tiers",
+              "name": "Compte de tiers",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "concubinage",
+              "name": "Concubinage",
+              "magicSel": false,
+              "dataType": "booleen"
+            },
+            {
+              "id": "confession",
+              "name": "Confession",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "confession-religieuse-impot-ecclesiastique",
+              "name": "Confession religieuse (impôt ecclésiastique)",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "confidentialite-rgpd",
+              "name": "Confidentialité RGPD",
+              "magicSel": false,
+              "dataType": "booleen"
+            },
+            {
+              "id": "contrat-de-travail",
+              "name": "Contrat de travail",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "curriculum-vitae",
+              "name": "Curriculum vitae",
+              "magicSel": false,
+              "dataType": "file"
+            },
+            {
+              "id": "cycles-de-travail-nom",
+              "name": "Cycles de travail (Nom)",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "cycles-de-travail-date-de-debut",
+              "name": "Cycles de travail (Date de début)",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "cycles-de-travail-date-de-fin",
+              "name": "Cycles de travail (Date de fin)",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "datalbe",
+              "name": "DATALBE",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "date-d-anciennete",
+              "name": "Date d'ancienneté",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "date-d-effet-de-l-adhesion",
+              "name": "Date d'effet de l'adhésion",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "date-d-entree-dans-l-entreprise",
+              "name": "Date d'entrée dans l'entreprise",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "date-de-divorce",
+              "name": "Date de divorce",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "date-de-la-prochaine-visite",
+              "name": "Date de la prochaine visite",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "date-de-la-visite",
+              "name": "Date de la visite",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "date-de-mariage",
+              "name": "Date de mariage",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "date-de-naissance",
+              "name": "Date de naissance",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "date-du-dernier-entretien-annuel",
+              "name": "Date du dernier entretien annuel",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "date-du-dernier-entretien-forfait-jour",
+              "name": "Date du dernier entretien forfait jour",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "date-du-dernier-entretien-professionnel",
+              "name": "Date du dernier entretien professionnel",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "diplomas",
+              "name": "Diplomas",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "document-d-identite-recto",
+              "name": "Document d'identité recto",
+              "magicSel": false,
+              "dataType": "file"
+            },
+            {
+              "id": "document-d-identite-verso",
+              "name": "Document d'identité verso",
+              "magicSel": false,
+              "dataType": "file"
+            },
+            {
+              "id": "document-du-contrat",
+              "name": "Document du contrat",
+              "magicSel": false,
+              "dataType": "file"
+            },
+            {
+              "id": "duree-de-la-premiere-periode-d-essai-en-jours",
+              "name": "Durée de la première période d'essai (en jours)",
+              "magicSel": false,
+              "dataType": "number"
+            },
+            {
+              "id": "duree-du-renouvellement-de-la-periode-d-essai-en-nombre-de-jours",
+              "name": "Durée du renouvellement de la période d'essai (en nombre de jours)",
+              "magicSel": false,
+              "dataType": "number"
+            },
+            {
+              "id": "debut-de-contrat",
+              "name": "Début de contrat",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "departement-nom",
+              "name": "Département (Nom)",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "departement-code",
+              "name": "Département (Code)",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "departement-arborescence",
+              "name": "Département (Arborescence)",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "departement-de-naissance",
+              "name": "Département de naissance",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "email-personnel",
+              "name": "Email personnel",
+              "magicSel": false,
+              "dataType": "email"
+            },
+            {
+              "id": "email-professionnel",
+              "name": "Email professionnel",
+              "magicSel": false,
+              "dataType": "email"
+            },
+            {
+              "id": "envoi-electronique",
+              "name": "Envoi électronique",
+              "magicSel": false,
+              "dataType": "booleen"
+            },
+            {
+              "id": "escalier",
+              "name": "Escalier",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "etablissement-nom",
+              "name": "Etablissement (Nom)",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "etablissement-code",
+              "name": "Etablissement (Code)",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "fr-prix-de-revient-jour",
+              "name": "FR Prix de revient (€/Jour)",
+              "magicSel": false,
+              "dataType": "number"
+            },
+            {
+              "id": "fr-prix-de-vente-standard-jour",
+              "name": "FR Prix de vente standard (€/Jour)",
+              "magicSel": false,
+              "dataType": "number"
+            },
+            {
+              "id": "fichier-pdf-du-dernier-entretien-annuel",
+              "name": "Fichier PDF du dernier entretien annuel",
+              "magicSel": false,
+              "dataType": "file"
+            },
+            {
+              "id": "fichier-pdf-du-dernier-entretien-forfait-jour",
+              "name": "Fichier PDF du dernier entretien forfait jour",
+              "magicSel": false,
+              "dataType": "file"
+            },
+            {
+              "id": "fichier-pdf-du-dernier-entretien-professionnel",
+              "name": "Fichier PDF du dernier entretien professionnel",
+              "magicSel": false,
+              "dataType": "file"
+            },
+            {
+              "id": "fin-de-contrat",
+              "name": "Fin de contrat",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "fin-de-la-seconde-periode-d-essai",
+              "name": "Fin de la seconde période d'essai",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "fin-de-periode-d-essai",
+              "name": "Fin de période d'essai",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "fin-periode-d-essai-1",
+              "name": "Fin période d'essai 1",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "frequence-de-paiement",
+              "name": "Fréquence de paiement",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "genre",
+              "name": "Genre",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "groupe-assurance-sociale",
+              "name": "Groupe Assurance Sociale",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "groupe-de-contribution-cotisations",
+              "name": "Groupe de contribution (cotisations)",
+              "magicSel": false,
+              "dataType": "file"
+            },
+            {
+              "id": "groupe-tarifaire",
+              "name": "Groupe tarifaire",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "iban",
+              "name": "IBAN",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "id",
+              "name": "Id",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "id-de-l-approbateur-lucca-absences-personnalise",
+              "name": "Id de l'approbateur Lucca Absences personnalisé",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "impots-ecclesiastiques-le-cas-echeant",
+              "name": "Impôts écclésiastiques (le cas échéant)",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "intitule-de-poste",
+              "name": "Intitulé de poste",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "langue",
+              "name": "Langue",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "lieu-de-naissance",
+              "name": "Lieu de naissance",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "lieu-de-travail",
+              "name": "Lieu de travail",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "lieu-dit",
+              "name": "Lieu-dit",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "ligne-directe",
+              "name": "Ligne directe",
+              "magicSel": false,
+              "dataType": "phone"
+            },
+            {
+              "id": "login",
+              "name": "Login",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "login-du-tuteur-de-stage",
+              "name": "Login du tuteur de stage",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "manager-nom",
+              "name": "Manager (Nom)",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "manager-matricule-de-paie",
+              "name": "Manager (Matricule de paie)",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "manager-login",
+              "name": "Manager (Login)",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "manager-e-mail",
+              "name": "Manager (E-mail)",
+              "magicSel": false,
+              "dataType": "email"
+            },
+            {
+              "id": "matricule-de-paie",
+              "name": "Matricule de paie",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "missions-principales",
+              "name": "Missions principales",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "modalite-de-temps-de-travail",
+              "name": "Modalité de temps de travail",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "modalite-de-temps-de-travail-nom",
+              "name": "Modalité de temps de travail (Nom)",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "mode-de-paiement",
+              "name": "Mode de paiement",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "modelo-145",
+              "name": "Modelo 145",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "modele-de-contrat",
+              "name": "Modèle de contrat",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "montant-abonnement-rembourse",
+              "name": "Montant abonnement remboursé",
+              "magicSel": false,
+              "dataType": "number"
+            },
+            {
+              "id": "motif-de-debut-du-contrat",
+              "name": "Motif de début du contrat",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "motif-de-fin-du-contrat",
+              "name": "Motif de fin du contrat",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "motif-de-recours-au-cdd",
+              "name": "Motif de recours au CDD",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "motif-de-rupture",
+              "name": "Motif de rupture",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "nationalite",
+              "name": "Nationalité",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "nom-de-la-banque",
+              "name": "Nom de la banque",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "nom-de-la-voie",
+              "name": "Nom de la voie",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "nom-de-naissance",
+              "name": "Nom de naissance",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "nom-marital",
+              "name": "Nom marital",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "nombre-d-enfants",
+              "name": "Nombre d'enfants",
+              "magicSel": false,
+              "dataType": "number"
+            },
+            {
+              "id": "nombre-de-personnes-a-charge",
+              "name": "Nombre de personnes à charge",
+              "magicSel": false,
+              "dataType": "number"
+            },
+            {
+              "id": "non-concurrence",
+              "name": "Non-concurrence",
+              "magicSel": false,
+              "dataType": "booleen"
+            },
+            {
+              "id": "numero-d-identification",
+              "name": "Numéro d'identification",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "numero-de-compte",
+              "name": "Numéro de compte",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "numero-de-securite-sociale",
+              "name": "Numéro de sécurité sociale",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "numero-de-telephone-personnel",
+              "name": "Numéro de téléphone personnel",
+              "magicSel": false,
+              "dataType": "phone"
+            },
+            {
+              "id": "numero-de-telephone-professionnel",
+              "name": "Numéro de téléphone professionnel",
+              "magicSel": false,
+              "dataType": "phone"
+            },
+            {
+              "id": "numero-de-voie",
+              "name": "Numéro de voie",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "numero-fiscal",
+              "name": "Numéro fiscal",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "parent-celibataire",
+              "name": "Parent célibataire",
+              "magicSel": false,
+              "dataType": "booleen"
+            },
+            {
+              "id": "part-fiscale-enfants-a-charge",
+              "name": "Part fiscale enfants à charge",
+              "magicSel": false,
+              "dataType": "number"
+            },
+            {
+              "id": "pays-de-naissance",
+              "name": "Pays de naissance",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "pays-de-nationalite",
+              "name": "Pays de nationalité",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "pays-de-residence",
+              "name": "Pays de résidence",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "photo",
+              "name": "Photo",
+              "magicSel": false,
+              "dataType": "file"
+            },
+            {
+              "id": "plan-d-action",
+              "name": "Plan d'action",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "portable-perso",
+              "name": "Portable perso",
+              "magicSel": false,
+              "dataType": "phone"
+            },
+            {
+              "id": "porte",
+              "name": "Porte",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "position",
+              "name": "Position",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "premier-nom",
+              "name": "Premier nom",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "profil-linkedin",
+              "name": "Profil LinkedIn",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "profil-applicatif-notes-de-frais",
+              "name": "Profil applicatif Notes de frais",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "profil-d-acquisition-de-conges",
+              "name": "Profil d'acquisition de congés",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "profil-de-teletravail",
+              "name": "Profil de télétravail",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "province-de-naissance",
+              "name": "Province de naissance",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "prevoyance-retraite-d-entreprise",
+              "name": "Prévoyance retraite d'entreprise",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "qualification-nom",
+              "name": "Qualification (Nom)",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "qualification-metier",
+              "name": "Qualification (Métier)",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "qualification-niveau-rang",
+              "name": "Qualification (Niveau - rang)",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "quotite-temps-de-travail-a-ce-jour",
+              "name": "Quotité temps de travail (à ce jour)",
+              "magicSel": false,
+              "dataType": "number"
+            },
+            {
+              "id": "recevoir-ses-fiches-de-paie-sous-format-electronique",
+              "name": "Recevoir ses fiches de paie sous format électronique",
+              "magicSel": false,
+              "dataType": "booleen"
+            },
+            {
+              "id": "reglamento-de-proteccion-de-datos",
+              "name": "Reglamento de Protección de Datos",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "rente",
+              "name": "Rente",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "responsable-de-mission",
+              "name": "Responsable de mission",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "referent-cse",
+              "name": "Référent CSE",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "referent-rh",
+              "name": "Référent RH",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "regime-de-cotisation",
+              "name": "Régime de cotisation",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "remuneration-theorique-annuelle-a-ce-jour",
+              "name": "Rémunération théorique annuelle (à ce jour)",
+              "magicSel": false,
+              "dataType": "number"
+            },
+            {
+              "id": "residence",
+              "name": "Résidence",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "role-principal",
+              "name": "Rôle principal",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "roles-secondaires",
+              "name": "Rôles secondaires",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "scan-rib",
+              "name": "Scan RIB",
+              "magicSel": false,
+              "dataType": "file"
+            },
+            {
+              "id": "second-nom",
+              "name": "Second nom",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "semi-familles",
+              "name": "Semi-familles",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "site",
+              "name": "Site",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "situation-familiale",
+              "name": "Situation familiale",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "steuerid",
+              "name": "SteuerID",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "successeurs-potentiels",
+              "name": "Successeurs potentiels",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "swiss-salary-system-id",
+              "name": "Swiss Salary System Id",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "titre",
+              "name": "Titre",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "titre-de-sejour-debut-validite",
+              "name": "Titre de séjour (Début validité)",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "titre-de-sejour-fin-validite",
+              "name": "Titre de séjour (Fin validité)",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "titre-de-sejour-n-d-ordre",
+              "name": "Titre de séjour (n° d'ordre)",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "titre-de-sejour-type",
+              "name": "Titre de séjour (type)",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "titre-de-sejour-type-2",
+              "name": "Titre de séjour (type)_2",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "tranche-fiscale",
+              "name": "Tranche fiscale",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "tuteur-de-stage",
+              "name": "Tuteur de stage",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "type-d-adhesion-mutuelle",
+              "name": "Type d'adhésion mutuelle",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "type-d-emploi",
+              "name": "Type d'emploi",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "type-d-identification",
+              "name": "Type d'identification",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "type-de-contrat",
+              "name": "Type de contrat",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "type-de-cotisation",
+              "name": "Type de cotisation",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "type-de-travailleur",
+              "name": "Type de travailleur",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "type-de-visite",
+              "name": "Type de visite",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "type-de-voie",
+              "name": "Type de voie",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "type-du-contrat",
+              "name": "Type du contrat",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "tache-1",
+              "name": "Tâche 1",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "tache-2",
+              "name": "Tâche 2",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "tache-3",
+              "name": "Tâche 3",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "tache-4",
+              "name": "Tâche 4",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "telephone-fixe-domicile",
+              "name": "Téléphone fixe (domicile)",
+              "magicSel": false,
+              "dataType": "phone"
+            },
+            {
+              "id": "telephone-fixe-travail",
+              "name": "Téléphone fixe (travail)",
+              "magicSel": false,
+              "dataType": "phone"
+            },
+            {
+              "id": "ville",
+              "name": "Ville",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "bis-ter-etc",
+              "name": "bis, ter, etc",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "etage",
+              "name": "Étage",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "etat-civil",
+              "name": "État civil",
+              "magicSel": false,
+              "dataType": "string"
+            }
+          ]
         }
       ]
     },
@@ -1742,6 +3617,3 @@
     }
   ]
 }
-
-
-

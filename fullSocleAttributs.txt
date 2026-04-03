@@ -1,0 +1,276 @@
+Abattement fiscal enfant
+Approbateur de congés personnalisé
+Assurance maladie complémentaire d'entreprise
+Attestation d'ayant droit
+Attestation de dispense
+Avantages salariaux
+Avis d'aptitude
+Axe de développement principal
+BIC
+Banque (adresse du bénéficiaire 2)
+Banque (adresse du bénéficiaire)
+Banque (code postal du bénéficaire)
+Banque (lieu du bénéficiaire)
+Banque (nom du bénéficiaire)
+Banque (règlement des frais généraux)
+Banque (référence de paiement 1)
+Banque (référence de paiement 2)
+Barème Impôts source
+CSP
+# Caisse d'assurance-maladie
+    child:Nom de l'assurance-maladie
+    child:Numéro d'identification de la caisse de maladie
+    child:Type d'assurance maladie
+    child:Numéro d'assuré
+Calendrier
+Canton
+Carte société externe
+Carte vitale
+Catégorie d'employés
+Centre de coût
+Certificat de travail
+Chevaux fiscaux voiture
+Choix du niveau de garantie
+Citation
+Classification professionnelle
+Clé d'association du bulletin de paie
+Code PCS-ESE
+Code de convention collective
+Code de l'intitulé de poste
+Coefficient
+Commune de naissance
+Complément d'adresse
+Compte de tiers
+Concubinage
+Confession
+Confession religieuse (impôt ecclésiastique)
+Confidentialité RGPD
+# Contact en cas d'urgence
+    child:Nom
+    child:Téléphone
+    child:Lien de parenté
+Contrat de travail
+Curriculum vitae
+Cycles de travail (Nom)
+Cycles de travail (Date de début)
+Cycles de travail (Date de fin)
+DATALBE
+Date d'ancienneté
+Date d'effet de l'adhésion
+Date d'entrée dans l'entreprise
+Date de divorce
+Date de la prochaine visite
+Date de la visite
+Date de mariage
+Date de naissance
+Date du dernier entretien annuel
+Date du dernier entretien forfait jour
+Date du dernier entretien professionnel
+# Dernier diplôme de référence
+    child:Nom du diplôme
+    child:Ecole / université
+    child:Scan Diplôme
+Diplomas
+Document d'identité recto
+Document d'identité verso
+Document du contrat
+Durée de la première période d'essai (en jours)
+Durée du renouvellement de la période d'essai (en nombre de jours)
+Début de contrat
+Département (Nom)
+Département (Code)
+Département (Arborescence)
+Département de naissance
+Email personnel
+Email professionnel
+# Enfant(s)
+    child:Date de naissance
+    child:Prénom
+Envoi électronique
+Escalier
+Etablissement (Nom)
+Etablissement (Code)
+FR Prix de revient (€/Jour)
+FR Prix de vente standard (€/Jour)
+Fichier PDF du dernier entretien annuel
+Fichier PDF du dernier entretien forfait jour
+Fichier PDF du dernier entretien professionnel
+Fin de contrat
+Fin de la seconde période d'essai
+Fin de période d'essai
+Fin période d'essai 1
+Fréquence de paiement
+Genre
+Groupe Assurance Sociale
+Groupe de contribution (cotisations)
+Groupe tarifaire
+# Handicap
+    child:Pièce d'identité - recto
+    child:Pièce d'identité - verso
+    child:Expire le
+    child:Taux d'incapacité
+# Historique des synthèses d'entretiens
+    child:Date
+    child:Nom
+    child:Synthèse
+    child:Commentaires
+# Historique des synthèses d'entretiens annuels
+    child:Date
+    child:Nom
+    child:Synthèse
+    child:Commentaires
+# Historique des synthèses d'entretiens professionnels
+    child:Date
+    child:Nom
+    child:Synthèse
+    child:Commentaires
+IBAN
+Id
+Id de l'approbateur Lucca Absences personnalisé
+Impôts écclésiastiques (le cas échéant)
+Intitulé de poste
+Langue
+# Langue(s)
+    child:Langue
+    child:Niveau oral
+    child:Niveau écrit
+# LBERDATA
+    child:champ1
+    child:champ2
+    child:champ3
+Lieu de naissance
+Lieu de travail
+Lieu-dit
+Ligne directe
+Login
+Login du tuteur de stage
+Manager (Nom)
+Manager (Matricule de paie)
+Manager (Login)
+Manager (E-mail)
+Matricule de paie
+Missions principales
+Modalité de temps de travail
+Modalité de temps de travail (Nom)
+Mode de paiement
+Modelo 145
+Modèle de contrat
+Montant abonnement remboursé
+Motif de début du contrat
+Motif de fin du contrat
+Motif de recours au CDD
+Motif de rupture
+Nationalité
+Nom de la banque
+Nom de la voie
+Nom de naissance
+Nom marital
+Nombre d'enfants
+Nombre de personnes à charge
+Non-concurrence
+# Numéro AVS
+    child:Numéro d'AVS
+    child:Scan AVS
+Numéro d'identification
+Numéro de compte
+Numéro de sécurité sociale
+Numéro de téléphone personnel
+Numéro de téléphone professionnel
+Numéro de voie
+Numéro fiscal
+# PC portable
+    child:Modèle PC
+    child:Attestation de remise
+Parent célibataire
+Part fiscale enfants à charge
+# Partenaire
+    child:canton de travail
+    child:date de naissance
+    child:début de l'activité
+    child:emploi
+    child:fin de l'activité
+    child:genre
+    child:nationalité
+    child:nom
+    child:numéro de sécurité sociale
+    child:pays de travail
+    child:permis de séjour
+    child:profession
+    child:prénom
+    child:revenu
+Pays de naissance
+Pays de nationalité
+Pays de résidence
+# Permis de travail
+    child:Type de permis
+    child:Copie du permis
+    child:Date de validité
+Photo
+Plan d'action
+Portable perso
+Porte
+Position
+Premier nom
+Profil LinkedIn
+Profil applicatif Notes de frais
+Profil d'acquisition de congés
+Profil de télétravail
+Province de naissance
+Prévoyance retraite d'entreprise
+Qualification (Nom)
+Qualification (Métier)
+Qualification (Niveau - rang)
+Quotité temps de travail (à ce jour)
+Recevoir ses fiches de paie sous format électronique
+Reglamento de Protección de Datos
+Rente
+Responsable de mission
+Référent CSE
+Référent RH
+Régime de cotisation
+Rémunération théorique annuelle (à ce jour)
+Résidence
+Rôle principal
+Rôles secondaires
+Scan RIB
+Second nom
+Semi-familles
+Site
+Situation familiale
+SteuerID
+Successeurs potentiels
+Swiss Salary System Id
+Titre
+Titre de séjour (Début validité)
+Titre de séjour (Fin validité)
+Titre de séjour (n° d'ordre)
+Titre de séjour (type)
+Titre de séjour (type)_2
+Tranche fiscale
+Tuteur de stage
+Type d'adhésion mutuelle
+Type d'emploi
+Type d'identification
+Type de contrat
+Type de cotisation
+Type de travailleur
+Type de visite
+Type de voie
+Type du contrat
+Tâche 1
+Tâche 2
+Tâche 3
+Tâche 4
+Téléphone fixe (domicile)
+Téléphone fixe (travail)
+# Téléphone portable
+    child:Modèle du téléphone
+    child:Attestation de remise
+Ville
+# Voiture de fonction
+    child:Modèle de voiture
+    child:Carte grise
+Voiture de fonction
+bis, ter, etc
+Étage
+État civil
