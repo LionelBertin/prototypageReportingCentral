@@ -9,6 +9,7 @@ export interface Attribute {
   required?: boolean;
   magicSel?: boolean;
   description?: string;
+  tooltip?: string;
 }
 
 export interface ObjectRelation {
@@ -71,6 +72,7 @@ export interface DataObject {
   relations?: ObjectRelation[];
   smartObjects?: SmartObjectDefinition[];
   description?: string;
+  tooltip?: string;
 }
 
 export interface Theme {
@@ -78,6 +80,7 @@ export interface Theme {
   name: string;
   objects: DataObject[];
   description?: string;
+  tooltip?: string;
 }
 
 type ManifestAttribute = {
@@ -87,6 +90,7 @@ type ManifestAttribute = {
   type?: AttributeType;
   magicSel?: boolean;
   description?: string;
+  tooltip?: string;
 };
 
 type ManifestRelation = {
@@ -106,6 +110,7 @@ type ManifestObject = {
   applicationDate?: boolean | { startAttributeId?: string; endAttributeId?: string; mandatory?: boolean; resultingSingleLine?: boolean };
   isApplicable?: boolean;
   description?: string;
+  tooltip?: string;
   attributes?: ManifestAttribute[];
   relations?: ManifestRelation[];
   smartObjects?: Array<{
@@ -119,6 +124,7 @@ type ManifestDomain = {
   id: string;
   name: string;
   description?: string;
+  tooltip?: string;
   objects?: ManifestObject[];
 };
 
@@ -592,6 +598,7 @@ const buildDataStructure = (): Theme[] => {
     id: domain.id,
     name: domain.name,
     description: domain.description,
+    tooltip: domain.tooltip,
     objects: (domain.objects ?? []).map((obj) => {
       const relations: ObjectRelation[] = (obj.relations ?? []).flatMap((relation) => {
         const target = resolveRelationTarget(relation, domain.id, objectLookup);
@@ -614,6 +621,7 @@ const buildDataStructure = (): Theme[] => {
         id: obj.id,
         name: obj.name,
         description: obj.description,
+        tooltip: obj.tooltip,
         cardinality: obj.cardinality || buildFallbackCardinality(obj),
         applicationDate: !!obj.applicationDate,
         applicationDateConfig: (typeof obj.applicationDate === 'object' && obj.applicationDate !== null)
@@ -633,6 +641,7 @@ const buildDataStructure = (): Theme[] => {
           type: normalizeAttributeType(attribute),
           magicSel: !!attribute.magicSel,
           description: attribute.description,
+          tooltip: attribute.tooltip,
         })),
         relations: relations.length > 0 ? relations : undefined,
         smartObjects: normalizeSmartObjects(obj.smartObjects),

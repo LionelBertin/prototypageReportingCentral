@@ -42,6 +42,7 @@ type AvailableObjectAttribute = {
   name: string;
   rawName: string;
   description?: string;
+  tooltip?: string;
   type: AttributeType;
   magicSel?: boolean;
   smartSel?: boolean;
@@ -59,6 +60,7 @@ type Stage2ObjectGroup = {
   key: string;
   label: string;
   objectName: string;
+  tooltip?: string;
   themeId: string;
   themeName: string;
   objectId: string;
@@ -80,6 +82,8 @@ export function AttributeSelector() {
   const [pendingObjectInsertion, setPendingObjectInsertion] = useState<PendingObjectInsertion | null>(null);
   const [globalFilterDialogOpen, setGlobalFilterDialogOpen] = useState(false);
   const [globalFilterGroups, setGlobalFilterGroups] = useState<FilterGroup[] | undefined>(undefined);
+  const [groupedColumnIds, setGroupedColumnIds] = useState<string[]>([]);
+  const [pendingGroupColumnId, setPendingGroupColumnId] = useState<string>('');
   const [sortColumnIds, setSortColumnIds] = useState<string[]>([]);
   const [pendingSortColumnId, setPendingSortColumnId] = useState<string>('');
   const [draggedSortColumnId, setDraggedSortColumnId] = useState<string | null>(null);
@@ -252,6 +256,7 @@ export function AttributeSelector() {
             : attr.name,
           rawName: attr.name,
           description: attr.description,
+          tooltip: attr.tooltip,
           type: attr.type,
           magicSel: attr.magicSel,
           smartSel: shouldMarkAsDefault,
@@ -364,6 +369,7 @@ export function AttributeSelector() {
         name: attr.name,
         rawName: attr.name,
         description: attr.description,
+        tooltip: attr.tooltip,
         type: attr.type,
         magicSel: attr.magicSel,
         smartSel: !!attr.magicSel,
@@ -1160,6 +1166,15 @@ export function AttributeSelector() {
       const updated = [...prev];
       const [draggedItem] = updated.splice(draggedIndex, 1);
       updated.splice(targetIndex, 0, draggedItem);
+
+      // Keep grouped columns priority aligned with the current column order.
+      const updatedOrder = new Map(updated.map((attr, index) => [attr.id, index] as const));
+      setGroupedColumnIds((prevGrouped) =>
+        [...prevGrouped]
+          .filter((id) => updatedOrder.has(id))
+          .sort((a, b) => (updatedOrder.get(a) ?? 0) - (updatedOrder.get(b) ?? 0))
+      );
+
       return updated;
     });
   };
@@ -1180,6 +1195,8 @@ export function AttributeSelector() {
     setSelectedAttributes([]);
     setGlobalFilterGroups(undefined);
     setGlobalFilterDialogOpen(false);
+    setGroupedColumnIds([]);
+    setPendingGroupColumnId('');
     setSelectingMainObject(true);
     setMainObject(null);
     setMainObjectConfig(null);
@@ -1198,13 +1215,23 @@ export function AttributeSelector() {
     setSelectedAttributes([]);
     setGlobalFilterGroups(undefined);
     setGlobalFilterDialogOpen(false);
+    setGroupedColumnIds([]);
+    setPendingGroupColumnId('');
     setSortColumnIds([]);
     setPendingSortColumnId('');
   };
 
   useEffect(() => {
     const selectedIds = new Set(selectedAttributes.map((attr) => attr.id));
-    setSortColumnIds((prev) => prev.filter((id) => selectedIds.has(id)));
+    const selectedOrder = new Map(selectedAttributes.map((attr, index) => [attr.id, index] as const));
+    const groupedIdSet = new Set(groupedColumnIds);
+    setGroupedColumnIds((prev) =>
+      [...prev]
+        .filter((id) => selectedIds.has(id))
+        .sort((a, b) => (selectedOrder.get(a) ?? 0) - (selectedOrder.get(b) ?? 0))
+    );
+    setPendingGroupColumnId((prev) => (prev && !selectedIds.has(prev) ? '' : prev));
+    setSortColumnIds((prev) => prev.filter((id) => selectedIds.has(id) && !groupedIdSet.has(id)));
     setPendingSortColumnId((prev) => (prev && !selectedIds.has(prev) ? '' : prev));
   }, [selectedAttributes]);
 
@@ -1352,8 +1379,61 @@ export function AttributeSelector() {
     return selectedAttributes.filter((attr) => attr.insertionType !== 'conditional' && attr.insertionType !== 'calculated');
   };
 
+  const getGroupableSelectedAttributes = () => {
+    return selectedAttributes.filter((attr) => attr.insertionType !== 'conditional' && attr.insertionType !== 'calculated');
+  };
+
+  const handleGroupColumnSelect = (attributeId: string) => {
+    if (!attributeId) {
+      setPendingGroupColumnId('');
+      return;
+    }
+
+    if (groupedColumnIds.includes(attributeId)) {
+      setPendingGroupColumnId('');
+      return;
+    }
+
+    const groupedInsertIndex = groupedColumnIds.length;
+
+    setSelectedAttributes((prev) => {
+      const currentIndex = prev.findIndex((attr) => attr.id === attributeId);
+      if (currentIndex === -1) return prev;
+
+      const next = [...prev];
+      const [moved] = next.splice(currentIndex, 1);
+      next.splice(groupedInsertIndex, 0, moved);
+      return next;
+    });
+
+    setGroupedColumnIds((prev) => [...prev, attributeId]);
+    setSortColumnIds((prev) => prev.filter((id) => id !== attributeId));
+    setPendingGroupColumnId('');
+  };
+
+  const removeGroupedColumn = (attributeId: string) => {
+    const nextGrouped = groupedColumnIds.filter((id) => id !== attributeId);
+
+    setSelectedAttributes((prev) => {
+      const currentIndex = prev.findIndex((attr) => attr.id === attributeId);
+      if (currentIndex === -1) return prev;
+
+      const next = [...prev];
+      const [moved] = next.splice(currentIndex, 1);
+      next.splice(nextGrouped.length, 0, moved);
+      return next;
+    });
+
+    setGroupedColumnIds(nextGrouped);
+  };
+
   const handleSortColumnSelect = (attributeId: string) => {
     if (!attributeId) {
+      setPendingSortColumnId('');
+      return;
+    }
+
+    if (groupedColumnIds.includes(attributeId)) {
       setPendingSortColumnId('');
       return;
     }
@@ -1462,6 +1542,7 @@ export function AttributeSelector() {
         key: navigationPath.length === 0 ? currentKey : `${currentKey}::${getNavigationPathKey(navigationPath)}`,
         label,
         objectName: found.obj.name,
+        tooltip: found.obj.tooltip,
         themeId,
         themeName: found.theme.name,
         objectId,
@@ -1700,9 +1781,14 @@ export function AttributeSelector() {
   const mainObjectSelectedAttributeIds = selectingMainObject
     ? new Set<string>()
     : getMainObjectSelectedAttributeIds(mainObjectAvailableAttributes);
+  const groupableSelectedAttributes = getGroupableSelectedAttributes();
+  const groupableById = new Map(groupableSelectedAttributes.map((attr) => [attr.id, attr] as const));
+  const availableGroupPickers = groupableSelectedAttributes.filter((attr) => !groupedColumnIds.includes(attr.id));
   const sortableSelectedAttributes = getSortableSelectedAttributes();
   const sortableById = new Map(sortableSelectedAttributes.map((attr) => [attr.id, attr] as const));
-  const availableSortPickers = sortableSelectedAttributes.filter((attr) => !sortColumnIds.includes(attr.id));
+  const availableSortPickers = sortableSelectedAttributes.filter(
+    (attr) => !sortColumnIds.includes(attr.id) && !groupedColumnIds.includes(attr.id)
+  );
 
   return (
     <div className="flex h-screen flex-col">
@@ -1778,10 +1864,13 @@ export function AttributeSelector() {
                     <div key={group.key} className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
                       <div className="mb-3 flex items-center justify-between gap-3">
                         <div>
-                          <h3 className="text-sm font-semibold text-gray-900">
-                            {group.label !== group.objectName
-                              ? `${group.label} (${group.objectName})`
-                              : group.label}
+                          <h3 className="flex items-center gap-1 text-sm font-semibold text-gray-900">
+                            <span>
+                              {group.label !== group.objectName
+                                ? `${group.label} (${group.objectName})`
+                                : group.label}
+                            </span>
+                            <InfoHint text={group.tooltip} />
                           </h3>
                           {showLinkedObjectCardinalities && group.navigationPath.length > 0 && (
                             <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600">
@@ -1836,7 +1925,7 @@ export function AttributeSelector() {
                                     onChange={(event) => toggleMainObjectAttribute(attr, event.target.checked)}
                                   />
                                   <span className="text-gray-800">{getMainObjectAttributeDisplayLabel(attr)}</span>
-                                  <InfoHint text={attr.description} />
+                                  <InfoHint text={attr.tooltip ?? attr.description} />
                                 </div>
                                 {!!attr.smartSel && (
                                   <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700">
@@ -1905,6 +1994,7 @@ export function AttributeSelector() {
 
               <SelectionPanel
                 selectedAttributes={selectedAttributes}
+                groupedAttributeIds={groupedColumnIds}
                 onRemoveAttribute={handleRemoveAttribute}
                 onEditCompartment={handleEditCompartment}
                 onEditDateReference={handleEditDateReference}
@@ -1923,32 +2013,36 @@ export function AttributeSelector() {
 
               <div className="border-t bg-gray-50 px-4 py-3">
                 <div className="space-y-3">
-                  <div className="text-sm font-medium text-gray-700">Filtrage</div>
-
                   {globalFilterGroups && globalFilterGroups.length > 0 ? (
-                    <button
-                      onClick={() => setGlobalFilterDialogOpen(true)}
-                      className="w-full rounded border border-orange-200 bg-orange-50 p-2 text-left text-xs text-orange-800 hover:bg-orange-100"
-                      title="Modifier le filtrage global"
-                    >
-                      <div className="mb-1 font-medium">Filtres actifs :</div>
-                      <div className="space-y-1">
-                        {getGlobalFilterGroupLines().map((line, index) => (
-                          <div key={index}>
-                            {index > 0 && <div className="my-1 font-bold text-orange-900">OU</div>}
-                            <div className="ml-2">{line}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </button>
+                    <>
+                      <div className="text-sm font-medium text-gray-700">Filtrage</div>
+                      <button
+                        onClick={() => setGlobalFilterDialogOpen(true)}
+                        className="w-full rounded border border-orange-200 bg-orange-50 p-2 text-left text-xs text-orange-800 hover:bg-orange-100"
+                        title="Modifier le filtrage global"
+                      >
+                        <div className="mb-1 font-medium">Filtres actifs :</div>
+                        <div className="space-y-1">
+                          {getGlobalFilterGroupLines().map((line, index) => (
+                            <div key={index}>
+                              {index > 0 && <div className="my-1 font-bold text-orange-900">OU</div>}
+                              <div className="ml-2">{line}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </button>
+                    </>
                   ) : (
-                    <button
-                      onClick={() => setGlobalFilterDialogOpen(true)}
-                      className="w-full rounded border border-orange-200 bg-orange-50 p-2 text-left text-xs text-orange-700 hover:bg-orange-100"
-                      title="Configurer le filtrage global"
-                    >
-                      Aucun filtre global défini
-                    </button>
+                    <div className="flex flex-nowrap items-center gap-2">
+                      <div className="shrink-0 text-sm font-medium text-gray-700">Filtrage</div>
+                      <button
+                        onClick={() => setGlobalFilterDialogOpen(true)}
+                        className="min-w-0 flex-1 whitespace-nowrap rounded border border-orange-200 bg-orange-50 px-2 py-1.5 text-left text-xs text-orange-700 hover:bg-orange-100"
+                        title="Configurer le filtrage global"
+                      >
+                        Aucun filtre global défini
+                      </button>
+                    </div>
                   )}
 
                   <div className="rounded border border-gray-200 bg-white p-2 text-xs text-gray-800">
@@ -1992,6 +2086,48 @@ export function AttributeSelector() {
                                 onClick={() => removeSortColumn(id)}
                                 className="rounded px-1 text-[11px] text-red-600 hover:bg-red-50"
                                 title="Retirer cette colonne du tri"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="rounded border border-gray-200 bg-white p-2 text-xs text-gray-800">
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <div className="text-sm font-medium text-gray-700">Grouper les lignes</div>
+                      <select
+                        value={pendingGroupColumnId}
+                        onChange={(event) => handleGroupColumnSelect(event.target.value)}
+                        className="min-w-[220px] rounded border border-gray-300 px-2 py-1.5 text-xs"
+                      >
+                        <option value="">Sélectionner une colonne</option>
+                        {availableGroupPickers.map((attr) => (
+                          <option key={attr.id} value={attr.id}>
+                            {getSelectedAttributeDisplayName(attr)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {groupedColumnIds.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {groupedColumnIds.map((id, index) => {
+                          const attr = groupableById.get(id);
+                          if (!attr) return null;
+
+                          return (
+                            <div key={id} className="flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-2 py-1">
+                              <span className="text-[11px] font-medium text-emerald-800">
+                                Groupe {index + 1}: {getSelectedAttributeDisplayName(attr)}
+                              </span>
+                              <button
+                                onClick={() => removeGroupedColumn(id)}
+                                className="rounded px-1 text-[11px] text-red-600 hover:bg-red-50"
+                                title="Retirer cette colonne des groupes"
                               >
                                 ×
                               </button>

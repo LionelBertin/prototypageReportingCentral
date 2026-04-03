@@ -58,6 +58,7 @@
         {
           "id": "matricules-et-login",
           "name": "Matricules et Login",
+          "tooltip": "Contient les informations d'identification du collaborateur pour les différents systèmes de l'entreprise",
           "relations": [
             {
               "targetObject": "Collaborateur",
@@ -84,6 +85,7 @@
             {
               "id": "matricule-de-paie",
               "name": "Matricule de paie",
+              "tooltip": "Identifiant utilisé dans le système de paie",
               "magicSel": false,
               "dataType": "string"
             }
@@ -867,6 +869,7 @@
     {
       "id": "talents-comp-tences",
       "name": "Talent & compétences",
+      "tooltip": "Contient les informations sur les compétences et les talents des collaborateurs, ainsi que les entretiens et les objectifs associés",
       "objects": [
         {
           "id": "entretiens",
@@ -1672,6 +1675,12 @@
             {
               "id": "code",
               "name": "Code",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "arborescence",
+              "name": "Arborescence",
               "magicSel": false,
               "dataType": "string"
             }

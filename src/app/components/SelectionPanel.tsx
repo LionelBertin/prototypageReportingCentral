@@ -14,6 +14,7 @@ const aggregationLabels: Record<string, string> = {
 
 interface SelectionPanelProps {
   selectedAttributes: SelectedAttribute[];
+  groupedAttributeIds?: string[];
   onRemoveAttribute: (id: string) => void;
   onEditCompartment: (id: string) => void;
   onEditDateReference: (id: string) => void;
@@ -32,6 +33,7 @@ interface SelectionPanelProps {
 
 export function SelectionPanel({
   selectedAttributes,
+  groupedAttributeIds = [],
   onRemoveAttribute,
   onEditCompartment,
   onEditDateReference,
@@ -273,10 +275,23 @@ export function SelectionPanel({
           {selectedAttributes.map((attr, index) => {
             const isDragged = draggedId === attr.id;
             const isFilterInvolved = filterInvolvedAttributeIds.includes(attr.id);
+            const groupedCount = groupedAttributeIds.length;
+            const showGroupingDivider = groupedCount > 0 && index === groupedCount;
+            const showGroupedHeader = groupedCount > 0 && index === 0;
 
             return (
+              <div key={attr.id}>
+              {showGroupedHeader && (
+                <div className="my-1 text-[11px] font-medium text-gray-500">
+                  Colonnes groupées
+                </div>
+              )}
+              {showGroupingDivider && (
+                <div className="my-1 border-t border-dashed border-gray-300 pt-1 text-[11px] font-medium text-gray-500">
+                  Colonnes non groupées
+                </div>
+              )}
               <div
-                key={attr.id}
                 draggable={editingColumnId !== attr.id}
                 onDragStart={() => handleDragStart(attr.id)}
                 onDragOver={(event) => handleDragOver(event, attr.id)}
@@ -533,6 +548,7 @@ export function SelectionPanel({
                             </button>
                           </div>
                         </div>
+              </div>
               </div>
             );
           })}

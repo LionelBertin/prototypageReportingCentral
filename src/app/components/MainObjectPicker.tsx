@@ -87,7 +87,10 @@ export function MainObjectPicker({ onSelect }: Props) {
                 onClick={() => toggleDomain(theme.id)}
                 className="flex w-full items-center justify-between px-4 py-3 text-left"
               >
-                <span className="text-sm font-semibold text-gray-900">{theme.name}</span>
+                <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+                  <span>{theme.name}</span>
+                  <InfoHint text={theme.tooltip} />
+                </span>
                 <span className="text-xs text-gray-500">{isExpanded ? 'v' : '>'}</span>
               </button>
 
