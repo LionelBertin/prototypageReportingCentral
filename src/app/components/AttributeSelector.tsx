@@ -2031,7 +2031,7 @@ export function AttributeSelector() {
           </div>
         ) : (
           <>
-            <div className="w-1/2">
+            <div className="w-5/12">
               <div className="h-full overflow-y-auto border-r bg-gray-50">
                 <div className="sticky top-0 z-10 border-b bg-gray-50 px-4 py-4">
                   <div className="flex items-center justify-between gap-2">
@@ -2185,7 +2185,7 @@ export function AttributeSelector() {
               </div>
             </div>
 
-            <div className="flex w-1/2 flex-col border-l bg-white">
+            <div className="flex w-4/12 flex-col border-l bg-white">
               <div className="border-b px-4 py-4">
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-lg font-semibold text-gray-900">
@@ -2202,28 +2202,37 @@ export function AttributeSelector() {
                   )}
                 </div>
               </div>
+              <div className="min-h-0 flex-1">
+                <SelectionPanel
+                  selectedAttributes={selectedAttributes}
+                  groupedAttributeIds={groupedColumnIds}
+                  onRemoveAttribute={handleRemoveAttribute}
+                  onEditCompartment={handleEditCompartment}
+                  onEditDateReference={handleEditDateReference}
+                  onEditConditionalColumn={handleEditConditionalColumn}
+                  onEditCalculatedColumn={handleEditCalculatedColumn}
+                  onEditAggregation={handleEditAggregation}
+                  onReorder={handleReorder}
+                  onEditColumnName={handleEditColumnName}
+                  getDateAttributeName={getDateAttributeName}
+                  showCompartmenting={showCompartmenting}
+                  showConditionalColumns={showConditionalColumns}
+                  showCalculatedColumns={showCalculatedColumns}
+                  showColumnRename={showColumnRename}
+                  filterInvolvedAttributeIds={globalFilterInvolvedAttributeIds}
+                  sortInvolvedAttributeIds={globalSortInvolvedAttributeIds}
+                />
+              </div>
+            </div>
 
-              <SelectionPanel
-                selectedAttributes={selectedAttributes}
-                groupedAttributeIds={groupedColumnIds}
-                onRemoveAttribute={handleRemoveAttribute}
-                onEditCompartment={handleEditCompartment}
-                onEditDateReference={handleEditDateReference}
-                onEditConditionalColumn={handleEditConditionalColumn}
-                onEditCalculatedColumn={handleEditCalculatedColumn}
-                onEditAggregation={handleEditAggregation}
-                onReorder={handleReorder}
-                onEditColumnName={handleEditColumnName}
-                getDateAttributeName={getDateAttributeName}
-                showCompartmenting={showCompartmenting}
-                showConditionalColumns={showConditionalColumns}
-                showCalculatedColumns={showCalculatedColumns}
-                showColumnRename={showColumnRename}
-                filterInvolvedAttributeIds={globalFilterInvolvedAttributeIds}
-                sortInvolvedAttributeIds={globalSortInvolvedAttributeIds}
-              />
+            <div className="flex w-3/12 flex-col border-l bg-gray-50">
+              <div className="border-b px-4 py-4">
+                <div className="text-lg font-semibold text-gray-900">
+                  Filtrage / Tri / Groupe
+                </div>
+              </div>
 
-              <div className="border-t bg-gray-50 px-4 py-3">
+              <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
                 <div className="space-y-3">
                   <div className="rounded border border-gray-200 bg-white p-2 text-xs text-gray-800">
                     <div className="mb-1 text-[11px] font-medium leading-none text-gray-700">Filtrage</div>
@@ -2261,7 +2270,6 @@ export function AttributeSelector() {
                               disabled={!mainObjectLinkedToCollaborateur}
                               className="rounded border border-orange-300 bg-white px-2 py-1 text-[11px] text-orange-900"
                             />
-                            <span className="text-[11px] text-orange-800">{getFormattedReportDate(reportDate)}</span>
                           </div>
 
                           <div className="flex flex-wrap gap-3 text-[11px] text-orange-900">
@@ -2573,7 +2581,7 @@ export function AttributeSelector() {
             <div className="w-1/2 px-4 py-4">
               <button
                 onClick={openPrototypeConfig}
-                className="rounded border border-gray-300 bg-gray-50 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+                className="rounded border border-dashed border-gray-400 px-2 py-0.5 text-[11px] text-gray-500 hover:bg-gray-100 hover:text-gray-700"
               >
                 conf proto
               </button>

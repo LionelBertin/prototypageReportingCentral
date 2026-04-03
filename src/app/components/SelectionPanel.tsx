@@ -192,12 +192,18 @@ export function SelectionPanel({
   };
 
   const getDateReferenceLabel = (attr: SelectedAttribute) => {
+    const formatIsoDate = (value: string) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+      const [year, month, day] = value.split('-');
+      return `${day}/${month}/${year}`;
+    };
+
     if (!attr.dateReference) return 'Date du jour';
     switch (attr.dateReference.type) {
       case 'today':
         return 'Date du jour';
       case 'custom':
-        return `Date: ${attr.dateReference.customDate}`;
+        return `Date: ${formatIsoDate(attr.dateReference.customDate ?? '')}`;
       case 'attribute': {
         const refAttrName = getDateAttributeName(attr.dateReference.attributeId || '');
         return refAttrName ? `Référence: ${refAttrName}` : 'Attribut de référence';
@@ -365,6 +371,7 @@ export function SelectionPanel({
 
                               <div className="mt-1 flex flex-wrap items-center gap-2">
                                 {attr.insertionType !== 'normal'
+                                  && attr.insertionType !== 'applicable'
                                   && attr.insertionType !== 'aggregation'
                                   && !(attr.insertionType === 'conditional' && !showConditionalColumns)
                                   && !(attr.insertionType === 'calculated' && !showCalculatedColumns) && (
@@ -375,8 +382,6 @@ export function SelectionPanel({
                                       ? 'bg-green-100 text-green-700'
                                       : attr.insertionType === 'last'
                                       ? 'bg-yellow-100 text-yellow-700'
-                                      : attr.insertionType === 'applicable'
-                                      ? 'bg-indigo-100 text-indigo-700'
                                       : attr.insertionType === 'conditional'
                                       ? 'bg-purple-100 text-purple-700'
                                       : attr.insertionType === 'calculated'
@@ -389,8 +394,6 @@ export function SelectionPanel({
                                       ? 'Première instance'
                                       : attr.insertionType === 'last'
                                       ? 'Dernière instance'
-                                      : attr.insertionType === 'applicable'
-                                      ? 'Instance applicable'
                                       : attr.insertionType === 'conditional'
                                       ? '📊 Colonne conditionnelle'
                                       : attr.insertionType === 'calculated'
@@ -416,6 +419,7 @@ export function SelectionPanel({
                                     title={getDateReferenceLabel(attr)}
                                   >
                                     <Calendar className="size-3" />
+                                    <span>{getDateReferenceLabel(attr)}</span>
                                   </button>
                                 )}
 
