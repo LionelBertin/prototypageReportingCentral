@@ -731,7 +731,16 @@ export function AttributeSelector() {
     if (!obj) return;
 
     const objectAttributes = getObjectAttributes(themeId, objectId);
-    const defaultAttributes = objectAttributes.filter((attr) => !!attr.autoSmartSel);
+    const directObjectAttributes = objectAttributes.filter(
+      (attr) =>
+        attr.sourceThemeId === themeId
+        && attr.sourceObjectId === objectId
+        && attr.relativeNavigationPath.length === 0
+    );
+    const mainObjectHasMagicSel = directObjectAttributes.some((attr) => !!attr.magicSel);
+    const defaultAttributes = mainObjectHasMagicSel
+      ? objectAttributes.filter((attr) => !!attr.autoSmartSel)
+      : directObjectAttributes;
     const mainObjectSupportsApplicable = !!(obj.applicationDate || obj.isApplicable);
     const mainObjectApplicationDateMandatory = !!obj.applicationDateConfig?.mandatory;
     const nextTemporalMode = obj.applicationDateConfig?.requirementMode === 'period' ? 'period' : 'day';
@@ -2339,12 +2348,41 @@ export function AttributeSelector() {
   const mainObjectStage2Groups = selectingMainObject
     ? [] as Stage2ObjectGroup[]
     : getMainObjectStage2Groups(mainObjectAvailableAttributes);
+  const orderedMainObjectStage2Groups = useMemo(() => {
+    if (!mainObject) return mainObjectStage2Groups;
+
+    const getGroupPriority = (group: Stage2ObjectGroup) => {
+      if (
+        group.themeId === mainObject.themeId
+        && group.objectId === mainObject.objectId
+        && group.navigationPath.length === 0
+      ) {
+        return 0;
+      }
+
+      if (group.themeId === mainObject.themeId) {
+        return 1;
+      }
+
+      return 2;
+    };
+
+    return [...mainObjectStage2Groups].sort((left, right) => {
+      const priorityDiff = getGroupPriority(left) - getGroupPriority(right);
+      if (priorityDiff !== 0) return priorityDiff;
+
+      const labelDiff = left.label.localeCompare(right.label, 'fr', { sensitivity: 'base' });
+      if (labelDiff !== 0) return labelDiff;
+
+      return left.objectName.localeCompare(right.objectName, 'fr', { sensitivity: 'base' });
+    });
+  }, [mainObject, mainObjectStage2Groups]);
   const mainObjectSelectedAttributeIds = selectingMainObject
     ? new Set<string>()
     : getMainObjectSelectedAttributeIds(mainObjectAvailableAttributes);
   const normalizedAvailableAttributeSearch = normalizeSearchText(availableAttributeSearchTerm.trim());
   const filteredMainObjectStage2Groups = normalizedAvailableAttributeSearch
-    ? mainObjectStage2Groups
+    ? orderedMainObjectStage2Groups
         .map((group) => {
           const groupNameMatches =
             normalizeSearchText(group.label).includes(normalizedAvailableAttributeSearch) ||
@@ -2361,7 +2399,7 @@ export function AttributeSelector() {
           return { ...group, attributes: filteredAttributes };
         })
         .filter((group): group is Stage2ObjectGroup => group !== null)
-    : mainObjectStage2Groups;
+      : orderedMainObjectStage2Groups;
   const groupableSelectedAttributes = getGroupableSelectedAttributes();
   const groupableById = new Map(groupableSelectedAttributes.map((attr) => [attr.id, attr] as const));
   const availableGroupPickers = groupableSelectedAttributes
@@ -2756,7 +2794,7 @@ export function AttributeSelector() {
               <div className="border-b px-4 py-4">
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-lg font-semibold text-gray-900">
-                    Attributs sélectionnés
+                    Colonnes du rapport
                   </div>
                   {showSelectAllButton && (
                     <button

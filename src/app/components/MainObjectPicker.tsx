@@ -17,10 +17,8 @@ export function MainObjectPicker({ onSelect }: Props) {
 
   const lower = search.trim().toLowerCase();
 
-  // Un objet est « secondaire » si sa cardinalité indique une relation strictement 1-à-1
-  // avec un objet parent (ex : "1 <> 1 Collaborateur"). On le masque dans le picker.
   const getSelectableObjects = (theme: (typeof dataStructure)[number]) =>
-    theme.objects.filter((obj) => !/^1\s+<>/.test(obj.cardinality));
+    theme.objects;
 
   const renderObjectInsertionButtons = (
     themeId: string,
@@ -80,7 +78,7 @@ export function MainObjectPicker({ onSelect }: Props) {
 
       <div className="space-y-3">
         {visibleThemes.map((theme) => {
-          const isExpanded = !!expandedDomains[theme.id];
+          const isExpanded = !!lower || !!expandedDomains[theme.id];
           return (
             <div key={theme.id} className="rounded border bg-white">
               <button

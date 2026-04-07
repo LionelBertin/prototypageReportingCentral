@@ -101,7 +101,7 @@
               "cardinalityFrom": "one",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": false
+              "magicSel": true
             }
           ],
           "attributes": [
@@ -412,34 +412,6 @@
               "name": "Scan Diplôme",
               "magicSel": false,
               "dataType": "file"
-            }
-          ]
-        },
-        {
-          "id": "enfant-s",
-          "name": "Enfant(s)",
-          "relations": [
-            {
-              "targetObject": "Collaborateur",
-              "relationName": "Collaborateur",
-              "cardinalityFrom": "many",
-              "cardinalityTo": "one",
-              "recursiveMagicSel": false,
-              "magicSel": true
-            }
-          ],
-          "attributes": [
-            {
-              "id": "date-de-naissance",
-              "name": "Date de naissance",
-              "magicSel": true,
-              "dataType": "date"
-            },
-            {
-              "id": "prenom",
-              "name": "Prénom",
-              "magicSel": true,
-              "dataType": "string"
             }
           ]
         },
@@ -2310,6 +2282,13 @@
         {
           "id": "absences",
           "name": "Liste des absences",
+          "applicationDate": {
+            "startAttributeId": "date-d-but",
+            "endAttributeId": "date-fin",
+            "mandatory": false,
+            "resultingSingleLine": false,
+            "requirementMode": "period"
+          },
           "relations": [
             {
               "targetObject": "Collaborateur",
@@ -2324,8 +2303,8 @@
               "relationName": "Bénéficiaire",
               "cardinalityFrom": "many",
               "cardinalityTo": "one",
-              "recursiveMagicSel": true,
-              "magicSel": false
+              "recursiveMagicSel": false,
+              "magicSel": true
             },
             {
               "targetObject": "Collaborateur",
@@ -2341,7 +2320,7 @@
               "cardinalityFrom": "many",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": true
+              "magicSel": false
             }
           ],
           "attributes": [
@@ -2371,13 +2350,13 @@
             {
               "id": "date-refus",
               "name": "Date refus",
-              "magicSel": true,
+              "magicSel": false,
               "dataType": "date"
             },
             {
               "id": "motivation-du-refus",
               "name": "Motivation du refus",
-              "magicSel": true,
+              "magicSel": false,
               "dataType": "string"
             },
             {
@@ -2471,7 +2450,7 @@
           "name": "Solde de congés",
           "applicationDate": {
             "mandatory": true,
-            "resultingSingleLine": true,
+            "resultingSingleLine": false,
             "requirementMode": "day"
           },
           "relations": [
@@ -2518,8 +2497,8 @@
               "relationName": "Collaborateur",
               "cardinalityFrom": "many",
               "cardinalityTo": "one",
-              "recursiveMagicSel": true,
-              "magicSel": false
+              "recursiveMagicSel": false,
+              "magicSel": true
             }
           ],
           "attributes": [
@@ -2567,10 +2546,10 @@
             {
               "targetObject": "Collaborateur",
               "relationName": "Collaborateur",
-              "cardinalityFrom": "many",
+              "cardinalityFrom": "one",
               "cardinalityTo": "one",
-              "recursiveMagicSel": true,
-              "magicSel": false
+              "recursiveMagicSel": false,
+              "magicSel": true
             }
           ],
           "attributes": [
@@ -2644,7 +2623,7 @@
             {
               "targetObject": "Collaborateur",
               "relationName": "Collaborateur",
-              "cardinalityFrom": "many",
+              "cardinalityFrom": "one",
               "cardinalityTo": "one",
               "recursiveMagicSel": true,
               "magicSel": false
@@ -3046,13 +3025,6 @@
         {
           "id": "formations",
           "name": "Formations",
-          "applicationDate": {
-            "startAttributeId": "date-de-d-but",
-            "endAttributeId": "date-de-fin",
-            "mandatory": false,
-            "resultingSingleLine": false,
-            "requirementMode": "day"
-          },
           "relations": [
             {
               "targetObject": "Catalogue de formation",
@@ -3064,11 +3036,11 @@
             },
             {
               "targetObject": "Collaborateur",
-              "relationName": "Bénficiaire",
+              "relationName": "Bénéficiaire",
               "cardinalityFrom": "many",
               "cardinalityTo": "one",
-              "recursiveMagicSel": true,
-              "magicSel": false
+              "recursiveMagicSel": false,
+              "magicSel": true
             },
             {
               "targetObject": "Collaborateur",
@@ -3159,8 +3131,8 @@
                 "Catalogue de formation.nom",
                 "Demandeur.nom",
                 "Demandeur.prénom",
-                "Bénficiaire.nom",
-                "Bénficiaire.prénom",
+                "Bénéficiaire.nom",
+                "Bénéficiaire.prénom",
                 "Responsable refus.nom",
                 "Responsable refus.prénom"
               ],
@@ -3174,8 +3146,8 @@
                 "date de début",
                 "date de fin",
                 "Catalogue de formation.nom",
-                "Bénficiaire.nom",
-                "Bénficiaire.prénom",
+                "Bénéficiaire.nom",
+                "Bénéficiaire.prénom",
                 "Responsable approbation.nom",
                 "Responsable approbation.prénom"
               ],
@@ -3188,8 +3160,8 @@
                 "Catalogue de formation.nom",
                 "Demandeur.nom",
                 "Demandeur.prénom",
-                "Bénficiaire.nom",
-                "Bénficiaire.prénom"
+                "Bénéficiaire.nom",
+                "Bénéficiaire.prénom"
               ],
               "filters": "statut='en attente'"
             },
@@ -3199,8 +3171,8 @@
                 "date certification",
                 "date expiration",
                 "Catalogue de formation.nom",
-                "Bénficiaire.nom",
-                "Bénficiaire.prénom"
+                "Bénéficiaire.nom",
+                "Bénéficiaire.prénom"
               ],
               "filters": "statut='approuvée' and 'date expiration' > dateDuJour"
             }
@@ -3213,8 +3185,8 @@
       "name": "Les rémunérations",
       "objects": [
         {
-          "id": "r-mun-ration-th-orique-fixe",
-          "name": "Rémunération théorique fixe",
+          "id": "r-mun-ration-th-orique",
+          "name": "Rémunération théorique annuelle",
           "applicationDate": {
             "startAttributeId": "date-d-but",
             "endAttributeId": "date-fin",
@@ -3234,6 +3206,16 @@
           ],
           "attributes": [
             {
+              "id": "type-r-mun-ration",
+              "name": "Type de rémunération",
+              "magicSel": true,
+              "dataType": "string",
+              "enum": [
+                "Fixe",
+                "Variable"
+              ]
+            },
+            {
               "id": "date-d-but",
               "name": "Date début",
               "magicSel": true,
@@ -3250,6 +3232,12 @@
               "name": "Montant",
               "magicSel": true,
               "dataType": "number"
+            },
+            {
+              "id": "devise",
+              "name": "Devise",
+              "magicSel": true,
+              "dataType": "string"
             },
             {
               "id": "nature-de-r-mun-ration",
@@ -3266,48 +3254,15 @@
           ]
         },
         {
-          "id": "r-mun-ration-th-orique-variable",
-          "name": "Rémunération théorique variable",
-          "relations": [
-            {
-              "targetObject": "Collaborateur",
-              "relationName": "Collaborateur",
-              "cardinalityFrom": "many",
-              "cardinalityTo": "one",
-              "recursiveMagicSel": true,
-              "magicSel": false
-            }
-          ],
-          "attributes": [
-            {
-              "id": "date-d-but",
-              "name": "Date début",
-              "magicSel": true,
-              "dataType": "date"
-            },
-            {
-              "id": "date-fin",
-              "name": "Date fin",
-              "magicSel": true,
-              "dataType": "date"
-            },
-            {
-              "id": "montant",
-              "name": "Montant",
-              "magicSel": true,
-              "dataType": "number"
-            },
-            {
-              "id": "p-riodicit",
-              "name": "Périodicité",
-              "magicSel": true,
-              "dataType": "string"
-            }
-          ]
-        },
-        {
           "id": "r-mun-ration-r-elle",
-          "name": "Rémunération réelle",
+          "name": "Rémunération mensuelle réelle",
+          "applicationDate": {
+            "startAttributeId": "date-d-but",
+            "endAttributeId": "date-fin",
+            "mandatory": false,
+            "resultingSingleLine": false,
+            "requirementMode": "day"
+          },
           "relations": [
             {
               "targetObject": "Collaborateur",
@@ -3320,8 +3275,8 @@
           ],
           "attributes": [
             {
-              "id": "type-de-r-mun-ration",
-              "name": "Nature de rémunération",
+              "id": "type-r-mun-ration",
+              "name": "Type de rémunération",
               "magicSel": true,
               "dataType": "string"
             },
@@ -3342,7 +3297,12 @@
               "name": "Montant",
               "magicSel": true,
               "dataType": "number"
-            }
+            },
+            {
+              "id": "devise",
+              "name": "Devise",
+              "magicSel": true,
+              "dataType": "string"}
           ]
         }
       ]
