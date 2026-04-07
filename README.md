@@ -1,7 +1,7 @@
 
   # maquette ReportingCentral v3
 
-  This is a code bundle for maquette ReportingCentral v3. The original project is available at https://www.figma.com/design/94X6AcSX8kmfThODgJGDQN/maquette-ReportingCentral-v3.
+  This is a code bundle for maquette ReportingCentral v3. The original project was initiated through figma then went to VSCode
 
   ## Running the code
 
