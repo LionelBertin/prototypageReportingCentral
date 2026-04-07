@@ -11,7 +11,7 @@ import { DateReferenceDialog } from './DateReferenceDialog';
 import { InfoHint } from './InfoHint';
 import { SelectedAttribute, AggregationType, InsertionType, FilterGroup, CompartmentConfig, DateReference, ConditionalColumnConfig, CalculatedColumnConfig } from '../types/selection';
 import { AttributeType, SmartObjectDefinition, dataStructure } from '../data/dataStructure';
-import { generateReportPreviewRows, ReportPreviewRow } from '../utils/reportPreview';
+import { generateReportPreviewRows, ReportPreviewRow, ReportTemporalContext } from '../utils/reportPreview';
 
 type NavigationPath = NonNullable<SelectedAttribute['navigationPath']>;
 
@@ -33,6 +33,7 @@ type PendingObjectInsertion = {
   mode: 'detailed' | 'operation' | 'aggregation' | 'special';
   isApplicable?: boolean;
   applicationDateMandatory?: boolean;
+  applicationDateRequirementMode?: 'day' | 'period';
   smartObjects?: SmartObjectDefinition[];
   navigationPath?: NavigationPath;
   directMagicOnly?: boolean;
@@ -51,6 +52,7 @@ type AvailableObjectAttribute = {
   autoSmartSel?: boolean;
   sourceObjectSupportsApplicable: boolean;
   sourceObjectApplicationDateMandatory: boolean;
+  sourceObjectApplicationDateRequirementMode?: 'day' | 'period';
   sourceThemeId: string;
   sourceThemeName: string;
   sourceObjectId: string;
@@ -71,6 +73,7 @@ type Stage2ObjectGroup = {
   isSelectable: boolean;
   objectSupportsApplicable: boolean;
   objectApplicationDateMandatory: boolean;
+  objectApplicationDateRequirementMode?: 'day' | 'period';
   attributes: AvailableObjectAttribute[];
 };
 
@@ -81,6 +84,29 @@ type DepartmentNode = {
 
 const STATUS_DATE_REFERENCE_ATTRIBUTE_ID = '__status-collaborators-date__';
 const STATUS_DATE_REFERENCE_ATTRIBUTE_LABEL = 'Date de valeur du rapport';
+const REPORT_PERIOD_START_ATTRIBUTE_ID = '__report-period-start__';
+const REPORT_PERIOD_START_ATTRIBUTE_LABEL = 'Date début de période du rapport';
+const REPORT_PERIOD_END_ATTRIBUTE_ID = '__report-period-end__';
+const REPORT_PERIOD_END_ATTRIBUTE_LABEL = 'Date fin de période du rapport';
+
+const getTodayIsoDate = () => {
+  const today = new Date();
+  return [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, '0'),
+    String(today.getDate()).padStart(2, '0'),
+  ].join('-');
+};
+
+const createDefaultTemporalContext = (mode: ReportTemporalContext['mode'] = 'day'): ReportTemporalContext => {
+  const today = getTodayIsoDate();
+  return {
+    mode,
+    reportDate: today,
+    periodStartDate: today,
+    periodEndDate: today,
+  };
+};
 
 const parseDepartmentHierarchy = (raw: string): DepartmentNode[] => {
   const lines = raw
@@ -192,6 +218,7 @@ export function AttributeSelector() {
   const [globalFilterGroups, setGlobalFilterGroups] = useState<FilterGroup[] | undefined>(undefined);
   const [groupedColumnIds, setGroupedColumnIds] = useState<string[]>([]);
   const [pendingGroupColumnId, setPendingGroupColumnId] = useState<string>('');
+  const [displayAsColumnsAttributeId, setDisplayAsColumnsAttributeId] = useState<string>('');
   const [sortColumnIds, setSortColumnIds] = useState<string[]>([]);
   const [pendingSortColumnId, setPendingSortColumnId] = useState<string>('');
   const [draggedSortColumnId, setDraggedSortColumnId] = useState<string | null>(null);
@@ -208,19 +235,14 @@ export function AttributeSelector() {
   const [showConditionalColumns, setShowConditionalColumns] = useState(false);
   const [showCalculatedColumns, setShowCalculatedColumns] = useState(false);
   const [showColumnRename, setShowColumnRename] = useState(false);
+  const [showDisplayAsColumns, setShowDisplayAsColumns] = useState(false);
   const [showLinkedObjectCardinalities, setShowLinkedObjectCardinalities] = useState(true);
   const [showSelectAllButton, setShowSelectAllButton] = useState(true);
-  const [reportDate, setReportDate] = useState(() => {
-    const today = new Date();
-    return [
-      today.getFullYear(),
-      String(today.getMonth() + 1).padStart(2, '0'),
-      String(today.getDate()).padStart(2, '0'),
-    ].join('-');
-  });
+  const [reportTemporalContext, setReportTemporalContext] = useState<ReportTemporalContext>(() => createDefaultTemporalContext());
   const [includeDepartedCollaborators, setIncludeDepartedCollaborators] = useState(false);
   const [includePresentCollaborators, setIncludePresentCollaborators] = useState(true);
-  const [includeFutureCollaborators, setIncludeFutureCollaborators] = useState(false);
+  const [includeFutureNewCollaborators, setIncludeFutureNewCollaborators] = useState(false);
+  const [includeFutureReturnCollaborators, setIncludeFutureReturnCollaborators] = useState(false);
   const [selectedDepartmentFilters, setSelectedDepartmentFilters] = useState<string[]>([]);
   const [selectedEstablishmentFilters, setSelectedEstablishmentFilters] = useState<string[]>([]);
   const [departmentTree, setDepartmentTree] = useState<DepartmentNode[]>([]);
@@ -228,15 +250,18 @@ export function AttributeSelector() {
   const [collaboratorStatusFilterExpanded, setCollaboratorStatusFilterExpanded] = useState(false);
   const [prototypeConfigOpen, setPrototypeConfigOpen] = useState(false);
   const [reportResultOpen, setReportResultOpen] = useState(false);
+  const [reportPreviewColumns, setReportPreviewColumns] = useState<Array<{ id: string; label: string }>>([]);
   const [reportPreviewRows, setReportPreviewRows] = useState<ReportPreviewRow[]>([]);
   const [reportPreviewLastUpdatedAt, setReportPreviewLastUpdatedAt] = useState<string>('');
   const [draftShowCompartmenting, setDraftShowCompartmenting] = useState(false);
   const [draftShowConditionalColumns, setDraftShowConditionalColumns] = useState(false);
   const [draftShowCalculatedColumns, setDraftShowCalculatedColumns] = useState(false);
   const [draftShowColumnRename, setDraftShowColumnRename] = useState(false);
+  const [draftShowDisplayAsColumns, setDraftShowDisplayAsColumns] = useState(false);
   const [draftShowLinkedObjectCardinalities, setDraftShowLinkedObjectCardinalities] = useState(true);
   const [draftShowSelectAllButton, setDraftShowSelectAllButton] = useState(true);
   const [availableAttributeSearchTerm, setAvailableAttributeSearchTerm] = useState('');
+  const [collapsedAvailableGroupKeys, setCollapsedAvailableGroupKeys] = useState<string[]>([]);
 
   useEffect(() => {
     const loadCollaboratorOrgLists = async () => {
@@ -321,15 +346,6 @@ export function AttributeSelector() {
     };
   };
 
-  const getTodayIsoDate = () => {
-    const today = new Date();
-    return [
-      today.getFullYear(),
-      String(today.getMonth() + 1).padStart(2, '0'),
-      String(today.getDate()).padStart(2, '0'),
-    ].join('-');
-  };
-
   const isSingleRelationCardinality = (cardinality?: string) => {
     if (!cardinality) return true;
     return !cardinality.includes('n');
@@ -391,6 +407,82 @@ export function AttributeSelector() {
     const [year, month, day] = isoDate.split('-');
     if (!year || !month || !day) return isoDate;
     return `${day}/${month}/${year}`;
+  };
+
+  const mainObjectDefinition = useMemo(() => {
+    if (!mainObject) return null;
+    const theme = dataStructure.find((candidate) => candidate.id === mainObject.themeId);
+    return theme?.objects.find((candidate) => candidate.id === mainObject.objectId) ?? null;
+  }, [mainObject]);
+
+  const mainObjectTemporalMode = mainObjectDefinition?.applicationDateConfig?.requirementMode === 'period'
+    ? 'period'
+    : 'day';
+  const mainObjectRequiresMandatoryDate = !!mainObjectDefinition?.applicationDateConfig?.mandatory;
+  const mainObjectHasTemporalContext = !!mainObjectDefinition?.applicationDate;
+  const reportDate = reportTemporalContext.reportDate;
+  const reportPeriodStartDate = reportTemporalContext.periodStartDate ?? reportTemporalContext.reportDate;
+  const reportPeriodEndDate = reportTemporalContext.periodEndDate ?? reportTemporalContext.reportDate;
+  const collaboratorStatusReferenceDate = mainObjectTemporalMode === 'period' ? reportPeriodEndDate : reportDate;
+
+  const setReportDate = (value: string) => {
+    setReportTemporalContext((prev) => ({
+      ...prev,
+      mode: 'day',
+      reportDate: value,
+    }));
+  };
+
+  const setReportPeriodStartDate = (value: string) => {
+    setReportTemporalContext((prev) => ({
+      ...prev,
+      mode: 'period',
+      periodStartDate: value,
+    }));
+  };
+
+  const setReportPeriodEndDate = (value: string) => {
+    setReportTemporalContext((prev) => ({
+      ...prev,
+      mode: 'period',
+      periodEndDate: value,
+    }));
+  };
+
+  const getFormattedTemporalContext = () => {
+    if (mainObjectTemporalMode === 'period') {
+      if (!reportPeriodStartDate || !reportPeriodEndDate) return 'Période incomplète';
+      return `${getFormattedReportDate(reportPeriodStartDate)} -> ${getFormattedReportDate(reportPeriodEndDate)}`;
+    }
+
+    return getFormattedReportDate(reportDate);
+  };
+
+  const validateReportTemporalContext = () => {
+    if (!mainObjectHasTemporalContext || !mainObjectRequiresMandatoryDate) {
+      return true;
+    }
+
+    if (mainObjectTemporalMode === 'period') {
+      if (!reportPeriodStartDate || !reportPeriodEndDate) {
+        window.alert('Veuillez renseigner une date de début et une date de fin pour la période du rapport.');
+        return false;
+      }
+
+      if (reportPeriodStartDate > reportPeriodEndDate) {
+        window.alert('La date de début de période doit être antérieure ou égale à la date de fin.');
+        return false;
+      }
+
+      return true;
+    }
+
+    if (!reportDate) {
+      window.alert('Veuillez renseigner la date de valeur du rapport.');
+      return false;
+    }
+
+    return true;
   };
 
   const getDefaultSortAttributeId = (attributes: AvailableObjectAttribute[]) => {
@@ -478,6 +570,7 @@ export function AttributeSelector() {
           autoSmartSel: shouldMarkForAutoInsert,
           sourceObjectSupportsApplicable: !!(currentObject.applicationDate || currentObject.isApplicable),
           sourceObjectApplicationDateMandatory: !!currentObject.applicationDateConfig?.mandatory,
+          sourceObjectApplicationDateRequirementMode: currentObject.applicationDateConfig?.requirementMode ?? 'day',
           sourceThemeId: currentThemeId,
           sourceThemeName: currentTheme?.name ?? currentThemeId,
           sourceObjectId: currentObjectId,
@@ -590,6 +683,7 @@ export function AttributeSelector() {
         smartSel: !!attr.magicSel,
         sourceObjectSupportsApplicable: !!(obj.applicationDate || obj.isApplicable),
         sourceObjectApplicationDateMandatory: !!obj.applicationDateConfig?.mandatory,
+        sourceObjectApplicationDateRequirementMode: obj.applicationDateConfig?.requirementMode ?? 'day',
         sourceThemeId: theme.id,
         sourceThemeName: theme.name,
         sourceObjectId: obj.id,
@@ -640,6 +734,7 @@ export function AttributeSelector() {
     const defaultAttributes = objectAttributes.filter((attr) => !!attr.autoSmartSel);
     const mainObjectSupportsApplicable = !!(obj.applicationDate || obj.isApplicable);
     const mainObjectApplicationDateMandatory = !!obj.applicationDateConfig?.mandatory;
+    const nextTemporalMode = obj.applicationDateConfig?.requirementMode === 'period' ? 'period' : 'day';
 
     const autoInserted = defaultAttributes.map((attr) =>
       buildSelectedAttribute({
@@ -665,6 +760,7 @@ export function AttributeSelector() {
       objectId,
       objectName,
     });
+    setReportTemporalContext(createDefaultTemporalContext(nextTemporalMode));
     setMainObjectConfig(
       mainObjectSupportsApplicable
         ? (mainObjectApplicationDateMandatory
@@ -947,6 +1043,7 @@ export function AttributeSelector() {
       cardinality,
       mode,
       isApplicable,
+      applicationDateRequirementMode: obj?.applicationDateConfig?.requirementMode ?? 'day',
       smartObjects: obj?.smartObjects,
       navigationPath,
       directMagicOnly: mode === 'aggregation',
@@ -1095,12 +1192,17 @@ export function AttributeSelector() {
       }
 
       if (isMainObjectSelection && pendingMainObject) {
+        const pendingTheme = dataStructure.find((theme) => theme.id === pendingMainObject.themeId);
+        const pendingObject = pendingTheme?.objects.find((obj) => obj.id === pendingMainObject.objectId);
         setMainObject({
           themeId: pendingMainObject.themeId,
           themeName: pendingMainObject.themeName,
           objectId: pendingMainObject.objectId,
           objectName: pendingMainObject.objectName,
         });
+        setReportTemporalContext(createDefaultTemporalContext(
+          pendingObject?.applicationDateConfig?.requirementMode === 'period' ? 'period' : 'day'
+        ));
         setMainObjectConfig(config);
         setSelectingMainObject(false);
         setPendingMainObject(null);
@@ -1169,12 +1271,17 @@ export function AttributeSelector() {
 
     if (newAttributes.length > 0) {
       if (isMainObjectSelection && pendingMainObject) {
+        const pendingTheme = dataStructure.find((theme) => theme.id === pendingMainObject.themeId);
+        const pendingObject = pendingTheme?.objects.find((obj) => obj.id === pendingMainObject.objectId);
         setMainObject({
           themeId: pendingMainObject.themeId,
           themeName: pendingMainObject.themeName,
           objectId: pendingMainObject.objectId,
           objectName: pendingMainObject.objectName,
         });
+        setReportTemporalContext(createDefaultTemporalContext(
+          pendingObject?.applicationDateConfig?.requirementMode === 'period' ? 'period' : 'day'
+        ));
         setMainObjectConfig(config);
         setSelectingMainObject(false);
         setPendingMainObject(null);
@@ -1232,6 +1339,7 @@ export function AttributeSelector() {
 
   const handleEditDateReference = (id: string) => {
     const currentAttr = selectedAttributes.find((attr) => attr.id === id);
+    if (currentAttr?.applicationDateConfig?.requirementMode === 'period') return;
     setEditingAttributeId(id);
     setEditingObjectInstanceKey(currentAttr ? getObjectInstanceKey(currentAttr) : null);
     setDateReferenceDialogOpen(true);
@@ -1315,6 +1423,7 @@ export function AttributeSelector() {
       cardinality: attr.navigationPath?.[attr.navigationPath.length - 1]?.cardinalityName || '1',
       mode: 'operation',
       isApplicable: attr.isApplicable,
+      applicationDateRequirementMode: attr.applicationDateConfig?.requirementMode ?? 'day',
       navigationPath: attr.navigationPath,
     });
     setObjectInsertionDialogOpen(true);
@@ -1408,15 +1517,12 @@ export function AttributeSelector() {
   };
 
   const handleChangeReportType = () => {
-    if (!window.confirm('Changer le type du rapport ? Toutes les colonnes seront réinitialisées.')) {
-      return;
-    }
-
     setSelectedAttributes([]);
     setGlobalFilterGroups(undefined);
     setGlobalFilterDialogOpen(false);
     setGroupedColumnIds([]);
     setPendingGroupColumnId('');
+    setDisplayAsColumnsAttributeId('');
     setSelectingMainObject(true);
     setMainObject(null);
     setMainObjectConfig(null);
@@ -1425,10 +1531,13 @@ export function AttributeSelector() {
     setObjectInsertionDialogOpen(false);
     setSortColumnIds([]);
     setPendingSortColumnId('');
-    setReportDate(getTodayIsoDate());
+    setReportPreviewColumns([]);
+    setReportPreviewRows([]);
+    setReportTemporalContext(createDefaultTemporalContext());
     setIncludeDepartedCollaborators(false);
     setIncludePresentCollaborators(true);
-    setIncludeFutureCollaborators(false);
+    setIncludeFutureNewCollaborators(false);
+    setIncludeFutureReturnCollaborators(false);
     setSelectedDepartmentFilters([]);
     setSelectedEstablishmentFilters([]);
     setCollaboratorStatusFilterExpanded(false);
@@ -1444,8 +1553,11 @@ export function AttributeSelector() {
     setGlobalFilterDialogOpen(false);
     setGroupedColumnIds([]);
     setPendingGroupColumnId('');
+    setDisplayAsColumnsAttributeId('');
     setSortColumnIds([]);
     setPendingSortColumnId('');
+    setReportPreviewColumns([]);
+    setReportPreviewRows([]);
   };
 
   useEffect(() => {
@@ -1457,16 +1569,24 @@ export function AttributeSelector() {
         .filter((id) => selectedIds.has(id))
         .sort((a, b) => (selectedOrder.get(a) ?? 0) - (selectedOrder.get(b) ?? 0))
     );
+    setDisplayAsColumnsAttributeId((prev) => (prev && !selectedIds.has(prev) ? '' : prev));
     setPendingGroupColumnId((prev) => (prev && !selectedIds.has(prev) ? '' : prev));
     setSortColumnIds((prev) => prev.filter((id) => selectedIds.has(id) && !groupedIdSet.has(id)));
     setPendingSortColumnId((prev) => (prev && !selectedIds.has(prev) ? '' : prev));
   }, [selectedAttributes]);
+
+  useEffect(() => {
+    if (!showDisplayAsColumns) {
+      setDisplayAsColumnsAttributeId('');
+    }
+  }, [showDisplayAsColumns]);
 
   const openPrototypeConfig = () => {
     setDraftShowCompartmenting(showCompartmenting);
     setDraftShowConditionalColumns(showConditionalColumns);
     setDraftShowCalculatedColumns(showCalculatedColumns);
     setDraftShowColumnRename(showColumnRename);
+    setDraftShowDisplayAsColumns(showDisplayAsColumns);
     setDraftShowLinkedObjectCardinalities(showLinkedObjectCardinalities);
     setDraftShowSelectAllButton(showSelectAllButton);
     setPrototypeConfigOpen(true);
@@ -1477,9 +1597,18 @@ export function AttributeSelector() {
     setShowConditionalColumns(draftShowConditionalColumns);
     setShowCalculatedColumns(draftShowCalculatedColumns);
     setShowColumnRename(draftShowColumnRename);
+    setShowDisplayAsColumns(draftShowDisplayAsColumns);
     setShowLinkedObjectCardinalities(draftShowLinkedObjectCardinalities);
     setShowSelectAllButton(draftShowSelectAllButton);
     setPrototypeConfigOpen(false);
+  };
+
+  const toggleAvailableGroupCollapsed = (groupKey: string) => {
+    setCollapsedAvailableGroupKeys((prev) =>
+      prev.includes(groupKey)
+        ? prev.filter((key) => key !== groupKey)
+        : [...prev, groupKey]
+    );
   };
 
   const getDateAttributeName = (attributeId: string): string => {
@@ -1568,12 +1697,27 @@ export function AttributeSelector() {
 
     return [
       ...selectedFilterAttributes,
-      {
-        id: STATUS_DATE_REFERENCE_ATTRIBUTE_ID,
-        name: STATUS_DATE_REFERENCE_ATTRIBUTE_LABEL,
-        columnName: STATUS_DATE_REFERENCE_ATTRIBUTE_LABEL,
-        type: 'date' as const,
-      },
+      ...(mainObjectTemporalMode === 'period'
+        ? [
+            {
+              id: REPORT_PERIOD_START_ATTRIBUTE_ID,
+              name: REPORT_PERIOD_START_ATTRIBUTE_LABEL,
+              columnName: REPORT_PERIOD_START_ATTRIBUTE_LABEL,
+              type: 'date' as const,
+            },
+            {
+              id: REPORT_PERIOD_END_ATTRIBUTE_ID,
+              name: REPORT_PERIOD_END_ATTRIBUTE_LABEL,
+              columnName: REPORT_PERIOD_END_ATTRIBUTE_LABEL,
+              type: 'date' as const,
+            },
+          ]
+        : [{
+            id: STATUS_DATE_REFERENCE_ATTRIBUTE_ID,
+            name: STATUS_DATE_REFERENCE_ATTRIBUTE_LABEL,
+            columnName: STATUS_DATE_REFERENCE_ATTRIBUTE_LABEL,
+            type: 'date' as const,
+          }]),
     ];
   };
 
@@ -1604,6 +1748,7 @@ export function AttributeSelector() {
     new Set(
       [
         ...sortColumnIds,
+        ...(displayAsColumnsAttributeId ? [displayAsColumnsAttributeId] : []),
         ...selectedAttributes
           .flatMap((attr) => [attr.sortAttributeId].filter((value): value is string => !!value)),
       ]
@@ -1672,24 +1817,30 @@ export function AttributeSelector() {
   };
 
   const getCollaboratorStatusFilterLines = () => {
-    const formattedDate = getFormattedReportDate(reportDate);
+    const formattedDate = getFormattedReportDate(collaboratorStatusReferenceDate);
     const lines: string[] = [];
 
     if (includeDepartedCollaborators) {
       lines.push(
-        `Partis: collaborateurs ayant un contrat avec Date fin <= ${formattedDate} et n'ayant aucun contrat avec Date début >= ${formattedDate}.`
+        `Partis: collaborateurs ayant un poste avec Date fin <= ${formattedDate} et n'ayant aucun poste avec Date début >= ${formattedDate}.`
       );
     }
 
     if (includePresentCollaborators) {
       lines.push(
-        `Présents: collaborateurs ayant un contrat avec Date début <= ${formattedDate} et (Date fin >= ${formattedDate} ou Date fin vide).`
+        `Présents: collaborateurs ayant un poste avec Date début <= ${formattedDate} et (Date fin >= ${formattedDate} ou Date fin vide).`
       );
     }
 
-    if (includeFutureCollaborators) {
+    if (includeFutureNewCollaborators) {
       lines.push(
-        `Futurs: collaborateurs ayant un contrat avec Date début >= ${formattedDate} et n'ayant aucun contrat avec Date fin <= ${formattedDate}.`
+        `Nouveaux: collaborateurs ayant un poste futur (Date début > ${formattedDate}) sans poste passé (Date fin < ${formattedDate}).`
+      );
+    }
+
+    if (includeFutureReturnCollaborators) {
+      lines.push(
+        `Retours: collaborateurs ayant un poste futur (Date début > ${formattedDate}) et aussi un poste passé (Date fin < ${formattedDate}), sans poste présent à la date ${formattedDate}.`
       );
     }
 
@@ -1792,6 +1943,19 @@ export function AttributeSelector() {
     });
 
     setGroupedColumnIds(nextGrouped);
+  };
+
+  const handleDisplayAsColumnsSelect = (attributeId: string) => {
+    if (!attributeId) {
+      setDisplayAsColumnsAttributeId('');
+      return;
+    }
+
+    setDisplayAsColumnsAttributeId(attributeId);
+    setGroupedColumnIds((prev) => prev.filter((id) => id !== attributeId));
+    setSortColumnIds((prev) => prev.filter((id) => id !== attributeId));
+    setPendingGroupColumnId((prev) => (prev === attributeId ? '' : prev));
+    setPendingSortColumnId((prev) => (prev === attributeId ? '' : prev));
   };
 
   const handleSortColumnSelect = (attributeId: string) => {
@@ -1918,6 +2082,7 @@ export function AttributeSelector() {
         isSelectable,
         objectSupportsApplicable: !!(found.obj.applicationDate || found.obj.isApplicable),
         objectApplicationDateMandatory: !!found.obj.applicationDateConfig?.mandatory,
+        objectApplicationDateRequirementMode: found.obj.applicationDateConfig?.requirementMode ?? 'day',
       });
 
       if (!isSelectable) return;
@@ -2118,10 +2283,11 @@ export function AttributeSelector() {
   const deselectAllSelectedAttributes = () => {
     setSelectedAttributes([]);
     setGlobalFilterGroups(undefined);
-    setReportDate(getTodayIsoDate());
+    setReportTemporalContext(createDefaultTemporalContext(mainObjectTemporalMode));
     setIncludeDepartedCollaborators(false);
     setIncludePresentCollaborators(true);
-    setIncludeFutureCollaborators(false);
+    setIncludeFutureNewCollaborators(false);
+    setIncludeFutureReturnCollaborators(false);
     setSelectedDepartmentFilters([]);
     setSelectedEstablishmentFilters([]);
   };
@@ -2159,6 +2325,7 @@ export function AttributeSelector() {
       mode: preset === 'aggregation' ? 'aggregation' : preset === 'applicable' ? 'special' : 'operation',
       isApplicable: group.objectSupportsApplicable,
       applicationDateMandatory: group.objectApplicationDateMandatory,
+      applicationDateRequirementMode: group.objectApplicationDateRequirementMode ?? 'day',
       smartObjects: obj.smartObjects,
       navigationPath: group.navigationPath,
       initialConfig,
@@ -2198,12 +2365,14 @@ export function AttributeSelector() {
   const groupableSelectedAttributes = getGroupableSelectedAttributes();
   const groupableById = new Map(groupableSelectedAttributes.map((attr) => [attr.id, attr] as const));
   const availableGroupPickers = groupableSelectedAttributes
-    .filter((attr) => !groupedColumnIds.includes(attr.id))
+    .filter((attr) => !groupedColumnIds.includes(attr.id) && attr.id !== displayAsColumnsAttributeId)
     .sort(compareSelectedAttributesByAttributeThenContext);
   const sortableSelectedAttributes = getSortableSelectedAttributes();
   const sortableById = new Map(sortableSelectedAttributes.map((attr) => [attr.id, attr] as const));
   const availableSortPickers = sortableSelectedAttributes
-    .filter((attr) => !sortColumnIds.includes(attr.id) && !groupedColumnIds.includes(attr.id))
+    .filter((attr) => !sortColumnIds.includes(attr.id) && !groupedColumnIds.includes(attr.id) && attr.id !== displayAsColumnsAttributeId)
+    .sort(compareSelectedAttributesByAttributeThenContext);
+  const displayAsColumnsPickers = groupableSelectedAttributes
     .sort(compareSelectedAttributesByAttributeThenContext);
   const mainObjectLinkedToCollaborateur = !!(
     !selectingMainObject
@@ -2213,7 +2382,8 @@ export function AttributeSelector() {
   const activeCollaboratorStatusLabels = [
     includeDepartedCollaborators ? 'partis' : null,
     includePresentCollaborators ? 'présents' : null,
-    includeFutureCollaborators ? 'futurs' : null,
+    includeFutureNewCollaborators ? 'nouveaux' : null,
+    includeFutureReturnCollaborators ? 'retours' : null,
   ].filter((label): label is string => label !== null);
   const activeCollaboratorStatusSummary =
     activeCollaboratorStatusLabels.length === 0
@@ -2240,7 +2410,7 @@ export function AttributeSelector() {
     () => Array.from(new Set(flattenDepartmentTree(departmentTree))).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }),),
     [departmentTree]
   );
-  const reportPreviewColumns = selectedAttributes.map((attr) => ({
+  const reportPreviewSourceColumns = selectedAttributes.map((attr) => ({
     id: attr.id,
     label: getSelectedAttributeDisplayName(attr),
     attributeType: attr.attributeType,
@@ -2249,24 +2419,36 @@ export function AttributeSelector() {
   }));
 
   const refreshReportPreview = () => {
-    const rows = generateReportPreviewRows({
-      columns: reportPreviewColumns,
+    if (!validateReportTemporalContext()) {
+      return false;
+    }
+
+    const preview = generateReportPreviewRows({
+      columns: reportPreviewSourceColumns,
       rowCount: 20,
-      reportDate,
+      temporalContext: {
+        mode: mainObjectTemporalMode,
+        reportDate,
+        periodStartDate: reportPeriodStartDate,
+        periodEndDate: reportPeriodEndDate,
+      },
       globalFilterGroups,
       collaboratorFilterEnabled: mainObjectLinkedToCollaborateur,
       includeDepartedCollaborators,
       includePresentCollaborators,
-      includeFutureCollaborators,
+      includeFutureNewCollaborators,
+      includeFutureReturnCollaborators,
       selectedDepartmentFilters,
       selectedEstablishmentFilters,
       departmentUniverse: departmentFilterOptions,
       establishmentUniverse: establishmentOptions,
       sortColumnIds,
       groupedColumnIds,
+      displayAsColumnsAttributeId: showDisplayAsColumns ? (displayAsColumnsAttributeId || undefined) : undefined,
     });
 
-    setReportPreviewRows(rows);
+    setReportPreviewColumns(preview.columns);
+    setReportPreviewRows(preview.rows);
     const now = new Date();
     const formattedDate = [
       String(now.getDate()).padStart(2, '0'),
@@ -2275,6 +2457,7 @@ export function AttributeSelector() {
     ].join('/');
     const formattedTime = `${String(now.getHours()).padStart(2, '0')}h${String(now.getMinutes()).padStart(2, '0')}`;
     setReportPreviewLastUpdatedAt(`Actualisé le ${formattedDate} à ${formattedTime}`);
+    return true;
   };
 
   return (
@@ -2357,21 +2540,30 @@ export function AttributeSelector() {
           <ReportResultDrawer
             onBackToConfiguration={() => setReportResultOpen(false)}
             mainObjectName={mainObject?.objectName ?? 'Rapport'}
-            columns={reportPreviewColumns.map((column) => ({ id: column.id, label: column.label }))}
+            columns={reportPreviewColumns}
             rows={reportPreviewRows}
             mainObjectLinkedToCollaborateur={mainObjectLinkedToCollaborateur}
-            reportDate={reportDate}
+            temporalContext={{
+              mode: mainObjectTemporalMode,
+              reportDate,
+              periodStartDate: reportPeriodStartDate,
+              periodEndDate: reportPeriodEndDate,
+            }}
             includeDepartedCollaborators={includeDepartedCollaborators}
             includePresentCollaborators={includePresentCollaborators}
-            includeFutureCollaborators={includeFutureCollaborators}
+            includeFutureNewCollaborators={includeFutureNewCollaborators}
+            includeFutureReturnCollaborators={includeFutureReturnCollaborators}
             selectedDepartmentFilters={selectedDepartmentFilters}
             selectedEstablishmentFilters={selectedEstablishmentFilters}
             departmentTree={departmentTree}
             establishmentOptions={establishmentOptions}
             onReportDateChange={setReportDate}
+            onReportPeriodStartChange={setReportPeriodStartDate}
+            onReportPeriodEndChange={setReportPeriodEndDate}
             onIncludeDepartedChange={setIncludeDepartedCollaborators}
             onIncludePresentChange={setIncludePresentCollaborators}
-            onIncludeFutureChange={setIncludeFutureCollaborators}
+            onIncludeFutureNewChange={setIncludeFutureNewCollaborators}
+            onIncludeFutureReturnChange={setIncludeFutureReturnCollaborators}
             onSelectedDepartmentsChange={setSelectedDepartmentFilters}
             onSelectedEstablishmentsChange={setSelectedEstablishmentFilters}
             globalFilterSummaryLines={getGlobalFilterGroupLines()}
@@ -2380,7 +2572,7 @@ export function AttributeSelector() {
             }
             collaboratorStatusSummaryLabel={
               mainObjectLinkedToCollaborateur
-                ? `${activeCollaboratorStatusSummary} · ${collaboratorOrgFilterSummaryLabel} · ${getFormattedReportDate(reportDate)}`
+                ? `${activeCollaboratorStatusSummary} · ${collaboratorOrgFilterSummaryLabel} · ${getFormattedTemporalContext()}`
                 : 'Non applicable'
             }
             onEditGlobalFilters={() => setGlobalFilterDialogOpen(true)}
@@ -2422,18 +2614,29 @@ export function AttributeSelector() {
                 </div>
 
                 <div className="space-y-3 p-4">
-                  {filteredMainObjectStage2Groups.map((group) => (
+                  {filteredMainObjectStage2Groups.map((group) => {
+                    const isCollapsed = collapsedAvailableGroupKeys.includes(group.key);
+
+                    return (
                     <div key={group.key} className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
                       <div className="mb-3 flex items-center justify-between gap-3">
                         <div>
-                          <h3 className="flex items-center gap-1 text-sm font-semibold text-gray-900">
-                            <span>
-                              {group.label !== group.objectName
-                                ? `${group.label} (${group.objectName})`
-                                : group.label}
-                            </span>
+                          <div className="flex items-center gap-1 text-sm font-semibold text-gray-900">
+                            <button
+                              type="button"
+                              onClick={() => toggleAvailableGroupCollapsed(group.key)}
+                              className="flex items-center gap-1 rounded px-1 py-0.5 text-left hover:bg-gray-100"
+                              title={isCollapsed ? 'Déplier cet objet' : 'Replier cet objet'}
+                            >
+                              <span>
+                                {group.label !== group.objectName
+                                  ? `${group.label} (${group.objectName})`
+                                  : group.label}
+                              </span>
+                              <span className="text-[10px] text-gray-500">{isCollapsed ? '>' : 'v'}</span>
+                            </button>
                             <InfoHint text={group.tooltip} />
-                          </h3>
+                          </div>
                           {showLinkedObjectCardinalities && group.navigationPath.length > 0 && (
                             <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600">
                               {group.navigationPath.length === 1
@@ -2443,7 +2646,7 @@ export function AttributeSelector() {
                             </span>
                           )}
                         </div>
-                        {group.isSelectable ? (
+                        {!isCollapsed && group.isSelectable ? (
                           <div className="flex items-center gap-1 text-[10px] text-gray-400">
                             <button
                               onClick={() => applyMainObjectQuickSelection('smart', group.attributes)}
@@ -2466,12 +2669,12 @@ export function AttributeSelector() {
                               aucun
                             </button>
                           </div>
-                        ) : (
+                        ) : !isCollapsed ? (
                           <div className="text-xs text-gray-500">Relation multiple</div>
-                        )}
+                        ) : null}
                       </div>
 
-                      {group.isSelectable ? (
+                      {!isCollapsed && group.isSelectable ? (
                         <div className="space-y-2">
                           {group.attributes.map((attr) => {
                             const checked = mainObjectSelectedAttributeIds.has(attr.id);
@@ -2498,7 +2701,7 @@ export function AttributeSelector() {
                             );
                           })}
                         </div>
-                      ) : (
+                      ) : !isCollapsed ? (
                         <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                           <div className="mb-2">
                             {group.objectSupportsApplicable && group.objectApplicationDateMandatory
@@ -2534,9 +2737,9 @@ export function AttributeSelector() {
                             )}
                           </div>
                         </div>
-                      )}
+                      ) : null}
                     </div>
-                  ))}
+                  )})}
 
                   {filteredMainObjectStage2Groups.length === 0 && (
                     <div className="rounded border bg-white px-3 py-2 text-sm text-gray-500">
@@ -2585,6 +2788,7 @@ export function AttributeSelector() {
                   showColumnRename={showColumnRename}
                   filterInvolvedAttributeIds={globalFilterInvolvedAttributeIds}
                   sortInvolvedAttributeIds={globalSortInvolvedAttributeIds}
+                  displayAsColumnsAttributeId={displayAsColumnsAttributeId}
                 />
               </div>
             </div>
@@ -2600,7 +2804,49 @@ export function AttributeSelector() {
                 <div className="space-y-3">
                   <div className="rounded border border-gray-200 bg-white p-2 text-xs text-gray-800">
                     <div className="mb-1 text-[11px] font-medium leading-none text-gray-700">Filtrage</div>
-                    <div className={`mb-2 rounded border border-orange-200 bg-orange-50 ${!mainObjectLinkedToCollaborateur ? 'opacity-60' : ''}`}>
+                    {mainObjectLinkedToCollaborateur && (
+                    <div className="mb-2 rounded border border-orange-200 bg-orange-50">
+                      <div className="border-b border-orange-200 px-2 py-2 text-[11px] text-orange-900">
+                        <div className="mb-2 font-medium">Contexte temporel du rapport</div>
+                        {mainObjectTemporalMode === 'period' ? (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <label className="font-medium text-orange-900" htmlFor="report-period-start">
+                              Début de période
+                            </label>
+                            <input
+                              id="report-period-start"
+                              type="date"
+                              value={reportPeriodStartDate}
+                              onChange={(event) => setReportPeriodStartDate(event.target.value)}
+                              className="rounded border border-orange-300 bg-white px-2 py-1 text-[11px] text-orange-900"
+                            />
+                            <label className="font-medium text-orange-900" htmlFor="report-period-end">
+                              Fin de période
+                            </label>
+                            <input
+                              id="report-period-end"
+                              type="date"
+                              value={reportPeriodEndDate}
+                              onChange={(event) => setReportPeriodEndDate(event.target.value)}
+                              className="rounded border border-orange-300 bg-white px-2 py-1 text-[11px] text-orange-900"
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <label className="text-[11px] font-medium text-orange-900" htmlFor="report-date">
+                              Date de valeur du rapport
+                            </label>
+                            <input
+                              id="report-date"
+                              type="date"
+                              value={reportDate}
+                              onChange={(event) => setReportDate(event.target.value)}
+                              className="rounded border border-orange-300 bg-white px-2 py-1 text-[11px] text-orange-900"
+                            />
+                          </div>
+                        )}
+                      </div>
+
                       <button
                         type="button"
                         onClick={() => setCollaboratorStatusFilterExpanded((prev) => !prev)}
@@ -2611,41 +2857,18 @@ export function AttributeSelector() {
                           <span>Statuts collaborateurs</span>
                         </span>
                         <span>
-                          {mainObjectLinkedToCollaborateur
-                            ? `${activeCollaboratorStatusSummary} · ${collaboratorOrgFilterSummaryLabel} · ${getFormattedReportDate(reportDate)}`
-                            : 'Non applicable'}
+                          {`${activeCollaboratorStatusSummary} · ${collaboratorOrgFilterSummaryLabel} · ${getFormattedTemporalContext()}`}
                         </span>
                       </button>
 
                       {collaboratorStatusFilterExpanded && (
                         <div className="space-y-2 border-t border-orange-200 px-2 py-2">
-                          {!mainObjectLinkedToCollaborateur && (
-                            <div className="text-[11px] text-orange-900">
-                              Aucun lien (même indirect) avec Collaborateur depuis l'objet principal.
-                            </div>
-                          )}
-
-                          <div className="flex flex-wrap items-center gap-2">
-                            <label className="text-[11px] font-medium text-orange-900" htmlFor="report-date">
-                              Date de valeur du rapport
-                            </label>
-                            <input
-                              id="report-date"
-                              type="date"
-                              value={reportDate}
-                              onChange={(event) => setReportDate(event.target.value)}
-                              disabled={!mainObjectLinkedToCollaborateur}
-                              className="rounded border border-orange-300 bg-white px-2 py-1 text-[11px] text-orange-900"
-                            />
-                          </div>
-
                           <div className="flex flex-wrap gap-3 text-[11px] text-orange-900">
                             <label className="flex items-center gap-1">
                               <input
                                 type="checkbox"
                                 checked={includeDepartedCollaborators}
                                 onChange={(event) => setIncludeDepartedCollaborators(event.target.checked)}
-                                disabled={!mainObjectLinkedToCollaborateur}
                               />
                               partis
                             </label>
@@ -2654,18 +2877,24 @@ export function AttributeSelector() {
                                 type="checkbox"
                                 checked={includePresentCollaborators}
                                 onChange={(event) => setIncludePresentCollaborators(event.target.checked)}
-                                disabled={!mainObjectLinkedToCollaborateur}
                               />
                               présents
                             </label>
                             <label className="flex items-center gap-1">
                               <input
                                 type="checkbox"
-                                checked={includeFutureCollaborators}
-                                onChange={(event) => setIncludeFutureCollaborators(event.target.checked)}
-                                disabled={!mainObjectLinkedToCollaborateur}
+                                checked={includeFutureNewCollaborators}
+                                onChange={(event) => setIncludeFutureNewCollaborators(event.target.checked)}
                               />
-                              futurs
+                              nouveaux
+                            </label>
+                            <label className="flex items-center gap-1">
+                              <input
+                                type="checkbox"
+                                checked={includeFutureReturnCollaborators}
+                                onChange={(event) => setIncludeFutureReturnCollaborators(event.target.checked)}
+                              />
+                              retours
                             </label>
                           </div>
 
@@ -2682,7 +2911,7 @@ export function AttributeSelector() {
                                         key={rootNode.name}
                                         node={rootNode}
                                         level={0}
-                                        disabled={!mainObjectLinkedToCollaborateur}
+                                        disabled={false}
                                         selectedDepartmentFilters={selectedDepartmentFilters}
                                         onToggle={toggleDepartmentBranch}
                                       />
@@ -2709,7 +2938,6 @@ export function AttributeSelector() {
                                           <input
                                             type="checkbox"
                                             checked={isChecked}
-                                            disabled={!mainObjectLinkedToCollaborateur}
                                             onChange={(event) => {
                                               const shouldCheck = event.target.checked;
                                               setSelectedEstablishmentFilters((prev) => {
@@ -2744,6 +2972,7 @@ export function AttributeSelector() {
                         </div>
                       )}
                     </div>
+                    )}
 
                     <button
                       onClick={() => setGlobalFilterDialogOpen(true)}
@@ -2860,6 +3089,26 @@ export function AttributeSelector() {
                       </div>
                     )}
                   </div>
+
+                  {showDisplayAsColumns && (
+                    <div className="rounded border border-gray-200 bg-white p-2 text-xs text-gray-800">
+                      <div className="mb-2 flex flex-col items-start gap-2">
+                        <div className="text-[11px] font-medium leading-none text-gray-700">Afficher en colonnes</div>
+                        <select
+                          value={displayAsColumnsAttributeId}
+                          onChange={(event) => handleDisplayAsColumnsSelect(event.target.value)}
+                          className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs"
+                        >
+                          <option value="">Aucune colonne dynamique</option>
+                          {displayAsColumnsPickers.map((attr) => (
+                            <option key={attr.id} value={attr.id}>
+                              {getSelectedAttributeDisplayName(attr)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -2884,6 +3133,7 @@ export function AttributeSelector() {
           cardinality={pendingObjectInsertion.cardinality}
           objectSupportsApplicable={!!pendingObjectInsertion.isApplicable}
           objectApplicationDateMandatory={!!pendingObjectInsertion.applicationDateMandatory}
+          objectApplicationDateRequirementMode={pendingObjectInsertion.applicationDateRequirementMode ?? 'day'}
           availableAttributes={getInsertionAvailableAttributes(pendingObjectInsertion)}
           smartObjects={pendingObjectInsertion.smartObjects}
           availableDateAttributes={getAvailableDateAttributes().map((attr) => ({
@@ -2942,6 +3192,7 @@ export function AttributeSelector() {
               objectName={editingAttribute.objectName}
               currentDateReference={editingAttribute.dateReference}
               availableDateAttributes={getAvailableDateAttributes()}
+              forceReportValueDateOnly={editingAttribute.applicationDateConfig?.requirementMode === 'period'}
               onConfirm={handleDateReferenceConfirm}
             />
           )}
@@ -3054,19 +3305,29 @@ export function AttributeSelector() {
                   <button
                     className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
                     onClick={() => {
-                      refreshReportPreview();
+                      const refreshed = refreshReportPreview();
+                      if (!refreshed) {
+                        return;
+                      }
                       setReportResultOpen(true);
                       console.log('Report payload:', {
                         selectedAttributes,
                         groupedColumnIds,
                         sortColumnIds,
                         globalFilterGroups,
+                        temporalContext: {
+                          mode: mainObjectTemporalMode,
+                          reportDate,
+                          periodStartDate: reportPeriodStartDate,
+                          periodEndDate: reportPeriodEndDate,
+                        },
                         collaboratorStatusFilter: {
                           enabled: mainObjectLinkedToCollaborateur,
-                          reportDate,
+                          reportDate: collaboratorStatusReferenceDate,
                           includeDepartedCollaborators,
                           includePresentCollaborators,
-                          includeFutureCollaborators,
+                          includeFutureNewCollaborators,
+                          includeFutureReturnCollaborators,
                           selectedDepartmentFilters,
                           selectedEstablishmentFilters,
                           generatedLines: mainObjectLinkedToCollaborateur ? collaboratorGeneratedFilterLines : [],
@@ -3109,6 +3370,11 @@ export function AttributeSelector() {
                   label: 'Renommage colonnes',
                   enabled: draftShowColumnRename,
                   setEnabled: setDraftShowColumnRename,
+                },
+                {
+                  label: 'Afficher en colonnes',
+                  enabled: draftShowDisplayAsColumns,
+                  setEnabled: setDraftShowDisplayAsColumns,
                 },
                 {
                   label: 'Afficher les cardinalités',

@@ -25,6 +25,7 @@ interface ObjectInsertionDialogProps {
   cardinality: string;
   objectSupportsApplicable?: boolean;
   objectApplicationDateMandatory?: boolean;
+  objectApplicationDateRequirementMode?: 'day' | 'period';
   availableAttributes: Array<{
     id: string;
     name: string;
@@ -81,6 +82,7 @@ export function ObjectInsertionDialog({
   cardinality,
   objectSupportsApplicable = false,
   objectApplicationDateMandatory = false,
+  objectApplicationDateRequirementMode = 'day',
   availableAttributes,
   smartObjects = [],
   availableDateAttributes,
@@ -90,6 +92,7 @@ export function ObjectInsertionDialog({
 }: ObjectInsertionDialogProps) {
   const mode: ObjectInsertionMode = initialMode;
   const shouldForceApplicableDate = objectSupportsApplicable && objectApplicationDateMandatory;
+  const shouldForceReportValueDateOnly = objectSupportsApplicable && objectApplicationDateRequirementMode === 'period';
   const [selectedAttributeIds, setSelectedAttributeIds] = useState<string[]>(
     availableAttributes.filter((attr) => !!attr.smartSel).map((attr) => attr.id)
   );
@@ -517,6 +520,16 @@ export function ObjectInsertionDialog({
     }
 
     if (specialType === 'applicable') {
+      if (shouldForceReportValueDateOnly) {
+        onConfirm({
+          insertionType: 'applicable',
+          selectedAttributeIds,
+          dateReference: { type: 'today' },
+        });
+        onClose();
+        return;
+      }
+
       if (referenceType === 'custom' && !customDate) {
         alert('Veuillez sélectionner une date cible');
         return;
@@ -984,70 +997,78 @@ export function ObjectInsertionDialog({
               {specialType === 'applicable' && objectSupportsApplicable && (
                 <div className="space-y-2">
                   <label className="mb-1 block text-sm font-medium text-gray-700">Date cible</label>
-                  <label className="flex items-center gap-2 text-sm text-gray-700">
-                    <input
-                      type="radio"
-                      name="referenceType"
-                      value="today"
-                      checked={referenceType === 'today'}
-                      onChange={() => setReferenceType('today')}
-                      className="size-4"
-                    />
-                    <span>Date de valeur du rapport</span>
-                  </label>
-                  <label className="flex items-center gap-2 text-sm text-gray-700">
-                    <input
-                      type="radio"
-                      name="referenceType"
-                      value="custom"
-                      checked={referenceType === 'custom'}
-                      onChange={() => setReferenceType('custom')}
-                      className="size-4"
-                    />
-                    <span>Date personnalisée</span>
-                  </label>
-                  {referenceType === 'custom' && (
-                    <input
-                      type="date"
-                      value={customDate}
-                      onChange={(e) => setCustomDate(e.target.value)}
-                      className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-                    />
-                  )}
-
-                  <label className="flex items-start gap-2 text-sm text-gray-700">
-                    <input
-                      type="radio"
-                      name="referenceType"
-                      value="attribute"
-                      checked={referenceType === 'attribute'}
-                      onChange={() => setReferenceType('attribute')}
-                      className="mt-0.5 size-4"
-                      disabled={availableDateAttributes.length === 0}
-                    />
-                    <div className="flex-1">
-                      <span className={availableDateAttributes.length === 0 ? 'text-gray-400' : ''}>
-                        Date d'un attribut déjà sélectionné
-                      </span>
-                      {availableDateAttributes.length === 0 && (
-                        <p className="text-xs text-gray-500">Aucun attribut date sélectionné dans le rapport</p>
-                      )}
-                      {referenceType === 'attribute' && availableDateAttributes.length > 0 && (
-                        <select
-                          value={referenceAttributeId}
-                          onChange={(e) => setReferenceAttributeId(e.target.value)}
-                          className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
-                        >
-                          <option value="">Sélectionner un attribut date</option>
-                          {availableDateAttributes.map((attr) => (
-                            <option key={attr.id} value={attr.id}>
-                              {attr.name}
-                            </option>
-                          ))}
-                        </select>
-                      )}
+                  {shouldForceReportValueDateOnly ? (
+                    <div className="rounded border border-indigo-200 bg-indigo-100 px-3 py-2 text-sm text-indigo-800">
+                      Cet objet applicable est basé sur une période. La seule référence autorisée est la Date de valeur du rapport.
                     </div>
-                  </label>
+                  ) : (
+                    <>
+                      <label className="flex items-center gap-2 text-sm text-gray-700">
+                        <input
+                          type="radio"
+                          name="referenceType"
+                          value="today"
+                          checked={referenceType === 'today'}
+                          onChange={() => setReferenceType('today')}
+                          className="size-4"
+                        />
+                        <span>Date de valeur du rapport</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-gray-700">
+                        <input
+                          type="radio"
+                          name="referenceType"
+                          value="custom"
+                          checked={referenceType === 'custom'}
+                          onChange={() => setReferenceType('custom')}
+                          className="size-4"
+                        />
+                        <span>Date personnalisée</span>
+                      </label>
+                      {referenceType === 'custom' && (
+                        <input
+                          type="date"
+                          value={customDate}
+                          onChange={(e) => setCustomDate(e.target.value)}
+                          className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                        />
+                      )}
+
+                      <label className="flex items-start gap-2 text-sm text-gray-700">
+                        <input
+                          type="radio"
+                          name="referenceType"
+                          value="attribute"
+                          checked={referenceType === 'attribute'}
+                          onChange={() => setReferenceType('attribute')}
+                          className="mt-0.5 size-4"
+                          disabled={availableDateAttributes.length === 0}
+                        />
+                        <div className="flex-1">
+                          <span className={availableDateAttributes.length === 0 ? 'text-gray-400' : ''}>
+                            Date d'un attribut déjà sélectionné
+                          </span>
+                          {availableDateAttributes.length === 0 && (
+                            <p className="text-xs text-gray-500">Aucun attribut date sélectionné dans le rapport</p>
+                          )}
+                          {referenceType === 'attribute' && availableDateAttributes.length > 0 && (
+                            <select
+                              value={referenceAttributeId}
+                              onChange={(e) => setReferenceAttributeId(e.target.value)}
+                              className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                            >
+                              <option value="">Sélectionner un attribut date</option>
+                              {availableDateAttributes.map((attr) => (
+                                <option key={attr.id} value={attr.id}>
+                                  {attr.name}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      </label>
+                    </>
+                  )}
                 </div>
               )}
 

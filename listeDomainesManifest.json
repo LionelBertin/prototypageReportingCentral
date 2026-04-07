@@ -2081,7 +2081,8 @@
             "startAttributeId": "date-d-but",
             "endAttributeId": "date-fin",
             "mandatory": false,
-            "resultingSingleLine": true
+            "resultingSingleLine": true,
+            "requirementMode": "day"
           },
           "relations": [
             {
@@ -2180,7 +2181,8 @@
             "startAttributeId": "date-d-but",
             "endAttributeId": "date-fin",
             "mandatory": false,
-            "resultingSingleLine": true
+            "resultingSingleLine": true,
+            "requirementMode": "day"
           },
           "relations": [
             {
@@ -2303,11 +2305,11 @@
     },
     {
       "id": "les-absences",
-      "name": "Les absences",
+      "name": "Les congés",
       "objects": [
         {
           "id": "absences",
-          "name": "Absences",
+          "name": "Liste des absences",
           "relations": [
             {
               "targetObject": "Collaborateur",
@@ -2469,7 +2471,8 @@
           "name": "Solde de congés",
           "applicationDate": {
             "mandatory": true,
-            "resultingSingleLine": true
+            "resultingSingleLine": true,
+            "requirementMode": "day"
           },
           "relations": [
             {
@@ -2501,6 +2504,224 @@
               "dataType": "number"
             }
           ]
+        },{
+          "id":"evolution-des-soldes",
+          "name":"Évolution des soldes",
+          "applicationDate": {
+            "mandatory": true,
+            "resultingSingleLine": false,
+            "requirementMode": "period"
+          },
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "compte",
+              "name": "compte",
+              "magicSel": true,
+              "dataType": "string",
+              "enum": [
+                "RTT",
+                "CP",
+                "Congés exceptionnels",
+                "Autres"
+              ]
+            },
+            {
+              "id": "unite",
+              "name": "Unité",
+              "magicSel": true,
+              "dataType": "number"
+            },
+            {
+              "id": "acquis",
+              "name": "Acquis",
+              "magicSel": true,
+              "dataType": "number"
+            },
+            {
+              "id": "pris",
+              "name": "Pris",
+              "magicSel": true,
+              "dataType": "number"
+            }
+          ]
+        },
+        {
+          "id": "suivi-forfaits-jours",
+          "name": "Suivi forfaits jours",
+          "applicationDate": {
+            "mandatory": true,
+            "resultingSingleLine": true,
+            "requirementMode": "period"
+          },
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+            }
+          ],
+          "attributes": [
+            {
+              "id": "forfait-proratise",
+              "name": "Forfait proratisé",
+              "magicSel": true,
+              "dataType": "number",
+              "tooltip": "Forfait renseigné dans la règle d'acquisition au forfait du profil du collaborateur, au prorata calendaire."
+            },
+            {
+              "id": "anciennete-droit",
+              "name": "Ancienneté (droit)",
+              "magicSel": true,
+              "dataType": "number",
+              "tooltip": "Nombre de jours acquis sur la période par une ou plusieurs règles d'ancienneté."
+            },
+            {
+              "id": "absences-reduisant-le-nombre-de-jours-a-travailler",
+              "name": "Absences réduisant le nombre de jours à travailler",
+              "magicSel": true,
+              "dataType": "number",
+              "tooltip": "Nombre de jours ouvrés type arrêts maladie, congés légaux mariage, deuil, etc."
+            },
+            {
+              "id": "plafond-a-ne-pas-depasser",
+              "name": "Plafond à ne pas dépasser",
+              "magicSel": true,
+              "dataType": "number",
+              "tooltip": "Forfait proratisé - Ancienneté (droit) - Absences réduisant le nombre de jours à travailler."
+            },
+            {
+              "id": "temps-de-travail",
+              "name": "Temps de travail",
+              "magicSel": true,
+              "dataType": "number",
+              "tooltip": "Jours de travail saisis dans les feuilles de temps passées + estimation en fonction des absences posées dans le futur."
+            },
+            {
+              "id": "ecart",
+              "name": "Écart",
+              "magicSel": true,
+              "dataType": "number",
+              "tooltip": "Différence entre le temps de travail et le plafond à ne pas dépasser sur la période."
+            },
+            {
+              "id": "solde-d-absences-disponible",
+              "name": "Solde d'absences disponible",
+              "magicSel": true,
+              "dataType": "number",
+              "tooltip": "Solde à la fin de la période, tout compte confondu sauf ceux ciblés par une campagne de CET."
+            },
+            {
+              "id": "risque-de-depassement",
+              "name": "Risque de dépassement",
+              "magicSel": true,
+              "dataType": "booleen",
+              "tooltip": "Si le collaborateur pose l'intégralité de son solde d'absences disponible avant la fin de la période."
+            }
+          ]
+        },
+        {
+          "id": "statistiques-des-absences",
+          "name": "Statistiques des absences",
+          "applicationDate": {
+            "mandatory": true,
+            "resultingSingleLine": true,
+            "requirementMode": "period"
+          },
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+        }
+          ],
+          "attributes": [
+            {
+              "id": "taux-d-absenteisme",
+              "name": "Taux d'absentéisme",
+              "magicSel": true,
+              "dataType": "percentage",
+              "tooltip": "Comptabilise les absences issues des comptes identifiés comme de l'absentéisme dans les rapports."
+            },
+            {
+              "id": "taux-de-presence",
+              "name": "Taux de présence",
+              "magicSel": true,
+              "dataType": "percentage",
+              "tooltip": "Comptabilise les absences sélectionnées dans le paramétrage du rapport."
+            },
+            {
+              "id": "nombre-de-jours-travailles-reel",
+              "name": "Nombre de jours travaillés réel",
+              "magicSel": true,
+              "dataType": "number",
+              "tooltip": "Décompte les jours fériés, chômés, les absences, les déclarations de temps et d'activités."
+            },
+            {
+              "id": "nombre-de-jours-pris-absence-uniquement",
+              "name": "Nombre de jours pris (absence uniquement)",
+              "magicSel": true,
+              "dataType": "number",
+              "tooltip": "Comptabilise les absences issues des comptes identifiés comme \"Décompté comme une absence\"."
+            },
+            {
+              "id": "nombre-de-jours-travailles-theorique",
+              "name": "Nombre de jours travaillés théorique",
+              "magicSel": false,
+              "dataType": "number"
+            },
+            {
+              "id": "nombre-d-heures-d-absence",
+              "name": "Nombre d'heures d'absence",
+              "magicSel": false,
+              "dataType": "number"
+            },
+            {
+              "id": "nombre-de-jours-pris",
+              "name": "Nombre de jours pris",
+              "magicSel": false,
+              "dataType": "number"
+            },
+            {
+              "id": "nombre-d-heures-prises",
+              "name": "Nombre d'heures prises",
+              "magicSel": false,
+              "dataType": "number"
+            },
+            {
+              "id": "nombre-de-jours-d-absence-absenteisme",
+              "name": "Nombre de jours d'absence (absentéisme)",
+              "magicSel": false,
+              "dataType": "number"
+            },
+            {
+              "id": "nombre-de-jours-fiscaux",
+              "name": "Nombre de jours fiscaux",
+              "magicSel": false,
+              "dataType": "number"
+            },
+            {
+              "id": "semaines-d-absence-consecutives-maximum",
+              "name": "Semaines d'absence consécutives maximum",
+              "magicSel": false,
+              "dataType": "number"
+            }
+          ]
         }
       ]
     },
@@ -2510,7 +2731,7 @@
       "objects": [
         {
           "id": "d-penses",
-          "name": "Dépenses",
+          "name": "Liste des dépenses",
           "relations": [
             {
               "targetObject": "Collaborateur",
@@ -2825,6 +3046,13 @@
         {
           "id": "formations",
           "name": "Formations",
+          "applicationDate": {
+            "startAttributeId": "date-de-d-but",
+            "endAttributeId": "date-de-fin",
+            "mandatory": false,
+            "resultingSingleLine": false,
+            "requirementMode": "day"
+          },
           "relations": [
             {
               "targetObject": "Catalogue de formation",
@@ -2977,36 +3205,6 @@
               "filters": "statut='approuvée' and 'date expiration' > dateDuJour"
             }
           ]
-        },
-        {
-          "id": "catalogue-de-formation",
-          "name": "Catalogue de formation",
-          "attributes": [
-            {
-              "id": "nom",
-              "name": "Nom",
-              "magicSel": true,
-              "dataType": "string"
-            },
-            {
-              "id": "description",
-              "name": "Description",
-              "magicSel": false,
-              "dataType": "string"
-            },
-            {
-              "id": "organisme",
-              "name": "Organisme",
-              "magicSel": false,
-              "dataType": "string"
-            },
-            {
-              "id": "obligatoire",
-              "name": "Obligatoire",
-              "magicSel": true,
-              "dataType": "booleen"
-            }
-          ]
         }
       ]
     },
@@ -3021,7 +3219,8 @@
             "startAttributeId": "date-d-but",
             "endAttributeId": "date-fin",
             "mandatory": false,
-            "resultingSingleLine": false
+            "resultingSingleLine": false,
+            "requirementMode": "day"
           },
           "relations": [
             {
@@ -3122,7 +3321,7 @@
           "attributes": [
             {
               "id": "type-de-r-mun-ration",
-              "name": "Type de rémunération",
+              "name": "Nature de rémunération",
               "magicSel": true,
               "dataType": "string"
             },
@@ -3573,6 +3772,36 @@
               "name": "Pays",
               "magicSel": false,
               "dataType": "string"
+            }
+          ]
+        },
+        {
+          "id": "catalogue-de-formation",
+          "name": "Catalogue de formation",
+          "attributes": [
+            {
+              "id": "nom",
+              "name": "Nom",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "description",
+              "name": "Description",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "organisme",
+              "name": "Organisme",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "obligatoire",
+              "name": "Obligatoire",
+              "magicSel": true,
+              "dataType": "booleen"
             }
           ]
         }

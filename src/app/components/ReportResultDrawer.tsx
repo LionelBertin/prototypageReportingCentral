@@ -15,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from './ui/table';
+import { ReportTemporalContext } from '../utils/reportPreview';
 
 type ReportPreviewColumn = {
   id: string;
@@ -34,18 +35,22 @@ type ReportResultDrawerProps = {
   columns: ReportPreviewColumn[];
   rows: ReportPreviewRow[];
   mainObjectLinkedToCollaborateur: boolean;
-  reportDate: string;
+  temporalContext: ReportTemporalContext;
   includeDepartedCollaborators: boolean;
   includePresentCollaborators: boolean;
-  includeFutureCollaborators: boolean;
+  includeFutureNewCollaborators: boolean;
+  includeFutureReturnCollaborators: boolean;
   selectedDepartmentFilters: string[];
   selectedEstablishmentFilters: string[];
   departmentTree: DepartmentTreeNode[];
   establishmentOptions: string[];
   onReportDateChange: (value: string) => void;
+  onReportPeriodStartChange: (value: string) => void;
+  onReportPeriodEndChange: (value: string) => void;
   onIncludeDepartedChange: (value: boolean) => void;
   onIncludePresentChange: (value: boolean) => void;
-  onIncludeFutureChange: (value: boolean) => void;
+  onIncludeFutureNewChange: (value: boolean) => void;
+  onIncludeFutureReturnChange: (value: boolean) => void;
   onSelectedDepartmentsChange: (next: string[]) => void;
   onSelectedEstablishmentsChange: (next: string[]) => void;
   globalFilterSummaryLines: string[];
@@ -123,18 +128,22 @@ export function ReportResultDrawer({
   columns,
   rows,
   mainObjectLinkedToCollaborateur,
-  reportDate,
+  temporalContext,
   includeDepartedCollaborators,
   includePresentCollaborators,
-  includeFutureCollaborators,
+  includeFutureNewCollaborators,
+  includeFutureReturnCollaborators,
   selectedDepartmentFilters,
   selectedEstablishmentFilters,
   departmentTree,
   establishmentOptions,
   onReportDateChange,
+  onReportPeriodStartChange,
+  onReportPeriodEndChange,
   onIncludeDepartedChange,
   onIncludePresentChange,
-  onIncludeFutureChange,
+  onIncludeFutureNewChange,
+  onIncludeFutureReturnChange,
   onSelectedDepartmentsChange,
   onSelectedEstablishmentsChange,
   globalFilterSummaryLines,
@@ -163,6 +172,7 @@ export function ReportResultDrawer({
 
   const saveDialogTitle = saveDialogMode === 'model' ? 'Enregistrer le modèle' : 'Enregistrer ce rapport';
   const saveDialogLabel = saveDialogMode === 'model' ? 'Nom du modèle' : 'Nom du rapport';
+  const isPeriodMode = temporalContext.mode === 'period';
 
   const getDepartmentBranchNames = (node: DepartmentTreeNode): string[] => {
     return [node.name, ...node.children.flatMap(getDepartmentBranchNames)];
@@ -186,11 +196,48 @@ export function ReportResultDrawer({
       <div className="min-h-0 flex-1 overflow-y-auto py-4">
         <div className="mx-auto flex min-h-full w-full max-w-full flex-col gap-3 px-4">
             <div className="grid shrink-0 gap-3 lg:grid-cols-2">
-              <div className={`rounded border p-3 ${!mainObjectLinkedToCollaborateur ? 'opacity-60' : ''}`}>
+              <div className="rounded border p-3">
+                {mainObjectLinkedToCollaborateur && (
+                  <div className="mb-2 space-y-2 border-b border-gray-200 pb-2 text-xs text-gray-700">
+                    <div className="font-medium">Contexte temporel du rapport</div>
+                    {isPeriodMode ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label htmlFor="preview-report-period-start" className="font-medium text-gray-700">Début de période</label>
+                        <input
+                          id="preview-report-period-start"
+                          type="date"
+                          value={temporalContext.periodStartDate ?? ''}
+                          onChange={(event) => onReportPeriodStartChange(event.target.value)}
+                          className="rounded border border-gray-300 px-2 py-1 text-xs"
+                        />
+                        <label htmlFor="preview-report-period-end" className="font-medium text-gray-700">Fin de période</label>
+                        <input
+                          id="preview-report-period-end"
+                          type="date"
+                          value={temporalContext.periodEndDate ?? ''}
+                          onChange={(event) => onReportPeriodEndChange(event.target.value)}
+                          className="rounded border border-gray-300 px-2 py-1 text-xs"
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label htmlFor="preview-report-date" className="font-medium text-gray-700">Date de valeur du rapport</label>
+                        <input
+                          id="preview-report-date"
+                          type="date"
+                          value={temporalContext.reportDate}
+                          onChange={(event) => onReportDateChange(event.target.value)}
+                          className="rounded border border-gray-300 px-2 py-1 text-xs"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <button
                   type="button"
                   onClick={() => setCollaboratorStatusFilterExpanded((prev) => !prev)}
-                  className="mb-2 flex w-full items-center justify-between text-left"
+                  className="flex w-full items-center justify-between text-left"
                 >
                   <span className="flex items-center gap-1 text-sm font-medium text-gray-800">
                     <span className="inline-block w-2">{collaboratorStatusFilterExpanded ? 'v' : '>'}</span>
@@ -202,24 +249,12 @@ export function ReportResultDrawer({
                 </button>
 
                 {collaboratorStatusFilterExpanded && (
-                  <div className="space-y-2 border-t border-gray-200 pt-2">
+                  <div className={`space-y-2 pt-2 ${mainObjectLinkedToCollaborateur ? 'border-t border-gray-200' : ''}`}>
                     {!mainObjectLinkedToCollaborateur && (
                       <div className="text-xs text-gray-600">
                         Aucun lien (même indirect) avec Collaborateur depuis l'objet principal.
                       </div>
                     )}
-
-                    <div className="flex flex-wrap items-center gap-2 text-xs">
-                      <label htmlFor="preview-report-date" className="font-medium text-gray-700">Date de valeur du rapport</label>
-                      <input
-                        id="preview-report-date"
-                        type="date"
-                        value={reportDate}
-                        disabled={!mainObjectLinkedToCollaborateur}
-                        onChange={(event) => onReportDateChange(event.target.value)}
-                        className="rounded border border-gray-300 px-2 py-1 text-xs"
-                      />
-                    </div>
 
                     <div className="flex flex-wrap gap-3 text-xs text-gray-700">
                       <label className="flex items-center gap-1">
@@ -243,11 +278,20 @@ export function ReportResultDrawer({
                       <label className="flex items-center gap-1">
                         <input
                           type="checkbox"
-                          checked={includeFutureCollaborators}
+                          checked={includeFutureNewCollaborators}
                           disabled={!mainObjectLinkedToCollaborateur}
-                          onChange={(event) => onIncludeFutureChange(event.target.checked)}
+                          onChange={(event) => onIncludeFutureNewChange(event.target.checked)}
                         />
-                        futurs
+                        nouveaux
+                      </label>
+                      <label className="flex items-center gap-1">
+                        <input
+                          type="checkbox"
+                          checked={includeFutureReturnCollaborators}
+                          disabled={!mainObjectLinkedToCollaborateur}
+                          onChange={(event) => onIncludeFutureReturnChange(event.target.checked)}
+                        />
+                        retours
                       </label>
                     </div>
 

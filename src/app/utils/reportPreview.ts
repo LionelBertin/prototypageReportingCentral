@@ -4,12 +4,23 @@ import { FilterCondition, FilterGroup, SelectedAttribute } from '../types/select
 type PreviewCellValue = string | number | boolean | null;
 
 type PreviewMeta = {
-  collaboratorStatus: 'present' | 'departed' | 'future';
+  collaboratorStatus: 'present' | 'departed' | 'futureNew' | 'futureReturn';
   department: string;
   establishment: string;
 };
 
 const STATUS_DATE_REFERENCE_ATTRIBUTE_ID = '__status-collaborators-date__';
+const REPORT_PERIOD_START_ATTRIBUTE_ID = '__report-period-start__';
+const REPORT_PERIOD_END_ATTRIBUTE_ID = '__report-period-end__';
+
+export type ReportTemporalMode = 'day' | 'period';
+
+export type ReportTemporalContext = {
+  mode: ReportTemporalMode;
+  reportDate: string;
+  periodStartDate?: string;
+  periodEndDate?: string;
+};
 
 type PreviewRowInternal = {
   id: string;
@@ -30,18 +41,25 @@ export type ReportPreviewColumn = {
 export type GenerateReportPreviewInput = {
   columns: ReportPreviewColumn[];
   rowCount: number;
-  reportDate: string;
+  temporalContext: ReportTemporalContext;
   globalFilterGroups?: FilterGroup[];
   collaboratorFilterEnabled: boolean;
   includeDepartedCollaborators: boolean;
   includePresentCollaborators: boolean;
-  includeFutureCollaborators: boolean;
+  includeFutureNewCollaborators: boolean;
+  includeFutureReturnCollaborators: boolean;
   selectedDepartmentFilters: string[];
   selectedEstablishmentFilters: string[];
   departmentUniverse: string[];
   establishmentUniverse: string[];
   sortColumnIds: string[];
   groupedColumnIds: string[];
+  displayAsColumnsAttributeId?: string;
+};
+
+export type GeneratedReportPreview = {
+  columns: Array<{ id: string; label: string }>;
+  rows: ReportPreviewRow[];
 };
 
 const normalizeText = (value: string) =>
@@ -93,6 +111,16 @@ const compareValues = (a: PreviewCellValue, b: PreviewCellValue) => {
   return String(a).localeCompare(String(b), 'fr', { sensitivity: 'base' });
 };
 
+const serializeCellValue = (value: PreviewCellValue) => {
+  if (value === null) return 'null:';
+  return `${typeof value}:${String(value)}`;
+};
+
+const getPivotDisplayLabel = (value: PreviewCellValue) => {
+  if (value === null || value === '') return '(Vide)';
+  return String(value);
+};
+
 const buildFakeValue = (
   column: ReportPreviewColumn,
   rowIndex: number,
@@ -114,7 +142,9 @@ const buildFakeValue = (
       ? 'Présent'
       : meta.collaboratorStatus === 'departed'
       ? 'Parti'
-      : 'Futur';
+      : meta.collaboratorStatus === 'futureNew'
+      ? 'Nouveau'
+      : 'Retour';
   }
 
   if (normalizedName.includes('nom')) {
@@ -160,12 +190,16 @@ const buildFakeValue = (
 const evaluateCondition = (
   condition: FilterCondition,
   cells: Record<string, PreviewCellValue>,
-  reportDate: string,
+  temporalContext: ReportTemporalContext,
 ): boolean => {
   const left = cells[condition.attributeId];
   const right = condition.valueType === 'attribute'
     ? (condition.referenceAttributeId === STATUS_DATE_REFERENCE_ATTRIBUTE_ID
-      ? reportDate
+      ? temporalContext.reportDate
+      : condition.referenceAttributeId === REPORT_PERIOD_START_ATTRIBUTE_ID
+      ? temporalContext.periodStartDate ?? temporalContext.reportDate
+      : condition.referenceAttributeId === REPORT_PERIOD_END_ATTRIBUTE_ID
+      ? temporalContext.periodEndDate ?? temporalContext.reportDate
       : cells[condition.referenceAttributeId ?? ''])
     : condition.value;
 
@@ -235,7 +269,7 @@ const evaluateCondition = (
 const evaluateGlobalFilters = (
   groups: FilterGroup[] | undefined,
   cells: Record<string, PreviewCellValue>,
-  reportDate: string,
+  temporalContext: ReportTemporalContext,
 ) => {
   if (!groups || groups.length === 0) return true;
 
@@ -243,11 +277,19 @@ const evaluateGlobalFilters = (
     if (group.conditions.length === 0) return true;
 
     if (group.logicalOperator === 'OU') {
-      return group.conditions.some((condition) => evaluateCondition(condition, cells, reportDate));
+      return group.conditions.some((condition) => evaluateCondition(condition, cells, temporalContext));
     }
 
-    return group.conditions.every((condition) => evaluateCondition(condition, cells, reportDate));
+    return group.conditions.every((condition) => evaluateCondition(condition, cells, temporalContext));
   });
+};
+
+const getPreviewReferenceDate = (temporalContext: ReportTemporalContext) => {
+  if (temporalContext.mode === 'period') {
+    return temporalContext.periodEndDate || temporalContext.periodStartDate || temporalContext.reportDate;
+  }
+
+  return temporalContext.reportDate;
 };
 
 const applyCollaboratorFilters = (
@@ -259,7 +301,8 @@ const applyCollaboratorFilters = (
   const allowedStatuses = new Set<PreviewMeta['collaboratorStatus']>([
     ...(input.includePresentCollaborators ? ['present' as const] : []),
     ...(input.includeDepartedCollaborators ? ['departed' as const] : []),
-    ...(input.includeFutureCollaborators ? ['future' as const] : []),
+    ...(input.includeFutureNewCollaborators ? ['futureNew' as const] : []),
+    ...(input.includeFutureReturnCollaborators ? ['futureReturn' as const] : []),
   ]);
 
   if (allowedStatuses.size === 0) return [];
@@ -302,8 +345,117 @@ const applySortAndGrouping = (
   });
 };
 
-export const generateReportPreviewRows = (input: GenerateReportPreviewInput): ReportPreviewRow[] => {
-  if (input.columns.length === 0) return [];
+const getColumnLabelById = (columns: ReportPreviewColumn[], columnId: string) => {
+  return columns.find((column) => column.id === columnId)?.label ?? columnId;
+};
+
+const buildDisplayAsColumnsPreview = (
+  rows: PreviewRowInternal[],
+  input: GenerateReportPreviewInput,
+): GeneratedReportPreview | null => {
+  const pivotColumnId = input.displayAsColumnsAttributeId;
+  if (!pivotColumnId) return null;
+
+  const pivotColumn = input.columns.find((column) => column.id === pivotColumnId);
+  if (!pivotColumn) return null;
+
+  const groupedColumnIds = input.groupedColumnIds.filter((columnId) => columnId !== pivotColumnId);
+
+  const pivotValues = new Map<string, { rawValue: PreviewCellValue; label: string }>();
+  for (const row of rows) {
+    const rawValue = row.cells[pivotColumnId] ?? null;
+    const key = serializeCellValue(rawValue);
+    if (!pivotValues.has(key)) {
+      pivotValues.set(key, {
+        rawValue,
+        label: getPivotDisplayLabel(rawValue),
+      });
+    }
+  }
+
+  const orderedPivotValues = [...pivotValues.entries()]
+    .sort(([, left], [, right]) => compareValues(left.rawValue, right.rawValue))
+    .map(([pivotKey, value], index) => ({
+      pivotKey,
+      label: value.label,
+      columnId: `pivot:${pivotColumnId}:${index}`,
+    }));
+
+  const groups = new Map<string, { groupCells: Record<string, PreviewCellValue>; counts: Map<string, number> }>();
+  for (const row of rows) {
+    const groupKey = groupedColumnIds.length > 0
+      ? groupedColumnIds.map((columnId) => serializeCellValue(row.cells[columnId] ?? null)).join('|')
+      : '__all__';
+
+    let group = groups.get(groupKey);
+    if (!group) {
+      const groupCells: Record<string, PreviewCellValue> = {};
+      for (const groupedColumnId of groupedColumnIds) {
+        groupCells[groupedColumnId] = row.cells[groupedColumnId] ?? null;
+      }
+      group = {
+        groupCells,
+        counts: new Map<string, number>(),
+      };
+      groups.set(groupKey, group);
+    }
+
+    const pivotKey = serializeCellValue(row.cells[pivotColumnId] ?? null);
+    group.counts.set(pivotKey, (group.counts.get(pivotKey) ?? 0) + 1);
+  }
+
+  const sortedGroups = [...groups.values()].sort((left, right) => {
+    for (const columnId of groupedColumnIds) {
+      const result = compareValues(left.groupCells[columnId] ?? null, right.groupCells[columnId] ?? null);
+      if (result !== 0) return result;
+    }
+    return 0;
+  });
+
+  const columns: Array<{ id: string; label: string }> = [
+    ...groupedColumnIds.map((columnId) => ({
+      id: columnId,
+      label: getColumnLabelById(input.columns, columnId),
+    })),
+    ...orderedPivotValues.map((pivotValue) => ({
+      id: pivotValue.columnId,
+      label: pivotValue.label,
+    })),
+  ];
+
+  const pivotColumnByKey = new Map(orderedPivotValues.map((entry) => [entry.pivotKey, entry.columnId] as const));
+
+  const previewRows: ReportPreviewRow[] = sortedGroups.map((group) => {
+    const output: ReportPreviewRow = {};
+
+    for (const groupedColumnId of groupedColumnIds) {
+      output[groupedColumnId] = group.groupCells[groupedColumnId] ?? null;
+    }
+
+    for (const pivotValue of orderedPivotValues) {
+      const columnId = pivotColumnByKey.get(pivotValue.pivotKey);
+      if (!columnId) continue;
+      output[columnId] = group.counts.get(pivotValue.pivotKey) ?? 0;
+    }
+
+    return output;
+  });
+
+  return {
+    columns,
+    rows: previewRows,
+  };
+};
+
+export const generateReportPreviewRows = (input: GenerateReportPreviewInput): GeneratedReportPreview => {
+  if (input.columns.length === 0) {
+    return {
+      columns: [],
+      rows: [],
+    };
+  }
+
+  const previewReferenceDate = getPreviewReferenceDate(input.temporalContext);
 
   const departmentUniverse = input.departmentUniverse.length > 0
     ? input.departmentUniverse
@@ -313,7 +465,7 @@ export const generateReportPreviewRows = (input: GenerateReportPreviewInput): Re
     ? input.establishmentUniverse
     : ['Lucca FR', 'Lucca UK', 'Lucca Deutschland'];
 
-  const statuses: Array<PreviewMeta['collaboratorStatus']> = ['present', 'departed', 'future'];
+  const statuses: Array<PreviewMeta['collaboratorStatus']> = ['present', 'departed', 'futureNew', 'futureReturn'];
 
   const rows: PreviewRowInternal[] = Array.from({ length: input.rowCount }).map((_, rowIndex) => {
     const meta: PreviewMeta = {
@@ -325,7 +477,7 @@ export const generateReportPreviewRows = (input: GenerateReportPreviewInput): Re
     const cells: Record<string, PreviewCellValue> = {};
 
     for (const column of input.columns) {
-      cells[column.id] = buildFakeValue(column, rowIndex, input.reportDate, meta);
+      cells[column.id] = buildFakeValue(column, rowIndex, previewReferenceDate, meta);
     }
 
     return {
@@ -337,7 +489,7 @@ export const generateReportPreviewRows = (input: GenerateReportPreviewInput): Re
 
   const collaboratorFilteredRows = applyCollaboratorFilters(rows, input);
   const globalFilteredRows = collaboratorFilteredRows.filter((row) =>
-    evaluateGlobalFilters(input.globalFilterGroups, row.cells, input.reportDate)
+    evaluateGlobalFilters(input.globalFilterGroups, row.cells, input.temporalContext)
   );
 
   const sortedRows = applySortAndGrouping(
@@ -346,5 +498,16 @@ export const generateReportPreviewRows = (input: GenerateReportPreviewInput): Re
     input.sortColumnIds,
   );
 
-  return sortedRows.map((row) => row.cells);
+  const displayAsColumnsPreview = buildDisplayAsColumnsPreview(sortedRows, input);
+  if (displayAsColumnsPreview) {
+    return displayAsColumnsPreview;
+  }
+
+  return {
+    columns: input.columns.map((column) => ({
+      id: column.id,
+      label: column.label,
+    })),
+    rows: sortedRows.map((row) => row.cells),
+  };
 };

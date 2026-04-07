@@ -8,6 +8,7 @@ interface DateReferenceDialogProps {
   objectName: string;
   currentDateReference?: DateReference;
   availableDateAttributes: SelectedAttribute[];
+  forceReportValueDateOnly?: boolean;
   onConfirm: (dateReference: DateReference) => void;
 }
 
@@ -17,6 +18,7 @@ export function DateReferenceDialog({
   objectName,
   currentDateReference,
   availableDateAttributes,
+  forceReportValueDateOnly = false,
   onConfirm,
 }: DateReferenceDialogProps) {
   const [referenceType, setReferenceType] = useState<DateReference['type']>(
@@ -32,6 +34,12 @@ export function DateReferenceDialog({
   if (!isOpen) return null;
 
   const handleConfirm = () => {
+    if (forceReportValueDateOnly) {
+      onConfirm({ type: 'today' });
+      onClose();
+      return;
+    }
+
     let dateRef: DateReference;
 
     if (referenceType === 'today') {
@@ -77,7 +85,12 @@ export function DateReferenceDialog({
             <label className="mb-2 block text-sm font-medium text-gray-700">
               Date de référence
             </label>
-            <div className="space-y-2">
+            {forceReportValueDateOnly ? (
+              <div className="rounded border border-purple-200 bg-purple-50 px-3 py-2 text-sm text-purple-800">
+                Cet objet applicable est basé sur une période. La seule référence autorisée est la Date de valeur du rapport.
+              </div>
+            ) : (
+              <div className="space-y-2">
               <label className="flex items-start gap-2">
                 <input
                   type="radio"
@@ -149,7 +162,8 @@ export function DateReferenceDialog({
                   )}
                 </div>
               </label>
-            </div>
+              </div>
+            )}
           </div>
         </div>
 

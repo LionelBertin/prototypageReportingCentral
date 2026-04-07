@@ -1,4 +1,4 @@
-import { X, Filter, Calendar, Edit2, Layers, MoreHorizontal, ArrowUpDown } from 'lucide-react';
+import { X, Filter, Calendar, Edit2, Layers, MoreHorizontal, ArrowUpDown, ArrowLeftRight } from 'lucide-react';
 import { SelectedAttribute } from '../types/selection';
 import { useState } from 'react';
 import { dataStructure } from '../data';
@@ -30,6 +30,7 @@ interface SelectionPanelProps {
   showColumnRename: boolean;
   filterInvolvedAttributeIds?: string[];
   sortInvolvedAttributeIds?: string[];
+  displayAsColumnsAttributeId?: string;
 }
 
 export function SelectionPanel({
@@ -50,6 +51,7 @@ export function SelectionPanel({
   showColumnRename,
   filterInvolvedAttributeIds = [],
   sortInvolvedAttributeIds = [],
+  displayAsColumnsAttributeId,
 }: SelectionPanelProps) {
   const [editingColumnId, setEditingColumnId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
@@ -198,6 +200,7 @@ export function SelectionPanel({
       return `${day}/${month}/${year}`;
     };
 
+    if (attr.applicationDateConfig?.requirementMode === 'period') return 'Date de valeur du rapport';
     if (!attr.dateReference) return 'Date de valeur du rapport';
     switch (attr.dateReference.type) {
       case 'today':
@@ -281,6 +284,7 @@ export function SelectionPanel({
             const isDragged = draggedId === attr.id;
             const isFilterInvolved = filterInvolvedAttributeIds.includes(attr.id);
             const isSortInvolved = sortInvolvedAttributeIds.includes(attr.id);
+            const isDisplayAsColumnsAttribute = displayAsColumnsAttributeId === attr.id;
             const groupedCount = groupedAttributeIds.length;
             const showGroupingDivider = groupedCount > 0 && index === groupedCount;
             const showGroupedHeader = groupedCount > 0 && index === 0;
@@ -350,7 +354,9 @@ export function SelectionPanel({
                                     {isFilterInvolved && (
                                       <Filter className="size-3 text-orange-600" title="Utilisé dans le filtrage" />
                                     )}
-                                    {isSortInvolved && (
+                                    {isDisplayAsColumnsAttribute ? (
+                                      <ArrowLeftRight className="size-3 text-blue-600" title="Utilisé pour l'affichage en colonnes" />
+                                    ) : isSortInvolved && (
                                       <ArrowUpDown className="size-3 text-blue-600" title="Utilisé dans le tri" />
                                     )}
                                     {showColumnRename && (
@@ -409,7 +415,17 @@ export function SelectionPanel({
                                   </button>
                                 )}
 
-                                {attr.insertionType === 'applicable' && (
+                                {attr.insertionType === 'applicable' && attr.applicationDateConfig?.requirementMode === 'period' && (
+                                  <span
+                                    className="flex items-center gap-1 rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-700"
+                                    title="Date de valeur du rapport"
+                                  >
+                                    <Calendar className="size-3" />
+                                    <span>Date de valeur du rapport</span>
+                                  </span>
+                                )}
+
+                                {attr.insertionType === 'applicable' && attr.applicationDateConfig?.requirementMode !== 'period' && (
                                   <button
                                     onClick={() => onEditDateReference(attr.id)}
                                     className="flex items-center gap-1 rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-700 hover:bg-purple-200"

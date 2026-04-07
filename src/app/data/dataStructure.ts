@@ -1,4 +1,4 @@
-﻿import manifest from '../../../listeDomainesManifest.json';
+import manifest from '../../../listeDomainesManifest.json';
 
 export type AttributeType = 'string' | 'number' | 'date' | 'boolean' | 'document';
 
@@ -52,6 +52,7 @@ export interface ApplicationDateConfig {
   endAttributeId?: string;
   mandatory?: boolean;
   resultingSingleLine?: boolean;
+  requirementMode?: 'day' | 'period';
 }
 
 export interface SmartObjectDefinition {
@@ -109,7 +110,13 @@ type ManifestObject = {
   id: string;
   name: string;
   cardinality?: string;
-  applicationDate?: boolean | { startAttributeId?: string; endAttributeId?: string; mandatory?: boolean; resultingSingleLine?: boolean };
+  applicationDate?: boolean | {
+    startAttributeId?: string;
+    endAttributeId?: string;
+    mandatory?: boolean;
+    resultingSingleLine?: boolean;
+    requirementMode?: 'day' | 'period';
+  };
   isApplicable?: boolean;
   description?: string;
   tooltip?: string;
@@ -632,9 +639,10 @@ const buildDataStructure = (): Theme[] => {
               endAttributeId: obj.applicationDate.endAttributeId,
               mandatory: !!obj.applicationDate.mandatory,
               resultingSingleLine: !!obj.applicationDate.resultingSingleLine,
+              requirementMode: obj.applicationDate.requirementMode === 'period' ? 'period' : 'day',
             }
           : (obj.applicationDate
-            ? { mandatory: false, resultingSingleLine: false }
+            ? { mandatory: false, resultingSingleLine: false, requirementMode: 'day' }
             : undefined),
         isApplicable: !!obj.isApplicable || !!obj.applicationDate,
         attributes: (obj.attributes ?? []).map((attribute) => ({
