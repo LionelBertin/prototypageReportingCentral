@@ -10,6 +10,7 @@
           "id": "collaborateur",
           "name": "Collaborateur",
           "magicSel": true,
+          "defaultDateFiltering" :"none",
           "attributes": [
             {
               "id": "photo",
@@ -56,6 +57,107 @@
           ]
         },
         {
+          "id": "contrat-poste-applicable",
+          "name": "Contrat et poste applicable",
+          "tooltip": "Permet de récupérer un unique contrat et poste pour cibler une données en particulier.",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "one",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": true
+            }
+          ],
+          "defaultDateFiltering" :"chooseOne",
+          "attributes": [
+            {
+              "id": "type-de-contrat",
+              "name": "Type de contrat",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "document",
+              "name": "Document",
+              "magicSel": false,
+              "dataType": "file"
+            },
+            {
+              "id": "date-signature-contrat",
+              "name": "Date signature du contrat",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "date-d-but-contrat",
+              "name": "Date début du contrat",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "date-fin-contrat",
+              "name": "Date fin du contrat",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "motif-d-but-contrat",
+              "name": "Motif début du contrat",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "motif-fin-contrat",
+              "name": "Motif fin du contrat",
+              "magicSel": false,
+              "dataType": "string"
+            },{
+              "id": "intitul-poste",
+              "name": "Intitulé de poste",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "document",
+              "name": "Document",
+              "magicSel": false,
+              "dataType": "file"
+            },
+            {
+              "id": "date-d-but-poste",
+              "name": "Date début du poste",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "date-fin-poste",
+              "name": "Date fin du poste",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "qualifications",
+              "name": "Qualifications",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "csp",
+              "name": "CSP",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "modalit-de-temps-de-travail",
+              "name": "Modalité de temps de travail",
+              "magicSel": false,
+              "dataType": "string"
+            }
+          ]
+        },
+        {
           "id": "matricules-et-login",
           "name": "Matricules et Login",
           "tooltip": "Contient les informations d'identification du collaborateur pour les différents systèmes de l'entreprise",
@@ -66,9 +168,10 @@
               "cardinalityFrom": "one",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": false
+              "magicSel": true
             }
           ],
+          "defaultDateFiltering" :"none",
           "attributes": [
             {
               "id": "userid",
@@ -104,6 +207,7 @@
               "magicSel": true
             }
           ],
+          "defaultDateFiltering" :"none",
           "attributes": [
             {
               "id": "rue",
@@ -147,9 +251,10 @@
               "cardinalityFrom": "one",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": false
+              "magicSel": true
             }
           ],
+          "defaultDateFiltering" :"none",
           "attributes": [
             {
               "id": "email-personnel",
@@ -175,9 +280,10 @@
               "cardinalityFrom": "one",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": false
+              "magicSel": true
             }
           ],
+          "defaultDateFiltering" :"none",
           "attributes": [
             {
               "id": "nom",
@@ -212,6 +318,7 @@
               "magicSel": true
             }
           ],
+          "defaultDateFiltering" :"none",
           "attributes": [
             {
               "id": "type-de-document",
@@ -252,6 +359,7 @@
               "magicSel": true
             }
           ],
+          "defaultDateFiltering" :"none",
           "attributes": [
             {
               "id": "nom",
@@ -292,6 +400,7 @@
               "magicSel": false
             }
           ],
+          "defaultDateFiltering" :"none",
           "attributes": [
             {
               "id": "taille-en-cm",
@@ -320,6 +429,7 @@
               "magicSel": false
             }
           ],
+          "defaultDateFiltering" :"none",
           "attributes": [
             {
               "id": "nom-de-l-assurance-maladie",
@@ -360,6 +470,7 @@
               "magicSel": false
             }
           ],
+          "defaultDateFiltering" :"none",
           "attributes": [
             {
               "id": "nom-du-diplome",
@@ -394,6 +505,7 @@
               "magicSel": false
             }
           ],
+          "defaultDateFiltering" :"none",
           "attributes": [
             {
               "id": "piece-d-identite-recto",
@@ -434,6 +546,7 @@
               "magicSel": true
             }
           ],
+          "defaultDateFiltering" :"none",
           "attributes": [
             {
               "id": "langue",
@@ -468,6 +581,7 @@
               "magicSel": false
             }
           ],
+          "defaultDateFiltering" :"none",
           "attributes": [
             {
               "id": "champ1",
@@ -503,6 +617,7 @@
               "magicSel": false
             }
           ],
+          "defaultDateFiltering" :"none",
           "attributes": [
             {
               "id": "numero-d-avs",
@@ -531,6 +646,7 @@
               "magicSel": false
             }
           ],
+          "defaultDateFiltering" :"none",
           "attributes": [
             {
               "id": "modele-pc",
@@ -559,6 +675,7 @@
               "magicSel": false
             }
           ],
+          "defaultDateFiltering" :"none",
           "attributes": [
             {
               "id": "canton-de-travail",
@@ -665,6 +782,7 @@
               "magicSel": false
             }
           ],
+          "defaultDateFiltering" :"none",
           "attributes": [
             {
               "id": "type-de-permis",
@@ -699,6 +817,7 @@
               "magicSel": false
             }
           ],
+          "defaultDateFiltering" :"none",
           "attributes": [
             {
               "id": "modele-du-telephone",
@@ -727,6 +846,7 @@
               "magicSel": false
             }
           ],
+          "defaultDateFiltering" :"none",
           "attributes": [
             {
               "id": "modele-de-voiture",
@@ -755,6 +875,7 @@
               "magicSel": false
             }
           ],
+          "defaultDateFiltering" :"none",
           "attributes": [
             {
               "id": "prenom",
@@ -2032,6 +2153,10 @@
               "magicSel": false
             }
           ],
+          "defaultDateFiltering" :{
+            "attrDate1":"date-fin",
+            "attrDate2":"date-d-but"
+          },
           "attributes": [
             {
               "id": "type-de-contrat",
@@ -2156,6 +2281,10 @@
               "magicSel": false
             }
           ],
+          "defaultDateFiltering" :{
+            "attrDate1": "date-fin",
+            "attrDate2": "date-d-but"
+          },
           "attributes": [
             {
               "id": "intitul",
@@ -2189,7 +2318,7 @@
             },
             {
               "id": "csp",
-              "name": "Csp",
+              "name": "CSP",
               "magicSel": false,
               "dataType": "string"
             },
@@ -2289,6 +2418,10 @@
               "magicSel": false
             }
           ],
+          "defaultDateFiltering" :{
+            "attrDate1":"date-fin",
+            "attrDate2":"date-d-but"
+          },
           "attributes": [
             {
               "id": "statut",
@@ -2429,6 +2562,7 @@
               "magicSel": false
             }
           ],
+          "defaultDateFiltering" :"chooseOne",
           "attributes": [
             {
               "id": "type-compte",
@@ -2467,6 +2601,7 @@
               "magicSel": true
             }
           ],
+          "defaultDateFiltering" :"choosePeriod",
           "attributes": [
             {
               "id": "compte",
@@ -2518,6 +2653,7 @@
               "magicSel": true
             }
           ],
+          "defaultDateFiltering" :"choosePeriod",
           "attributes": [
             {
               "id": "forfait-proratise",
@@ -2591,10 +2727,11 @@
               "relationName": "Collaborateur",
               "cardinalityFrom": "one",
               "cardinalityTo": "one",
-              "recursiveMagicSel": true,
-              "magicSel": false
+              "recursiveMagicSel": false,
+              "magicSel": true
         }
           ],
+          "defaultDateFiltering" :"choosePeriod",
           "attributes": [
             {
               "id": "taux-d-absenteisme",
@@ -2701,8 +2838,28 @@
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
               "magicSel": false
+            },
+            {
+              "targetObject": "Département",
+              "relationName": "Département",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+            },
+            {
+              "targetObject": "Etablissement",
+              "relationName": "Etablissement",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
             }
           ],
+          "defaultDateFiltering" :{
+            "attrDate1":"date-d-pense",
+            "attrDate2":"date-d-pense"
+          },
           "attributes": [
             {
               "id": "statut",
@@ -2831,6 +2988,10 @@
               "magicSel": false
             }
           ],
+          "defaultDateFiltering" :{
+            "attrDate1":"date-de-validation-manager",
+            "attrDate2":"date-de-validation-manager"
+          },
           "attributes": [
             {
               "id": "type-d-entretien",
@@ -2889,6 +3050,10 @@
               "magicSel": true
             }
           ],
+          "defaultDateFiltering" :{
+            "attrDate1":"date-entretien",
+            "attrDate2":"date-entretien"
+          },
           "attributes": [
             {
               "id": "nature",
@@ -2897,8 +3062,8 @@
               "dataType": "string"
             },
             {
-              "id": "date",
-              "name": "Date",
+              "id": "date-entretien",
+              "name": "Date de l'entretien",
               "magicSel": true,
               "dataType": "date"
             },
@@ -2961,11 +3126,26 @@
               "magicSel": false
             }
           ],
+          "defaultDateFiltering" :{
+            "attrDate1":"date-fin",
+            "attrDate2":"date-d-but"
+          },
           "attributes": [
+            {
+              "id": "teamLevel",
+              "name": "Objetctif d'équipe",
+              "magicSel": false,
+              "dataType": "booleen"
+            },{
+              "id": "nom",
+              "name": "Nom",
+              "magicSel": true,
+              "dataType": "string"
+            },
             {
               "id": "description",
               "name": "Description",
-              "magicSel": true,
+              "magicSel": false,
               "dataType": "string"
             },
             {
@@ -2979,6 +3159,35 @@
               "name": "Date fin",
               "magicSel": true,
               "dataType": "date"
+            }
+          ]
+        },
+        {
+          "id": "PaliersObjectifs",
+          "name": "Paliers d'objectifs",
+          "relations": [
+            {
+              "targetObject": "Objectifs",
+              "relationName": "Objectif",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+            }
+          ],
+          "defaultDateFiltering" :"none",
+          "attributes": [
+            {
+              "id": "percentage",
+              "name": "Pourcentage",
+              "magicSel": true,
+              "dataType": "number"
+            },
+            {
+              "id": "description",
+              "name": "Description",
+              "magicSel": true,
+              "dataType": "string"
             }
           ]
         }
@@ -3018,7 +3227,7 @@
             },
             {
               "targetObject": "Collaborateur",
-              "relationName": "Responsable approbation",
+              "relationName": "Approbateur",
               "cardinalityFrom": "many",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
@@ -3026,13 +3235,17 @@
             },
             {
               "targetObject": "Collaborateur",
-              "relationName": "Responsable refus",
+              "relationName": "Refuseur",
               "cardinalityFrom": "many",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
               "magicSel": false
             }
           ],
+          "defaultDateFiltering" :{
+            "attrDate1":"date-de-fin",
+            "attrDate2":"date-de-d-but"
+          },
           "attributes": [
             {
               "id": "statut",
@@ -3170,6 +3383,10 @@
               "magicSel": false
             }
           ],
+          "defaultDateFiltering" :{
+            "attrDate1":"date-fin",
+            "attrDate2":"date-d-but"
+          },
           "attributes": [
             {
               "id": "type-r-mun-ration",
@@ -3239,6 +3456,10 @@
               "magicSel": false
             }
           ],
+          "defaultDateFiltering" :{
+            "attrDate1":"date-fin",
+            "attrDate2":"date-d-but"
+          },
           "attributes": [
             {
               "id": "type-r-mun-ration",
@@ -3298,6 +3519,10 @@
               "magicSel": false
             }
           ],
+          "defaultDateFiltering" :{
+            "attrDate1":"date-publication",
+            "attrDate2":"date-publication"
+          },
           "attributes": [
             {
               "id": "date-publication",
@@ -3346,10 +3571,19 @@
               "magicSel": false
             }
           ],
+          "defaultDateFiltering" :{
+            "attrDate1":"date-fermeture-enqu-te",
+            "attrDate2":"date-publication-enqu-te"
+          },
           "attributes": [
             {
-              "id": "date-enqu-te",
-              "name": "Date enquête",
+              "id": "date-publication-enqu-te",
+              "name": "Date publication enquête",
+              "magicSel": true,
+              "dataType": "date"
+            },{
+              "id": "date-fermeture-enqu-te",
+              "name": "Date fermeture enquête",
               "magicSel": true,
               "dataType": "date"
             },
@@ -3388,6 +3622,10 @@
         {
           "id": "factures",
           "name": "Factures",
+          "defaultDateFiltering" :{
+            "attrDate1":"date-facture",
+            "attrDate2":"date-facture"
+          },
           "attributes": [
             {
               "id": "date-facture",
@@ -3466,6 +3704,10 @@
               "magicSel": false
             }
           ],
+          "defaultDateFiltering" :{
+            "attrDate1":"date-fermeture-poste",
+            "attrDate2":"date-ouverture-poste"
+          },
           "attributes": [
             {
               "id": "intitul",
@@ -3500,6 +3742,7 @@
               "magicSel": false
             }
           ],
+          "defaultDateFiltering" :"none",
           "attributes": [
             {
               "id": "nom",
@@ -3526,16 +3769,12 @@
               "cardinalityTo": "many",
               "recursiveMagicSel": true,
               "magicSel": false
-            },
-            {
-              "targetObject": "Historique de Candidature",
-              "relationName": "Historique de Candidature",
-              "cardinalityFrom": "one",
-              "cardinalityTo": "many",
-              "recursiveMagicSel": false,
-              "magicSel": false
             }
           ],
+          "defaultDateFiltering" :{
+            "attrDate1":"date-candidature",
+            "attrDate2":"date-candidature"
+          },
           "attributes": [
             {
               "id": "date-candidature",
@@ -3547,34 +3786,6 @@
               "id": "statut-candidature",
               "name": "Statut candidature",
               "magicSel": true,
-              "dataType": "string"
-            }
-          ]
-        },
-        {
-          "id": "historique-de-candidature",
-          "name": "Historique de Candidature",
-          "relations": [
-            {
-              "targetObject": "Collaborateur",
-              "relationName": "Recruteur",
-              "cardinalityFrom": "many",
-              "cardinalityTo": "one",
-              "recursiveMagicSel": false,
-              "magicSel": false
-            }
-          ],
-          "attributes": [
-            {
-              "id": "statut",
-              "name": "Statut",
-              "magicSel": false,
-              "dataType": "string"
-            },
-            {
-              "id": "commentaire",
-              "name": "Commentaire",
-              "magicSel": false,
               "dataType": "string"
             }
           ]
@@ -3592,6 +3803,10 @@
               "magicSel": false
             }
           ],
+          "defaultDateFiltering" :{
+            "attrDate1":"date-entretien",
+            "attrDate2":"date-entretien"
+          },
           "attributes": [
             {
               "id": "date-entretien",
@@ -3628,6 +3843,7 @@
         {
           "id": "d-partement",
           "name": "Département",
+          "defaultDateFiltering" :"none",
           "attributes": [
             {
               "id": "nom",
@@ -3654,14 +3870,15 @@
           "name": "Etablissement",
           "relations": [
             {
-              "targetObject": "Organisation",
-              "relationName": "Organisation",
+              "targetObject": "entreprise",
+              "relationName": "Entreprise",
               "cardinalityFrom": "many",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
               "magicSel": false
             }
           ],
+          "defaultDateFiltering" :"none",
           "attributes": [
             {
               "id": "nom",
@@ -3678,8 +3895,9 @@
           ]
         },
         {
-          "id": "organisation",
-          "name": "Organisation",
+          "id": "entreprise",
+          "name": "Entreprise",
+          "defaultDateFiltering" :"none",
           "attributes": [
             {
               "id": "nom",
@@ -3704,6 +3922,10 @@
         {
           "id": "catalogue-de-formation",
           "name": "Catalogue de formation",
+          "defaultDateFiltering" :{
+            "attrDate1":"date-sortie-catalogue",
+            "attrDate2":"date-entrée-catalogue"
+          },
           "attributes": [
             {
               "id": "nom",
@@ -3728,6 +3950,18 @@
               "name": "Obligatoire",
               "magicSel": true,
               "dataType": "booleen"
+            },
+            {
+              "id": "date-entrée-catalogue",
+              "name": "Date entrée catalogue",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "date-sortie-catalogue",
+              "name": "Date sortie catalogue",
+              "magicSel": true,
+              "dataType": "date"
             }
           ]
         }

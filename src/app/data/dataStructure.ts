@@ -63,6 +63,15 @@ export interface SmartObjectDefinition {
   };
 }
 
+export type DefaultDateFiltering =
+  | 'none'
+  | 'chooseOne'
+  | 'choosePeriod'
+  | {
+      attrDate1?: string;
+      attrDate2?: string;
+    };
+
 export interface DataObject {
   id: string;
   name: string;
@@ -73,6 +82,7 @@ export interface DataObject {
   isApplicable?: boolean;
   relations?: ObjectRelation[];
   smartObjects?: SmartObjectDefinition[];
+  defaultDateFiltering?: DefaultDateFiltering;
   description?: string;
   tooltip?: string;
 }
@@ -110,6 +120,14 @@ type ManifestObject = {
   id: string;
   name: string;
   cardinality?: string;
+  defaultDateFiltering?:
+    | 'none'
+    | 'chooseOne'
+    | 'choosePeriod'
+    | {
+        attrDate1?: string;
+        attrDate2?: string;
+      };
   applicationDate?: boolean | {
     startAttributeId?: string;
     endAttributeId?: string;
@@ -599,6 +617,29 @@ const normalizeSmartObjects = (value: ManifestObject['smartObjects']): SmartObje
   return valid.length > 0 ? valid : undefined;
 };
 
+const normalizeDefaultDateFiltering = (value: ManifestObject['defaultDateFiltering']): DefaultDateFiltering | undefined => {
+  if (!value) return undefined;
+
+  if (typeof value === 'string') {
+    if (value === 'none' || value === 'chooseOne' || value === 'choosePeriod') {
+      return value;
+    }
+    return undefined;
+  }
+
+  if (typeof value !== 'object') return undefined;
+
+  const attrDate1 = typeof value.attrDate1 === 'string' ? value.attrDate1.trim() : '';
+  const attrDate2 = typeof value.attrDate2 === 'string' ? value.attrDate2.trim() : '';
+
+  if (!attrDate1 && !attrDate2) return undefined;
+
+  return {
+    attrDate1: attrDate1 || undefined,
+    attrDate2: attrDate2 || undefined,
+  };
+};
+
 const buildDataStructure = (): Theme[] => {
   const domains = typedManifest.domains ?? [];
   const objectLookup = buildObjectLookup(domains);
@@ -656,6 +697,7 @@ const buildDataStructure = (): Theme[] => {
         })),
         relations: relations.length > 0 ? relations : undefined,
         smartObjects: normalizeSmartObjects(obj.smartObjects),
+        defaultDateFiltering: normalizeDefaultDateFiltering(obj.defaultDateFiltering),
       } as DataObject;
     }),
   }));

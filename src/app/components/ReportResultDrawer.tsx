@@ -15,7 +15,6 @@ import {
   TableHeader,
   TableRow,
 } from './ui/table';
-import { ReportTemporalContext } from '../utils/reportPreview';
 
 type ReportPreviewColumn = {
   id: string;
@@ -35,7 +34,6 @@ type ReportResultDrawerProps = {
   columns: ReportPreviewColumn[];
   rows: ReportPreviewRow[];
   mainObjectLinkedToCollaborateur: boolean;
-  temporalContext: ReportTemporalContext;
   includeDepartedCollaborators: boolean;
   includePresentCollaborators: boolean;
   includeFutureNewCollaborators: boolean;
@@ -44,9 +42,6 @@ type ReportResultDrawerProps = {
   selectedEstablishmentFilters: string[];
   departmentTree: DepartmentTreeNode[];
   establishmentOptions: string[];
-  onReportDateChange: (value: string) => void;
-  onReportPeriodStartChange: (value: string) => void;
-  onReportPeriodEndChange: (value: string) => void;
   onIncludeDepartedChange: (value: boolean) => void;
   onIncludePresentChange: (value: boolean) => void;
   onIncludeFutureNewChange: (value: boolean) => void;
@@ -128,7 +123,6 @@ export function ReportResultDrawer({
   columns,
   rows,
   mainObjectLinkedToCollaborateur,
-  temporalContext,
   includeDepartedCollaborators,
   includePresentCollaborators,
   includeFutureNewCollaborators,
@@ -137,9 +131,6 @@ export function ReportResultDrawer({
   selectedEstablishmentFilters,
   departmentTree,
   establishmentOptions,
-  onReportDateChange,
-  onReportPeriodStartChange,
-  onReportPeriodEndChange,
   onIncludeDepartedChange,
   onIncludePresentChange,
   onIncludeFutureNewChange,
@@ -172,7 +163,6 @@ export function ReportResultDrawer({
 
   const saveDialogTitle = saveDialogMode === 'model' ? 'Enregistrer le modèle' : 'Enregistrer ce rapport';
   const saveDialogLabel = saveDialogMode === 'model' ? 'Nom du modèle' : 'Nom du rapport';
-  const isPeriodMode = temporalContext.mode === 'period';
 
   const getDepartmentBranchNames = (node: DepartmentTreeNode): string[] => {
     return [node.name, ...node.children.flatMap(getDepartmentBranchNames)];
@@ -197,43 +187,6 @@ export function ReportResultDrawer({
         <div className="mx-auto flex min-h-full w-full max-w-full flex-col gap-3 px-4">
             <div className="grid shrink-0 gap-3 lg:grid-cols-2">
               <div className="rounded border p-3">
-                {mainObjectLinkedToCollaborateur && (
-                  <div className="mb-2 space-y-2 border-b border-gray-200 pb-2 text-xs text-gray-700">
-                    <div className="font-medium">Contexte temporel du rapport</div>
-                    {isPeriodMode ? (
-                      <div className="flex flex-wrap items-center gap-2">
-                        <label htmlFor="preview-report-period-start" className="font-medium text-gray-700">Début de période</label>
-                        <input
-                          id="preview-report-period-start"
-                          type="date"
-                          value={temporalContext.periodStartDate ?? ''}
-                          onChange={(event) => onReportPeriodStartChange(event.target.value)}
-                          className="rounded border border-gray-300 px-2 py-1 text-xs"
-                        />
-                        <label htmlFor="preview-report-period-end" className="font-medium text-gray-700">Fin de période</label>
-                        <input
-                          id="preview-report-period-end"
-                          type="date"
-                          value={temporalContext.periodEndDate ?? ''}
-                          onChange={(event) => onReportPeriodEndChange(event.target.value)}
-                          className="rounded border border-gray-300 px-2 py-1 text-xs"
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex flex-wrap items-center gap-2">
-                        <label htmlFor="preview-report-date" className="font-medium text-gray-700">Date de valeur du rapport</label>
-                        <input
-                          id="preview-report-date"
-                          type="date"
-                          value={temporalContext.reportDate}
-                          onChange={(event) => onReportDateChange(event.target.value)}
-                          className="rounded border border-gray-300 px-2 py-1 text-xs"
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
-
                 <button
                   type="button"
                   onClick={() => setCollaboratorStatusFilterExpanded((prev) => !prev)}

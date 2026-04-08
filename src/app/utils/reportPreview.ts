@@ -12,6 +12,10 @@ type PreviewMeta = {
 const STATUS_DATE_REFERENCE_ATTRIBUTE_ID = '__status-collaborators-date__';
 const REPORT_PERIOD_START_ATTRIBUTE_ID = '__report-period-start__';
 const REPORT_PERIOD_END_ATTRIBUTE_ID = '__report-period-end__';
+const REPORT_DATE_VARIABLE_ID = 'dateRapport';
+const REPORT_PERIOD_START_VARIABLE_ID = 'dateDebutRapport';
+const REPORT_PERIOD_END_VARIABLE_ID = 'dateFinRapport';
+const AUTO_FILTER_COLUMN_PREFIX = '__auto-filter-col__';
 
 export type ReportTemporalMode = 'day' | 'period';
 
@@ -20,6 +24,12 @@ export type ReportTemporalContext = {
   reportDate: string;
   periodStartDate?: string;
   periodEndDate?: string;
+  /** date unique choisie pour le mode chooseOne */
+  chosenDate?: string;
+  /** début de période choisie pour le mode choosePeriod */
+  chosenPeriodStart?: string;
+  /** fin de période choisie pour le mode choosePeriod */
+  chosenPeriodEnd?: string;
 };
 
 type PreviewRowInternal = {
@@ -192,15 +202,27 @@ const evaluateCondition = (
   cells: Record<string, PreviewCellValue>,
   temporalContext: ReportTemporalContext,
 ): boolean => {
+  const resolveReferenceAttributeValue = (referenceAttributeId: string | undefined) => {
+    if (!referenceAttributeId) return '';
+
+    if (referenceAttributeId === REPORT_DATE_VARIABLE_ID || referenceAttributeId === STATUS_DATE_REFERENCE_ATTRIBUTE_ID) {
+      return temporalContext.chosenDate ?? temporalContext.reportDate;
+    }
+
+    if (referenceAttributeId === REPORT_PERIOD_START_VARIABLE_ID || referenceAttributeId === REPORT_PERIOD_START_ATTRIBUTE_ID) {
+      return temporalContext.chosenPeriodStart ?? temporalContext.periodStartDate ?? temporalContext.reportDate;
+    }
+
+    if (referenceAttributeId === REPORT_PERIOD_END_VARIABLE_ID || referenceAttributeId === REPORT_PERIOD_END_ATTRIBUTE_ID) {
+      return temporalContext.chosenPeriodEnd ?? temporalContext.periodEndDate ?? temporalContext.reportDate;
+    }
+
+    return cells[referenceAttributeId];
+  };
+
   const left = cells[condition.attributeId];
   const right = condition.valueType === 'attribute'
-    ? (condition.referenceAttributeId === STATUS_DATE_REFERENCE_ATTRIBUTE_ID
-      ? temporalContext.reportDate
-      : condition.referenceAttributeId === REPORT_PERIOD_START_ATTRIBUTE_ID
-      ? temporalContext.periodStartDate ?? temporalContext.reportDate
-      : condition.referenceAttributeId === REPORT_PERIOD_END_ATTRIBUTE_ID
-      ? temporalContext.periodEndDate ?? temporalContext.reportDate
-      : cells[condition.referenceAttributeId ?? ''])
+    ? resolveReferenceAttributeValue(condition.referenceAttributeId)
     : condition.value;
 
   const leftText = normalizeText(String(left ?? ''));
@@ -504,10 +526,12 @@ export const generateReportPreviewRows = (input: GenerateReportPreviewInput): Ge
   }
 
   return {
-    columns: input.columns.map((column) => ({
+    columns: input.columns
+      .filter((column) => !column.id.startsWith(AUTO_FILTER_COLUMN_PREFIX))
+      .map((column) => ({
       id: column.id,
       label: column.label,
-    })),
+      })),
     rows: sortedRows.map((row) => row.cells),
   };
 };

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
 import { AttributeType, DataObject } from '../data/dataStructure';
 import { FilterCondition, FilterGroup, SelectedAttribute } from '../types/selection';
@@ -30,6 +30,9 @@ export function FilterDialog({
   compartmentFilterAttributes = [],
   showCompartmenting = false,
 }: FilterDialogProps) {
+  const AUTO_FILTER_COLUMN_PREFIX = '__auto-filter-col__';
+  const wasOpenRef = useRef(false);
+
   const normalizeSortKey = (value: string) =>
     value
       .normalize('NFD')
@@ -46,28 +49,40 @@ export function FilterDialog({
     [compartmentFilterAttributes]
   );
 
-  const filterTargets = useMemo(
-    () => [
-      ...sortedObjectAttributes.map((attr) => ({
-        id: attr.id,
-        name: attr.name,
-        type: attr.type,
-        enumValues: attr.enumValues,
+  const filterTargets = useMemo(() => {
+    const nativeTargets = sortedObjectAttributes.map((attr) => ({
+      id: attr.id,
+      name: attr.name,
+      type: attr.type,
+      enumValues: attr.enumValues,
+      targetKind: 'native' as const,
+    }));
+
+    const compartmentTargets = showCompartmenting
+      ? sortedCompartmentFilterAttributes.map((attr) => ({
+          id: attr.id,
+          name: attr.name,
+          type: 'string' as AttributeType,
+          targetKind: 'compartment' as const,
+          values: attr.values,
+          sourceAttributeName: attr.sourceAttributeName,
+        }))
+      : [];
+
+    const existingTargetIds = new Set([...nativeTargets, ...compartmentTargets].map((target) => target.id));
+    const autoFilterTargets = (currentFilterGroups ?? [])
+      .flatMap((group) => group.conditions)
+      .filter((condition) => condition.attributeId.startsWith(AUTO_FILTER_COLUMN_PREFIX))
+      .filter((condition) => !existingTargetIds.has(condition.attributeId))
+      .map((condition) => ({
+        id: condition.attributeId,
+        name: condition.attributeName,
+        type: condition.attributeType,
         targetKind: 'native' as const,
-      })),
-      ...(showCompartmenting
-        ? sortedCompartmentFilterAttributes.map((attr) => ({
-            id: attr.id,
-            name: attr.name,
-            type: 'string' as AttributeType,
-            targetKind: 'compartment' as const,
-            values: attr.values,
-            sourceAttributeName: attr.sourceAttributeName,
-          }))
-        : []),
-    ],
-      [sortedObjectAttributes, showCompartmenting, sortedCompartmentFilterAttributes]
-  );
+      }));
+
+    return [...nativeTargets, ...compartmentTargets, ...autoFilterTargets];
+  }, [currentFilterGroups, showCompartmenting, sortedCompartmentFilterAttributes, sortedObjectAttributes]);
 
   const [filterGroups, setFilterGroups] = useState<FilterGroup[]>(
     currentFilterGroups && currentFilterGroups.length > 0
@@ -86,49 +101,63 @@ export function FilterDialog({
   );
 
   useEffect(() => {
-    if (isOpen) {
-      if (currentFilterGroups && currentFilterGroups.length > 0) {
-        const normalizedGroups = currentFilterGroups.map((group) => ({
-          ...group,
-          conditions: group.conditions.map((condition) => {
-            const target = filterTargets.find((candidate) => candidate.id === condition.attributeId);
-            const enumValues = target?.targetKind === 'native' ? target.enumValues ?? [] : [];
-            const availableOperators = getAvailableOperators(condition.attributeType, enumValues).map((entry) => entry.value);
-            const operator = availableOperators.includes(condition.operator)
-              ? condition.operator
-              : (availableOperators[0] ?? 'equals');
-            const shouldUseArrayValue = condition.targetKind === 'compartment' || enumValues.length > 0;
-            const value = shouldUseArrayValue
-              ? (Array.isArray(condition.value)
-                ? condition.value
-                : (condition.value !== '' && condition.value !== null && condition.value !== undefined
-                  ? [String(condition.value)]
-                  : []))
-              : condition.value;
-
-            return {
-              ...condition,
-              operator,
-              value,
-            };
-          }),
-        }));
-
-        setFilterGroups(normalizedGroups);
-      } else {
-        setFilterGroups([{
-          conditions: [{
-            attributeId: filterTargets[0]?.id ?? '',
-            attributeName: attributeName,
-            attributeType: filterTargets[0]?.type ?? attributeType,
-            operator: 'equals',
-            value: '',
-            targetKind: filterTargets[0]?.targetKind ?? 'native',
-          }],
-          logicalOperator: 'ET',
-        }]);
-      }
+    const justOpened = isOpen && !wasOpenRef.current;
+    if (!justOpened) {
+      wasOpenRef.current = isOpen;
+      return;
     }
+
+    if (currentFilterGroups && currentFilterGroups.length > 0) {
+      const normalizedGroups = currentFilterGroups.map((group) => ({
+        ...group,
+        conditions: group.conditions.map((condition) => {
+          const normalizedAttributeId = condition.attributeId.startsWith(AUTO_FILTER_COLUMN_PREFIX)
+            ? condition.attributeId.slice(AUTO_FILTER_COLUMN_PREFIX.length)
+            : condition.attributeId;
+          const target = filterTargets.find((candidate) => candidate.id === condition.attributeId)
+            ?? filterTargets.find((candidate) => candidate.id === normalizedAttributeId);
+          const enumValues = target?.targetKind === 'native' ? target.enumValues ?? [] : [];
+          const availableOperators = getAvailableOperators(condition.attributeType, enumValues).map((entry) => entry.value);
+          const operator = availableOperators.includes(condition.operator)
+            ? condition.operator
+            : (availableOperators[0] ?? 'equals');
+          const targetKind = target?.targetKind ?? condition.targetKind ?? 'native';
+          const shouldUseArrayValue = targetKind === 'compartment' || enumValues.length > 0;
+          const value = shouldUseArrayValue
+            ? (Array.isArray(condition.value)
+              ? condition.value
+              : (condition.value !== '' && condition.value !== null && condition.value !== undefined
+                ? [String(condition.value)]
+                : []))
+            : condition.value;
+
+          return {
+            ...condition,
+            attributeName: target?.name ?? condition.attributeName,
+            attributeType: target?.type ?? condition.attributeType,
+            targetKind,
+            operator,
+            value,
+          };
+        }),
+      }));
+
+      setFilterGroups(normalizedGroups);
+    } else {
+      setFilterGroups([{
+        conditions: [{
+          attributeId: filterTargets[0]?.id ?? '',
+          attributeName: attributeName,
+          attributeType: filterTargets[0]?.type ?? attributeType,
+          operator: 'equals',
+          value: '',
+          targetKind: filterTargets[0]?.targetKind ?? 'native',
+        }],
+        logicalOperator: 'ET',
+      }]);
+    }
+
+    wasOpenRef.current = isOpen;
   }, [isOpen, currentFilterGroups, attributeName, attributeType, filterTargets]);
 
   if (!isOpen) return null;
@@ -385,7 +414,7 @@ export function FilterDialog({
       <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="font-semibold text-gray-900">Filtres</h3>
-          <button onClick={onClose} className="rounded p-1 hover:bg-gray-100">
+          <button type="button" onClick={onClose} className="rounded p-1 hover:bg-gray-100">
             <X className="size-5 text-gray-600" />
           </button>
         </div>
@@ -398,6 +427,7 @@ export function FilterDialog({
                   <span className="text-sm font-medium text-gray-700">Groupe {groupIndex + 1}</span>
                   <div className="flex gap-2">
                     <button
+                      type="button"
                       onClick={() => updateGroupOperator(groupIndex, 'ET')}
                       className={`rounded px-3 py-1 text-xs font-medium ${
                         group.logicalOperator === 'ET'
@@ -408,6 +438,7 @@ export function FilterDialog({
                       ET
                     </button>
                     <button
+                      type="button"
                       onClick={() => updateGroupOperator(groupIndex, 'OU')}
                       className={`rounded px-3 py-1 text-xs font-medium ${
                         group.logicalOperator === 'OU'
@@ -421,6 +452,7 @@ export function FilterDialog({
                 </div>
                 {filterGroups.length > 1 && (
                   <button
+                    type="button"
                     onClick={() => removeFilterGroup(groupIndex)}
                     className="flex items-center gap-1 rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50"
                   >
@@ -440,6 +472,13 @@ export function FilterDialog({
                     const enumValues = getConditionEnumValues(condition);
                     const hasEnumValues = enumValues.length > 0;
                     const availableOperators = getAvailableOperators(condition.attributeType, enumValues);
+                    const standardNativeTargets = filterTargets.filter(
+                      (target) => target.targetKind === 'native' && !target.id.startsWith(AUTO_FILTER_COLUMN_PREFIX)
+                    );
+                    const autoNativeTargets = filterTargets.filter(
+                      (target) => target.targetKind === 'native' && target.id.startsWith(AUTO_FILTER_COLUMN_PREFIX)
+                    );
+                    const compartmentTargets = filterTargets.filter((target) => target.targetKind === 'compartment');
 
                     return (
                   <div key={conditionIndex} className="flex items-start gap-2">
@@ -461,16 +500,25 @@ export function FilterDialog({
                             onChange={(e) => updateCondition(groupIndex, conditionIndex, 'attributeId', e.target.value)}
                             className="w-full rounded border border-gray-300 px-2 py-2 text-sm"
                           >
-                            {sortedObjectAttributes.map((attr) => (
-                              <option key={attr.id} value={attr.id}>
-                                {attr.name}
+                            {standardNativeTargets.map((target) => (
+                              <option key={target.id} value={target.id}>
+                                {target.name}
                               </option>
                             ))}
-                            {showCompartmenting && compartmentFilterAttributes.length > 0 && (
+                            {autoNativeTargets.length > 0 && (
+                              <optgroup label="Attributs auto">
+                                {autoNativeTargets.map((target) => (
+                                  <option key={target.id} value={target.id}>
+                                    {target.name}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                            {showCompartmenting && compartmentTargets.length > 0 && (
                               <optgroup label="Attributs compartimentés">
-                                {sortedCompartmentFilterAttributes.map((attr) => (
-                                  <option key={attr.id} value={attr.id}>
-                                    {attr.name}
+                                {compartmentTargets.map((target) => (
+                                  <option key={target.id} value={target.id}>
+                                    {target.name}
                                   </option>
                                 ))}
                               </optgroup>
@@ -508,6 +556,7 @@ export function FilterDialog({
                               {/* Choix entre valeur fixe et attribut de même type */}
                               <div className="mb-1 flex gap-2">
                                 <button
+                                  type="button"
                                   onClick={() => updateCondition(groupIndex, conditionIndex, 'valueType', 'fixed')}
                                   className={`flex-1 rounded px-2 py-1 text-xs ${
                                     (condition.valueType || 'fixed') === 'fixed'
@@ -518,6 +567,7 @@ export function FilterDialog({
                                   Valeur fixe
                                 </button>
                                 <button
+                                  type="button"
                                   onClick={() => updateCondition(groupIndex, conditionIndex, 'valueType', 'attribute')}
                                   className={`flex-1 rounded px-2 py-1 text-xs ${
                                     condition.valueType === 'attribute'
@@ -625,6 +675,7 @@ export function FilterDialog({
                     </div>
 
                     <button
+                      type="button"
                       onClick={() => removeConditionFromGroup(groupIndex, conditionIndex)}
                       className="mt-6 rounded p-1 text-red-600 hover:bg-red-50"
                       title="Supprimer la condition"
@@ -638,6 +689,7 @@ export function FilterDialog({
               </div>
 
               <button
+                type="button"
                 onClick={() => addConditionToGroup(groupIndex)}
                 className="mt-3 flex items-center gap-1 rounded border border-dashed border-gray-400 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
               >
@@ -649,6 +701,7 @@ export function FilterDialog({
         </div>
 
         <button
+          type="button"
           onClick={addFilterGroup}
           className="mt-4 flex items-center gap-1 rounded border border-dashed border-blue-400 px-4 py-2 text-sm text-blue-700 hover:bg-blue-50"
         >
@@ -659,6 +712,7 @@ export function FilterDialog({
         <div className="mt-6 flex justify-between gap-2">
           {hasActiveFilters && (
             <button
+              type="button"
               onClick={handleRemoveAllFilters}
               className="rounded border border-red-300 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
             >
@@ -667,12 +721,14 @@ export function FilterDialog({
           )}
           <div className="ml-auto flex gap-2">
             <button
+              type="button"
               onClick={onClose}
               className="rounded border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
             >
               Annuler
             </button>
             <button
+              type="button"
               onClick={handleConfirm}
               className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
             >

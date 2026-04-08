@@ -10,7 +10,7 @@ import { CalculatedColumnDialog } from './CalculatedColumnDialog';
 import { DateReferenceDialog } from './DateReferenceDialog';
 import { InfoHint } from './InfoHint';
 import { SelectedAttribute, AggregationType, InsertionType, FilterGroup, CompartmentConfig, DateReference, ConditionalColumnConfig, CalculatedColumnConfig } from '../types/selection';
-import { AttributeType, SmartObjectDefinition, dataStructure } from '../data/dataStructure';
+import { AttributeType, DefaultDateFiltering, SmartObjectDefinition, dataStructure } from '../data/dataStructure';
 import { generateReportPreviewRows, ReportPreviewRow, ReportTemporalContext } from '../utils/reportPreview';
 
 type NavigationPath = NonNullable<SelectedAttribute['navigationPath']>;
@@ -84,12 +84,13 @@ type DepartmentNode = {
   children: DepartmentNode[];
 };
 
-const STATUS_DATE_REFERENCE_ATTRIBUTE_ID = '__status-collaborators-date__';
-const STATUS_DATE_REFERENCE_ATTRIBUTE_LABEL = 'Date de valeur du rapport';
-const REPORT_PERIOD_START_ATTRIBUTE_ID = '__report-period-start__';
-const REPORT_PERIOD_START_ATTRIBUTE_LABEL = 'Date début de période du rapport';
-const REPORT_PERIOD_END_ATTRIBUTE_ID = '__report-period-end__';
-const REPORT_PERIOD_END_ATTRIBUTE_LABEL = 'Date fin de période du rapport';
+const REPORT_DATE_VARIABLE_ID = 'dateRapport';
+const REPORT_DATE_VARIABLE_LABEL = 'dateRapport';
+const REPORT_PERIOD_START_VARIABLE_ID = 'dateDebutRapport';
+const REPORT_PERIOD_START_VARIABLE_LABEL = 'dateDébutRapport';
+const REPORT_PERIOD_END_VARIABLE_ID = 'dateFinRapport';
+const REPORT_PERIOD_END_VARIABLE_LABEL = 'dateFinRapport';
+const AUTO_FILTER_COLUMN_PREFIX = '__auto-filter-col__';
 
 const getTodayIsoDate = () => {
   const today = new Date();
@@ -100,12 +101,46 @@ const getTodayIsoDate = () => {
   ].join('-');
 };
 
-const createDefaultTemporalContext = (mode: ReportTemporalContext['mode'] = 'day'): ReportTemporalContext => {
+const addMonthsIsoDate = (isoDate: string, monthsOffset: number) => {
+  const parsed = new Date(`${isoDate}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return isoDate;
+  parsed.setMonth(parsed.getMonth() + monthsOffset);
+  return [
+    parsed.getFullYear(),
+    String(parsed.getMonth() + 1).padStart(2, '0'),
+    String(parsed.getDate()).padStart(2, '0'),
+  ].join('-');
+};
+
+const isoToFrDate = (isoDate: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return '';
+  const [year, month, day] = isoDate.split('-');
+  return `${day}/${month}/${year}`;
+};
+
+const frToIsoDate = (frDate: string) => {
+  const trimmed = frDate.trim();
+  const match = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) return null;
+  const [, day, month, year] = match;
+  const iso = `${year}-${month}-${day}`;
+  const parsed = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const normalized = [
+    parsed.getFullYear(),
+    String(parsed.getMonth() + 1).padStart(2, '0'),
+    String(parsed.getDate()).padStart(2, '0'),
+  ].join('-');
+  return normalized === iso ? iso : null;
+};
+
+const createDefaultTemporalContext = (): ReportTemporalContext => {
   const today = getTodayIsoDate();
+  const twelveMonthsAgo = addMonthsIsoDate(today, -12);
   return {
-    mode,
+    mode: 'period',
     reportDate: today,
-    periodStartDate: today,
+    periodStartDate: twelveMonthsAgo,
     periodEndDate: today,
   };
 };
@@ -241,6 +276,10 @@ export function AttributeSelector() {
   const [showLinkedObjectCardinalities, setShowLinkedObjectCardinalities] = useState(true);
   const [showSelectAllButton, setShowSelectAllButton] = useState(true);
   const [reportTemporalContext, setReportTemporalContext] = useState<ReportTemporalContext>(() => createDefaultTemporalContext());
+  // Dates pour chooseOne/choosePeriod — modifiables par l'utilisateur dans la config
+  const [reportChosenDate, setReportChosenDate] = useState<string>(() => getTodayIsoDate());
+  const [reportChosenPeriodStart, setReportChosenPeriodStart] = useState<string>(() => addMonthsIsoDate(getTodayIsoDate(), -12));
+  const [reportChosenPeriodEnd, setReportChosenPeriodEnd] = useState<string>(() => getTodayIsoDate());
   const [includeDepartedCollaborators, setIncludeDepartedCollaborators] = useState(false);
   const [includePresentCollaborators, setIncludePresentCollaborators] = useState(true);
   const [includeFutureNewCollaborators, setIncludeFutureNewCollaborators] = useState(false);
@@ -404,83 +443,224 @@ export function AttributeSelector() {
     return false;
   };
 
-  const getFormattedReportDate = (isoDate: string) => {
-    if (!isoDate) return '';
-    const [year, month, day] = isoDate.split('-');
-    if (!year || !month || !day) return isoDate;
-    return `${day}/${month}/${year}`;
-  };
-
   const mainObjectDefinition = useMemo(() => {
     if (!mainObject) return null;
     const theme = dataStructure.find((candidate) => candidate.id === mainObject.themeId);
     return theme?.objects.find((candidate) => candidate.id === mainObject.objectId) ?? null;
   }, [mainObject]);
 
-  const mainObjectTemporalMode = mainObjectDefinition?.applicationDateConfig?.requirementMode === 'period'
-    ? 'period'
-    : 'day';
-  const mainObjectRequiresMandatoryDate = !!mainObjectDefinition?.applicationDateConfig?.mandatory;
-  const mainObjectHasTemporalContext = !!mainObjectDefinition?.applicationDate;
+  const mainObjectTemporalMode: ReportTemporalContext['mode'] = 'period';
   const reportDate = reportTemporalContext.reportDate;
   const reportPeriodStartDate = reportTemporalContext.periodStartDate ?? reportTemporalContext.reportDate;
   const reportPeriodEndDate = reportTemporalContext.periodEndDate ?? reportTemporalContext.reportDate;
-  const collaboratorStatusReferenceDate = mainObjectTemporalMode === 'period' ? reportPeriodEndDate : reportDate;
+  const collaboratorStatusReferenceDate = reportPeriodEndDate;
 
-  const setReportDate = (value: string) => {
-    setReportTemporalContext((prev) => ({
-      ...prev,
-      mode: 'day',
-      reportDate: value,
-    }));
+  const getDefaultDateFilteringAttribute = (
+    sourceThemeId: string,
+    sourceObjectId: string,
+    availableAttributes: AvailableObjectAttribute[],
+    attributeId: string,
+  ) => {
+    return availableAttributes.find(
+      (attr) =>
+        attr.sourceThemeId === sourceThemeId
+        && attr.sourceObjectId === sourceObjectId
+        && attr.relativeNavigationPath.length === 0
+        && attr.type === 'date'
+        && attr.id === attributeId
+    );
   };
 
-  const setReportPeriodStartDate = (value: string) => {
-    setReportTemporalContext((prev) => ({
-      ...prev,
-      mode: 'period',
-      periodStartDate: value,
-    }));
-  };
-
-  const setReportPeriodEndDate = (value: string) => {
-    setReportTemporalContext((prev) => ({
-      ...prev,
-      mode: 'period',
-      periodEndDate: value,
-    }));
-  };
-
-  const getFormattedTemporalContext = () => {
-    if (mainObjectTemporalMode === 'period') {
-      if (!reportPeriodStartDate || !reportPeriodEndDate) return 'Période incomplète';
-      return `${getFormattedReportDate(reportPeriodStartDate)} -> ${getFormattedReportDate(reportPeriodEndDate)}`;
+  const buildDefaultDateFilteringConfig = (
+    sourceThemeId: string,
+    sourceObjectId: string,
+    availableAttributes: AvailableObjectAttribute[],
+    defaultDateFiltering: DefaultDateFiltering | undefined,
+    temporalContext: ReportTemporalContext,
+    preferredDateAttributeIds?: { start?: string; end?: string },
+  ) => {
+    if (!defaultDateFiltering || defaultDateFiltering === 'none') {
+      return undefined;
     }
 
-    return getFormattedReportDate(reportDate);
+    const createDateCondition = (
+      attribute: AvailableObjectAttribute,
+      operator: 'greaterOrEqual' | 'lessOrEqual' | 'equals',
+      value: string,
+    ) => ({
+      attributeId: `${AUTO_FILTER_COLUMN_PREFIX}${attribute.id}`,
+      attributeName: `${attribute.rawName} [filtre auto]`,
+      attributeType: 'date' as const,
+      operator,
+      value,
+      valueType: 'fixed' as const,
+    });
+
+    const createDateReferenceCondition = (
+      attribute: AvailableObjectAttribute,
+      operator: 'greaterOrEqual' | 'lessOrEqual' | 'equals',
+      referenceAttributeId: string,
+      referenceAttributeName: string,
+    ) => ({
+      attributeId: `${AUTO_FILTER_COLUMN_PREFIX}${attribute.id}`,
+      attributeName: `${attribute.rawName} [filtre auto]`,
+      attributeType: 'date' as const,
+      operator,
+      value: '',
+      valueType: 'attribute' as const,
+      referenceAttributeId,
+      referenceAttributeName,
+    });
+
+    if (defaultDateFiltering === 'chooseOne') {
+      const fallbackDateAttr = availableAttributes.find(
+        (attr) =>
+          attr.sourceThemeId === sourceThemeId
+          && attr.sourceObjectId === sourceObjectId
+          && attr.relativeNavigationPath.length === 0
+          && attr.type === 'date'
+          && preferredDateAttributeIds?.start
+          && attr.id === preferredDateAttributeIds.start
+      ) ?? availableAttributes.find(
+        (attr) =>
+          attr.sourceThemeId === sourceThemeId
+          && attr.sourceObjectId === sourceObjectId
+          && attr.relativeNavigationPath.length === 0
+          && attr.type === 'date'
+      );
+
+      if (!fallbackDateAttr) return undefined;
+
+      return {
+        groups: [{
+          logicalOperator: 'ET' as const,
+          conditions: [
+            createDateReferenceCondition(
+              fallbackDateAttr,
+              'equals',
+              REPORT_DATE_VARIABLE_ID,
+              REPORT_DATE_VARIABLE_LABEL,
+            ),
+          ],
+        }],
+      };
+    }
+
+    if (defaultDateFiltering === 'choosePeriod') {
+      const dateAttributes = availableAttributes.filter(
+        (attr) =>
+          attr.sourceThemeId === sourceThemeId
+          && attr.sourceObjectId === sourceObjectId
+          && attr.relativeNavigationPath.length === 0
+          && attr.type === 'date'
+      );
+
+      const preferredStart = preferredDateAttributeIds?.start
+        ? dateAttributes.find((attr) => attr.id === preferredDateAttributeIds.start)
+        : undefined;
+      const preferredEnd = preferredDateAttributeIds?.end
+        ? dateAttributes.find((attr) => attr.id === preferredDateAttributeIds.end)
+        : undefined;
+      const firstDateAttribute = preferredStart ?? dateAttributes[0];
+      if (!firstDateAttribute) return undefined;
+      const secondDateAttribute = preferredEnd ?? dateAttributes[1] ?? firstDateAttribute;
+
+      return {
+        groups: [{
+          logicalOperator: 'ET' as const,
+          conditions: [
+            createDateReferenceCondition(
+              firstDateAttribute,
+              'greaterOrEqual',
+              REPORT_PERIOD_START_VARIABLE_ID,
+              REPORT_PERIOD_START_VARIABLE_LABEL,
+            ),
+            createDateReferenceCondition(
+              secondDateAttribute,
+              'lessOrEqual',
+              REPORT_PERIOD_END_VARIABLE_ID,
+              REPORT_PERIOD_END_VARIABLE_LABEL,
+            ),
+          ],
+        }],
+      };
+    }
+
+    const conditions: FilterGroup['conditions'] = [];
+    const dateStart = temporalContext.chosenPeriodStart ?? temporalContext.periodStartDate ?? temporalContext.reportDate;
+    const dateEnd = temporalContext.chosenPeriodEnd ?? temporalContext.periodEndDate ?? temporalContext.reportDate;
+
+    const firstAttr = getDefaultDateFilteringAttribute(
+      sourceThemeId,
+      sourceObjectId,
+      availableAttributes,
+      defaultDateFiltering.attrDate1 ?? ''
+    );
+    if (firstAttr) {
+      conditions.push(
+        createDateReferenceCondition(
+          firstAttr,
+          'greaterOrEqual',
+          REPORT_PERIOD_START_VARIABLE_ID,
+          REPORT_PERIOD_START_VARIABLE_LABEL,
+        )
+      );
+    }
+
+    const secondAttr = getDefaultDateFilteringAttribute(
+      sourceThemeId,
+      sourceObjectId,
+      availableAttributes,
+      defaultDateFiltering.attrDate2 ?? ''
+    );
+    if (secondAttr) {
+      conditions.push(
+        createDateReferenceCondition(
+          secondAttr,
+          'lessOrEqual',
+          REPORT_PERIOD_END_VARIABLE_ID,
+          REPORT_PERIOD_END_VARIABLE_LABEL,
+        )
+      );
+    }
+
+    if (conditions.length === 0) return undefined;
+
+    return {
+      groups: [{
+        logicalOperator: 'ET' as const,
+        conditions,
+      }],
+    };
+  };
+
+  const applyMainObjectDefaultDateFiltering = (
+    sourceThemeId: string,
+    sourceObjectId: string,
+    availableAttributes: AvailableObjectAttribute[],
+    defaultDateFiltering: DefaultDateFiltering | undefined,
+    temporalContext: ReportTemporalContext,
+    preferredDateAttributeIds?: { start?: string; end?: string },
+  ) => {
+    const nextFilterConfig = buildDefaultDateFilteringConfig(
+      sourceThemeId,
+      sourceObjectId,
+      availableAttributes,
+      defaultDateFiltering,
+      temporalContext,
+      preferredDateAttributeIds,
+    );
+    setGlobalFilterGroups(nextFilterConfig?.groups);
   };
 
   const validateReportTemporalContext = () => {
-    if (!mainObjectHasTemporalContext || !mainObjectRequiresMandatoryDate) {
-      return true;
+    if (!reportPeriodStartDate || !reportPeriodEndDate) {
+      window.alert('Veuillez renseigner une date de début et une date de fin pour la période du rapport.');
+      return false;
     }
 
-    if (mainObjectTemporalMode === 'period') {
-      if (!reportPeriodStartDate || !reportPeriodEndDate) {
-        window.alert('Veuillez renseigner une date de début et une date de fin pour la période du rapport.');
-        return false;
-      }
-
-      if (reportPeriodStartDate > reportPeriodEndDate) {
-        window.alert('La date de début de période doit être antérieure ou égale à la date de fin.');
-        return false;
-      }
-
-      return true;
-    }
-
-    if (!reportDate) {
-      window.alert('Veuillez renseigner la date de valeur du rapport.');
+    if (reportPeriodStartDate > reportPeriodEndDate) {
+      window.alert('La date de début de période doit être antérieure ou égale à la date de fin.');
       return false;
     }
 
@@ -745,7 +925,7 @@ export function AttributeSelector() {
       : directObjectAttributes;
     const mainObjectSupportsApplicable = !!(obj.applicationDate || obj.isApplicable);
     const mainObjectApplicationDateMandatory = !!obj.applicationDateConfig?.mandatory;
-    const nextTemporalMode = obj.applicationDateConfig?.requirementMode === 'period' ? 'period' : 'day';
+    const nextTemporalContext = createDefaultTemporalContext();
 
     const autoInserted = defaultAttributes.map((attr) =>
       buildSelectedAttribute({
@@ -771,7 +951,7 @@ export function AttributeSelector() {
       objectId,
       objectName,
     });
-    setReportTemporalContext(createDefaultTemporalContext(nextTemporalMode));
+    setReportTemporalContext(nextTemporalContext);
     setMainObjectConfig(
       mainObjectSupportsApplicable
         ? (mainObjectApplicationDateMandatory
@@ -788,6 +968,32 @@ export function AttributeSelector() {
     setPendingObjectInsertion(null);
     setObjectInsertionDialogOpen(false);
     setSelectedAttributes(autoInserted);
+
+    // Initialise les dates choisies par défaut (sans prompt)
+    const defaultChosenDate = nextTemporalContext.periodEndDate ?? nextTemporalContext.reportDate;
+    const defaultPeriodStart = nextTemporalContext.periodStartDate ?? addMonthsIsoDate(nextTemporalContext.reportDate, -12);
+    const defaultPeriodEnd = nextTemporalContext.periodEndDate ?? nextTemporalContext.reportDate;
+    setReportChosenDate(defaultChosenDate);
+    setReportChosenPeriodStart(defaultPeriodStart);
+    setReportChosenPeriodEnd(defaultPeriodEnd);
+
+    const ctxWithChosen: ReportTemporalContext = {
+      ...nextTemporalContext,
+      chosenDate: defaultChosenDate,
+      chosenPeriodStart: defaultPeriodStart,
+      chosenPeriodEnd: defaultPeriodEnd,
+    };
+    applyMainObjectDefaultDateFiltering(
+      themeId,
+      objectId,
+      objectAttributes,
+      obj.defaultDateFiltering,
+      ctxWithChosen,
+      {
+        start: obj.applicationDateConfig?.startAttributeId,
+        end: obj.applicationDateConfig?.endAttributeId,
+      }
+    );
   };
 
   const normalizeSmartText = (value: string) =>
@@ -1211,13 +1417,23 @@ export function AttributeSelector() {
           objectId: pendingMainObject.objectId,
           objectName: pendingMainObject.objectName,
         });
-        setReportTemporalContext(createDefaultTemporalContext(
-          pendingObject?.applicationDateConfig?.requirementMode === 'period' ? 'period' : 'day'
-        ));
+        const nextTemporalContext = createDefaultTemporalContext();
+        setReportTemporalContext(nextTemporalContext);
         setMainObjectConfig(config);
         setSelectingMainObject(false);
         setPendingMainObject(null);
         setSelectedAttributes([newAttr]);
+        applyMainObjectDefaultDateFiltering(
+          pendingMainObject.themeId,
+          pendingMainObject.objectId,
+          objectAttributes,
+          pendingObject?.defaultDateFiltering,
+          nextTemporalContext,
+          {
+            start: pendingObject?.applicationDateConfig?.startAttributeId,
+            end: pendingObject?.applicationDateConfig?.endAttributeId,
+          }
+        );
       } else {
         setSelectedAttributes((prev) => appendUniqueAttributes(prev, [newAttr]));
       }
@@ -1290,13 +1506,23 @@ export function AttributeSelector() {
           objectId: pendingMainObject.objectId,
           objectName: pendingMainObject.objectName,
         });
-        setReportTemporalContext(createDefaultTemporalContext(
-          pendingObject?.applicationDateConfig?.requirementMode === 'period' ? 'period' : 'day'
-        ));
+        const nextTemporalContext = createDefaultTemporalContext();
+        setReportTemporalContext(nextTemporalContext);
         setMainObjectConfig(config);
         setSelectingMainObject(false);
         setPendingMainObject(null);
         setSelectedAttributes((prev) => appendUniqueAttributes(prev, newAttributes));
+        applyMainObjectDefaultDateFiltering(
+          pendingMainObject.themeId,
+          pendingMainObject.objectId,
+          objectAttributes,
+          pendingObject?.defaultDateFiltering,
+          nextTemporalContext,
+          {
+            start: pendingObject?.applicationDateConfig?.startAttributeId,
+            end: pendingObject?.applicationDateConfig?.endAttributeId,
+          }
+        );
       } else {
         setSelectedAttributes((prev) => appendUniqueAttributes(prev, newAttributes));
       }
@@ -1528,6 +1754,11 @@ export function AttributeSelector() {
   };
 
   const handleChangeReportType = () => {
+    const defaultTemporalContext = createDefaultTemporalContext();
+    const defaultChosenDate = defaultTemporalContext.periodEndDate ?? defaultTemporalContext.reportDate;
+    const defaultChosenPeriodStart = defaultTemporalContext.periodStartDate ?? addMonthsIsoDate(defaultTemporalContext.reportDate, -12);
+    const defaultChosenPeriodEnd = defaultTemporalContext.periodEndDate ?? defaultTemporalContext.reportDate;
+
     setSelectedAttributes([]);
     setGlobalFilterGroups(undefined);
     setGlobalFilterDialogOpen(false);
@@ -1544,7 +1775,10 @@ export function AttributeSelector() {
     setPendingSortColumnId('');
     setReportPreviewColumns([]);
     setReportPreviewRows([]);
-    setReportTemporalContext(createDefaultTemporalContext());
+    setReportTemporalContext(defaultTemporalContext);
+    setReportChosenDate(defaultChosenDate);
+    setReportChosenPeriodStart(defaultChosenPeriodStart);
+    setReportChosenPeriodEnd(defaultChosenPeriodEnd);
     setIncludeDepartedCollaborators(false);
     setIncludePresentCollaborators(true);
     setIncludeFutureNewCollaborators(false);
@@ -1706,29 +1940,58 @@ export function AttributeSelector() {
       type: attr.attributeType,
       }));
 
+    const reportDateVariables = (() => {
+      if (!mainObjectDefinition || !mainObject) return [] as Array<{ id: string; name: string; columnName: string; type: 'date' }>;
+
+      if (mainObjectDefinition.defaultDateFiltering === 'chooseOne') {
+        return [{
+          id: REPORT_DATE_VARIABLE_ID,
+          name: REPORT_DATE_VARIABLE_LABEL,
+          columnName: REPORT_DATE_VARIABLE_LABEL,
+          type: 'date' as const,
+        }];
+      }
+
+      if (mainObjectDefinition.defaultDateFiltering === 'choosePeriod') {
+        return [
+          {
+            id: REPORT_PERIOD_START_VARIABLE_ID,
+            name: REPORT_PERIOD_START_VARIABLE_LABEL,
+            columnName: REPORT_PERIOD_START_VARIABLE_LABEL,
+            type: 'date' as const,
+          },
+          {
+            id: REPORT_PERIOD_END_VARIABLE_ID,
+            name: REPORT_PERIOD_END_VARIABLE_LABEL,
+            columnName: REPORT_PERIOD_END_VARIABLE_LABEL,
+            type: 'date' as const,
+          },
+        ];
+      }
+
+      if (typeof mainObjectDefinition.defaultDateFiltering === 'object') {
+        return [
+          {
+            id: REPORT_PERIOD_START_VARIABLE_ID,
+            name: REPORT_PERIOD_START_VARIABLE_LABEL,
+            columnName: REPORT_PERIOD_START_VARIABLE_LABEL,
+            type: 'date' as const,
+          },
+          {
+            id: REPORT_PERIOD_END_VARIABLE_ID,
+            name: REPORT_PERIOD_END_VARIABLE_LABEL,
+            columnName: REPORT_PERIOD_END_VARIABLE_LABEL,
+            type: 'date' as const,
+          },
+        ];
+      }
+
+      return [] as Array<{ id: string; name: string; columnName: string; type: 'date' }>;
+    })();
+
     return [
       ...selectedFilterAttributes,
-      ...(mainObjectTemporalMode === 'period'
-        ? [
-            {
-              id: REPORT_PERIOD_START_ATTRIBUTE_ID,
-              name: REPORT_PERIOD_START_ATTRIBUTE_LABEL,
-              columnName: REPORT_PERIOD_START_ATTRIBUTE_LABEL,
-              type: 'date' as const,
-            },
-            {
-              id: REPORT_PERIOD_END_ATTRIBUTE_ID,
-              name: REPORT_PERIOD_END_ATTRIBUTE_LABEL,
-              columnName: REPORT_PERIOD_END_ATTRIBUTE_LABEL,
-              type: 'date' as const,
-            },
-          ]
-        : [{
-            id: STATUS_DATE_REFERENCE_ATTRIBUTE_ID,
-            name: STATUS_DATE_REFERENCE_ATTRIBUTE_LABEL,
-            columnName: STATUS_DATE_REFERENCE_ATTRIBUTE_LABEL,
-            type: 'date' as const,
-          }]),
+      ...reportDateVariables,
     ];
   };
 
@@ -1797,7 +2060,7 @@ export function AttributeSelector() {
     const leftAttributeLabel = getFilterAttributeLabel(condition.attributeId, condition.attributeName);
     const formatFilterValue = (value: string | number | boolean) => {
       if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-        return getFormattedReportDate(value);
+        return isoToFrDate(value) || value;
       }
       return String(value);
     };
@@ -1828,7 +2091,7 @@ export function AttributeSelector() {
   };
 
   const getCollaboratorStatusFilterLines = () => {
-    const formattedDate = getFormattedReportDate(collaboratorStatusReferenceDate);
+    const formattedDate = isoToFrDate(collaboratorStatusReferenceDate) || collaboratorStatusReferenceDate;
     const lines: string[] = [];
 
     if (includeDepartedCollaborators) {
@@ -2304,9 +2567,17 @@ export function AttributeSelector() {
   };
 
   const deselectAllSelectedAttributes = () => {
+    const defaultTemporalContext = createDefaultTemporalContext();
+    const defaultChosenDate = defaultTemporalContext.periodEndDate ?? defaultTemporalContext.reportDate;
+    const defaultChosenPeriodStart = defaultTemporalContext.periodStartDate ?? addMonthsIsoDate(defaultTemporalContext.reportDate, -12);
+    const defaultChosenPeriodEnd = defaultTemporalContext.periodEndDate ?? defaultTemporalContext.reportDate;
+
     setSelectedAttributes([]);
     setGlobalFilterGroups(undefined);
-    setReportTemporalContext(createDefaultTemporalContext(mainObjectTemporalMode));
+    setReportTemporalContext(defaultTemporalContext);
+    setReportChosenDate(defaultChosenDate);
+    setReportChosenPeriodStart(defaultChosenPeriodStart);
+    setReportChosenPeriodEnd(defaultChosenPeriodEnd);
     setIncludeDepartedCollaborators(false);
     setIncludePresentCollaborators(true);
     setIncludeFutureNewCollaborators(false);
@@ -2702,6 +2973,27 @@ export function AttributeSelector() {
     attributeName: attr.attributeName,
     insertionType: attr.insertionType,
   }));
+  const technicalFilterColumns = useMemo(() => {
+    const byId = new Map<string, { id: string; label: string; attributeType: AttributeType; attributeName: string; insertionType: InsertionType }>();
+
+    for (const group of globalFilterGroups ?? []) {
+      for (const condition of group.conditions) {
+        if (!condition.attributeId.startsWith(AUTO_FILTER_COLUMN_PREFIX)) continue;
+        if (byId.has(condition.attributeId)) continue;
+
+        byId.set(condition.attributeId, {
+          id: condition.attributeId,
+          label: condition.attributeName,
+          attributeType: condition.attributeType,
+          attributeName: condition.attributeName,
+          insertionType: 'normal',
+        });
+      }
+    }
+
+    return Array.from(byId.values());
+  }, [globalFilterGroups]);
+  const previewColumnsForGeneration = [...reportPreviewSourceColumns, ...technicalFilterColumns];
 
   const refreshReportPreview = () => {
     if (!validateReportTemporalContext()) {
@@ -2709,13 +3001,16 @@ export function AttributeSelector() {
     }
 
     const preview = generateReportPreviewRows({
-      columns: reportPreviewSourceColumns,
+      columns: previewColumnsForGeneration,
       rowCount: 20,
       temporalContext: {
         mode: mainObjectTemporalMode,
         reportDate,
         periodStartDate: reportPeriodStartDate,
         periodEndDate: reportPeriodEndDate,
+        chosenDate: reportChosenDate,
+        chosenPeriodStart: reportChosenPeriodStart,
+        chosenPeriodEnd: reportChosenPeriodEnd,
       },
       globalFilterGroups,
       collaboratorFilterEnabled: mainObjectLinkedToCollaborateur,
@@ -2828,12 +3123,6 @@ export function AttributeSelector() {
             columns={reportPreviewColumns}
             rows={reportPreviewRows}
             mainObjectLinkedToCollaborateur={mainObjectLinkedToCollaborateur}
-            temporalContext={{
-              mode: mainObjectTemporalMode,
-              reportDate,
-              periodStartDate: reportPeriodStartDate,
-              periodEndDate: reportPeriodEndDate,
-            }}
             includeDepartedCollaborators={includeDepartedCollaborators}
             includePresentCollaborators={includePresentCollaborators}
             includeFutureNewCollaborators={includeFutureNewCollaborators}
@@ -2842,9 +3131,6 @@ export function AttributeSelector() {
             selectedEstablishmentFilters={selectedEstablishmentFilters}
             departmentTree={departmentTree}
             establishmentOptions={establishmentOptions}
-            onReportDateChange={setReportDate}
-            onReportPeriodStartChange={setReportPeriodStartDate}
-            onReportPeriodEndChange={setReportPeriodEndDate}
             onIncludeDepartedChange={setIncludeDepartedCollaborators}
             onIncludePresentChange={setIncludePresentCollaborators}
             onIncludeFutureNewChange={setIncludeFutureNewCollaborators}
@@ -2857,7 +3143,7 @@ export function AttributeSelector() {
             }
             collaboratorStatusSummaryLabel={
               mainObjectLinkedToCollaborateur
-                ? `${activeCollaboratorStatusSummary} · ${collaboratorOrgFilterSummaryLabel} · ${getFormattedTemporalContext()}`
+                ? `${activeCollaboratorStatusSummary} · ${collaboratorOrgFilterSummaryLabel}`
                 : 'Non applicable'
             }
             onEditGlobalFilters={() => setGlobalFilterDialogOpen(true)}
@@ -2962,178 +3248,79 @@ export function AttributeSelector() {
 
               <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
                 <div className="space-y-3">
-                  <div className="rounded border border-gray-200 bg-white p-2 text-xs text-gray-800">
-                    <div className="mb-1 text-[11px] font-medium leading-none text-gray-700">Filtrage</div>
-                    {mainObjectLinkedToCollaborateur && (
-                    <div className="mb-2 rounded border border-orange-200 bg-orange-50">
-                      <div className="border-b border-orange-200 px-2 py-2 text-[11px] text-orange-900">
-                        <div className="mb-2 font-medium">Contexte temporel du rapport</div>
-                        {mainObjectTemporalMode === 'period' ? (
-                          <div className="flex flex-wrap items-center gap-2">
-                            <label className="font-medium text-orange-900" htmlFor="report-period-start">
-                              Début de période
-                            </label>
-                            <input
-                              id="report-period-start"
-                              type="date"
-                              value={reportPeriodStartDate}
-                              onChange={(event) => setReportPeriodStartDate(event.target.value)}
-                              className="rounded border border-orange-300 bg-white px-2 py-1 text-[11px] text-orange-900"
-                            />
-                            <label className="font-medium text-orange-900" htmlFor="report-period-end">
-                              Fin de période
-                            </label>
-                            <input
-                              id="report-period-end"
-                              type="date"
-                              value={reportPeriodEndDate}
-                              onChange={(event) => setReportPeriodEndDate(event.target.value)}
-                              className="rounded border border-orange-300 bg-white px-2 py-1 text-[11px] text-orange-900"
-                            />
-                          </div>
-                        ) : (
-                          <div className="flex flex-wrap items-center gap-2">
-                            <label className="text-[11px] font-medium text-orange-900" htmlFor="report-date">
-                              Date de valeur du rapport
-                            </label>
-                            <input
-                              id="report-date"
-                              type="date"
-                              value={reportDate}
-                              onChange={(event) => setReportDate(event.target.value)}
-                              className="rounded border border-orange-300 bg-white px-2 py-1 text-[11px] text-orange-900"
-                            />
-                          </div>
-                        )}
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => setCollaboratorStatusFilterExpanded((prev) => !prev)}
-                        className="flex w-full items-center justify-between px-2 py-1.5 text-left text-[11px] text-orange-900"
-                      >
-                        <span className="flex items-center gap-1 font-medium">
-                          <span className="inline-block w-2">{collaboratorStatusFilterExpanded ? 'v' : '>'}</span>
-                          <span>Statuts collaborateurs</span>
-                        </span>
-                        <span>
-                          {`${activeCollaboratorStatusSummary} · ${collaboratorOrgFilterSummaryLabel} · ${getFormattedTemporalContext()}`}
-                        </span>
-                      </button>
-
-                      {collaboratorStatusFilterExpanded && (
-                        <div className="space-y-2 border-t border-orange-200 px-2 py-2">
-                          <div className="flex flex-wrap gap-3 text-[11px] text-orange-900">
-                            <label className="flex items-center gap-1">
-                              <input
-                                type="checkbox"
-                                checked={includeDepartedCollaborators}
-                                onChange={(event) => setIncludeDepartedCollaborators(event.target.checked)}
-                              />
-                              partis
-                            </label>
-                            <label className="flex items-center gap-1">
-                              <input
-                                type="checkbox"
-                                checked={includePresentCollaborators}
-                                onChange={(event) => setIncludePresentCollaborators(event.target.checked)}
-                              />
-                              présents
-                            </label>
-                            <label className="flex items-center gap-1">
-                              <input
-                                type="checkbox"
-                                checked={includeFutureNewCollaborators}
-                                onChange={(event) => setIncludeFutureNewCollaborators(event.target.checked)}
-                              />
-                              nouveaux
-                            </label>
-                            <label className="flex items-center gap-1">
-                              <input
-                                type="checkbox"
-                                checked={includeFutureReturnCollaborators}
-                                onChange={(event) => setIncludeFutureReturnCollaborators(event.target.checked)}
-                              />
-                              retours
-                            </label>
-                          </div>
-
-                          <div className="grid gap-2 md:grid-cols-2">
-                            <label className="space-y-1 text-[11px] text-orange-900">
-                              <span className="font-medium">Départements</span>
-                              <div className="h-48 w-full overflow-y-auto overflow-x-auto rounded border border-orange-300 bg-white px-2 py-1 text-[10px] font-light text-orange-900">
-                                {departmentTree.length === 0 ? (
-                                  <div className="text-orange-700">Aucun département chargé.</div>
-                                ) : (
-                                  <div className="space-y-0.5">
-                                    {departmentTree.map((rootNode) => (
-                                      <DepartmentTreeItem
-                                        key={rootNode.name}
-                                        node={rootNode}
-                                        level={0}
-                                        disabled={false}
-                                        selectedDepartmentFilters={selectedDepartmentFilters}
-                                        onToggle={toggleDepartmentBranch}
-                                      />
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </label>
-
-                            <label className="space-y-1 text-[11px] text-orange-900">
-                              <span className="font-medium">Etablissements</span>
-                              <div className="h-48 w-full overflow-y-auto overflow-x-auto rounded border border-orange-300 bg-white px-2 py-1 text-[10px] font-light text-orange-900">
-                                {establishmentOptions.length === 0 ? (
-                                  <div className="text-orange-700">Aucun établissement chargé.</div>
-                                ) : (
-                                  <div className="space-y-0.5">
-                                    {establishmentOptions.map((establishment) => {
-                                      const isChecked = selectedEstablishmentFilters.includes(establishment);
-                                      return (
-                                        <label
-                                          key={establishment}
-                                          className="flex items-center gap-2 whitespace-nowrap"
-                                        >
-                                          <input
-                                            type="checkbox"
-                                            checked={isChecked}
-                                            onChange={(event) => {
-                                              const shouldCheck = event.target.checked;
-                                              setSelectedEstablishmentFilters((prev) => {
-                                                const next = new Set(prev);
-                                                if (shouldCheck) {
-                                                  next.add(establishment);
-                                                } else {
-                                                  next.delete(establishment);
-                                                }
-                                                return Array.from(next).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
-                                              });
-                                            }}
-                                          />
-                                          <span className="font-light whitespace-nowrap">{establishment}</span>
-                                        </label>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                            </label>
-                          </div>
-
+                  {/* Sélecteur de date pour chooseOne / choosePeriod */}
+                  {(mainObjectDefinition?.defaultDateFiltering === 'chooseOne'
+                    || mainObjectDefinition?.defaultDateFiltering === 'choosePeriod'
+                    || (typeof mainObjectDefinition?.defaultDateFiltering === 'object' && mainObjectDefinition.defaultDateFiltering !== null)) && (
+                    <div className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+                      <div className="mb-1 font-semibold">Sélecteur de date du rapport</div>
+                      {mainObjectDefinition.defaultDateFiltering === 'chooseOne' ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">Rapport le dateRapport (dd/mm/yyyy)</span>
+                          <input
+                            type="date"
+                            value={reportChosenDate}
+                            onChange={(e) => {
+                              setReportChosenDate(e.target.value);
+                              if (mainObject) {
+                                const ctx = { ...reportTemporalContext, chosenDate: e.target.value };
+                                applyMainObjectDefaultDateFiltering(
+                                  mainObject.themeId, mainObject.objectId,
+                                  getMainObjectAvailableAttributes(),
+                                  mainObjectDefinition.defaultDateFiltering,
+                                  ctx,
+                                  { start: mainObjectDefinition.applicationDateConfig?.startAttributeId, end: mainObjectDefinition.applicationDateConfig?.endAttributeId }
+                                );
+                              }
+                            }}
+                            className="rounded border border-blue-300 bg-white px-2 py-1 text-xs"
+                          />
                         </div>
-                      )}
-
-                      {mainObjectLinkedToCollaborateur && collaboratorGeneratedFilterLines.length > 0 && (
-                        <div className="space-y-1 border-t border-orange-200 bg-white/80 p-2 text-[11px] text-orange-900">
-                          {collaboratorGeneratedFilterLines.map((line, index) => (
-                            <div key={index}>• {line}</div>
-                          ))}
+                      ) : (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">Rapport entre dateDébutRapport et dateFinRapport (dd/mm/yyyy)</span>
+                          <input
+                            type="date"
+                            value={reportChosenPeriodStart}
+                            onChange={(e) => {
+                              setReportChosenPeriodStart(e.target.value);
+                              if (mainObject) {
+                                const ctx = { ...reportTemporalContext, chosenPeriodStart: e.target.value, chosenPeriodEnd: reportChosenPeriodEnd };
+                                applyMainObjectDefaultDateFiltering(
+                                  mainObject.themeId, mainObject.objectId,
+                                  getMainObjectAvailableAttributes(),
+                                  mainObjectDefinition.defaultDateFiltering,
+                                  ctx,
+                                  { start: mainObjectDefinition.applicationDateConfig?.startAttributeId, end: mainObjectDefinition.applicationDateConfig?.endAttributeId }
+                                );
+                              }
+                            }}
+                            className="rounded border border-blue-300 bg-white px-2 py-1 text-xs"
+                          />
+                          <input
+                            type="date"
+                            value={reportChosenPeriodEnd}
+                            onChange={(e) => {
+                              setReportChosenPeriodEnd(e.target.value);
+                              if (mainObject) {
+                                const ctx = { ...reportTemporalContext, chosenPeriodStart: reportChosenPeriodStart, chosenPeriodEnd: e.target.value };
+                                applyMainObjectDefaultDateFiltering(
+                                  mainObject.themeId, mainObject.objectId,
+                                  getMainObjectAvailableAttributes(),
+                                  mainObjectDefinition.defaultDateFiltering,
+                                  ctx,
+                                  { start: mainObjectDefinition.applicationDateConfig?.startAttributeId, end: mainObjectDefinition.applicationDateConfig?.endAttributeId }
+                                );
+                              }
+                            }}
+                            className="rounded border border-blue-300 bg-white px-2 py-1 text-xs"
+                          />
                         </div>
                       )}
                     </div>
-                    )}
-
+                  )}
+                  <div className="rounded border border-gray-200 bg-white p-2 text-xs text-gray-800">
+                    <div className="mb-1 text-[11px] font-medium leading-none text-gray-700">Filtrage</div>
                     <button
                       onClick={() => setGlobalFilterDialogOpen(true)}
                       className="w-full rounded border border-orange-200 bg-orange-50 p-2 text-left text-xs text-orange-800 hover:bg-orange-100"
@@ -3480,6 +3667,9 @@ export function AttributeSelector() {
                           reportDate,
                           periodStartDate: reportPeriodStartDate,
                           periodEndDate: reportPeriodEndDate,
+                          chosenDate: reportChosenDate,
+                          chosenPeriodStart: reportChosenPeriodStart,
+                          chosenPeriodEnd: reportChosenPeriodEnd,
                         },
                         collaboratorStatusFilter: {
                           enabled: mainObjectLinkedToCollaborateur,
