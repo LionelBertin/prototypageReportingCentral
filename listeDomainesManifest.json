@@ -348,40 +348,6 @@
           ]
         },
         {
-          "id": "contact-en-cas-d-urgence",
-          "name": "Contact en cas d'urgence",
-          "relations": [
-            {
-              "targetObject": "Collaborateur",
-              "relationName": "Collaborateur",
-              "cardinalityFrom": "one",
-              "cardinalityTo": "one",
-              "recursiveMagicSel": false,
-              "magicSel": false
-            }
-          ],
-          "attributes": [
-            {
-              "id": "nom",
-              "name": "Nom",
-              "magicSel": false,
-              "dataType": "string"
-            },
-            {
-              "id": "telephone",
-              "name": "Téléphone",
-              "magicSel": false,
-              "dataType": "phone"
-            },
-            {
-              "id": "lien-de-parente",
-              "name": "Lien de parenté",
-              "magicSel": false,
-              "dataType": "string"
-            }
-          ]
-        },
-        {
           "id": "dernier-diplome-de-reference",
           "name": "Dernier diplôme de référence",
           "relations": [

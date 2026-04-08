@@ -62,6 +62,8 @@ type AvailableObjectAttribute = {
 
 type Stage2ObjectGroup = {
   key: string;
+  parentKey?: string;
+  depth: number;
   label: string;
   objectName: string;
   tooltip?: string;
@@ -2072,14 +2074,20 @@ export function AttributeSelector() {
       navigationPath: NavigationPath,
       cardinality: string,
       isSelectable: boolean,
+      parentKey: string | undefined,
+      depth: number,
       branchVisited: Set<string>
     ) => {
       const currentKey = `${themeId}::${objectId}`;
       const found = objectByKey.get(currentKey as `${string}::${string}`);
       if (!found) return;
 
+      const groupKey = navigationPath.length === 0 ? currentKey : `${currentKey}::${getNavigationPathKey(navigationPath)}`;
+
       groups.push({
-        key: navigationPath.length === 0 ? currentKey : `${currentKey}::${getNavigationPathKey(navigationPath)}`,
+        key: groupKey,
+        parentKey,
+        depth,
         label,
         objectName: found.obj.name,
         tooltip: found.obj.tooltip,
@@ -2125,6 +2133,8 @@ export function AttributeSelector() {
           childPath,
           relation.cardinalityFrom ?? relation.cardinality,
           true,
+          groupKey,
+          depth + 1,
           nextVisited
         );
       }
@@ -2158,6 +2168,8 @@ export function AttributeSelector() {
           childPath,
           inboundRelation.cardinalityFrom ?? '1',
           true,
+          groupKey,
+          depth + 1,
           nextVisited
         );
       }
@@ -2174,6 +2186,8 @@ export function AttributeSelector() {
       [],
       rootObject.cardinality,
       true,
+      undefined,
+      0,
       new Set<string>()
     );
 
@@ -2279,7 +2293,7 @@ export function AttributeSelector() {
   const selectAllVisibleAttributes = () => {
     const availableAttributes = getMainObjectAvailableAttributes();
     const selectedIds = getMainObjectSelectedAttributeIds(availableAttributes);
-    for (const group of filteredMainObjectStage2Groups) {
+    for (const group of visibleMainObjectStage2Groups) {
       if (!group.isSelectable) continue;
       for (const attr of group.attributes) {
         selectedIds.add(attr.id);
@@ -2348,6 +2362,10 @@ export function AttributeSelector() {
   const mainObjectStage2Groups = selectingMainObject
     ? [] as Stage2ObjectGroup[]
     : getMainObjectStage2Groups(mainObjectAvailableAttributes);
+  useEffect(() => {
+    const validGroupKeys = new Set(mainObjectStage2Groups.map((group) => group.key));
+    setCollapsedAvailableGroupKeys((prev) => prev.filter((key) => validGroupKeys.has(key)));
+  }, [mainObjectStage2Groups]);
   const orderedMainObjectStage2Groups = useMemo(() => {
     if (!mainObject) return mainObjectStage2Groups;
 
@@ -2400,6 +2418,235 @@ export function AttributeSelector() {
         })
         .filter((group): group is Stage2ObjectGroup => group !== null)
       : orderedMainObjectStage2Groups;
+  const mainObjectStage2GroupByKey = useMemo(
+    () => new Map(orderedMainObjectStage2Groups.map((group) => [group.key, group] as const)),
+    [orderedMainObjectStage2Groups]
+  );
+  const filteredMainObjectStage2GroupKeys = useMemo(
+    () => new Set(filteredMainObjectStage2Groups.map((group) => group.key)),
+    [filteredMainObjectStage2Groups]
+  );
+  const searchForcedExpandedGroupKeys = useMemo(() => {
+    if (!normalizedAvailableAttributeSearch) return new Set<string>();
+
+    const forced = new Set<string>();
+    for (const group of filteredMainObjectStage2Groups) {
+      // Auto-expand the matching group itself so matching attributes are immediately visible.
+      forced.add(group.key);
+
+      let parentKey = group.parentKey;
+      while (parentKey) {
+        forced.add(parentKey);
+        parentKey = mainObjectStage2GroupByKey.get(parentKey)?.parentKey;
+      }
+    }
+
+    return forced;
+  }, [filteredMainObjectStage2Groups, mainObjectStage2GroupByKey, normalizedAvailableAttributeSearch]);
+  const renderCandidateMainObjectStage2GroupKeys = useMemo(() => {
+    if (!normalizedAvailableAttributeSearch) {
+      return new Set(orderedMainObjectStage2Groups.map((group) => group.key));
+    }
+
+    const candidateKeys = new Set<string>(filteredMainObjectStage2GroupKeys);
+    for (const group of filteredMainObjectStage2Groups) {
+      let parentKey = group.parentKey;
+      while (parentKey) {
+        candidateKeys.add(parentKey);
+        parentKey = mainObjectStage2GroupByKey.get(parentKey)?.parentKey;
+      }
+    }
+
+    return candidateKeys;
+  }, [
+    filteredMainObjectStage2GroupKeys,
+    filteredMainObjectStage2Groups,
+    mainObjectStage2GroupByKey,
+    normalizedAvailableAttributeSearch,
+    orderedMainObjectStage2Groups,
+  ]);
+  const visibleMainObjectStage2Groups = useMemo(() => {
+    const collapsedKeys = new Set(collapsedAvailableGroupKeys);
+    for (const key of searchForcedExpandedGroupKeys) {
+      collapsedKeys.delete(key);
+    }
+
+    return orderedMainObjectStage2Groups.filter((group) => {
+      if (!renderCandidateMainObjectStage2GroupKeys.has(group.key)) {
+        return false;
+      }
+
+      let parentKey = group.parentKey;
+      while (parentKey) {
+        if (collapsedKeys.has(parentKey)) {
+          return false;
+        }
+        parentKey = mainObjectStage2GroupByKey.get(parentKey)?.parentKey;
+      }
+
+      return true;
+    });
+  }, [
+    collapsedAvailableGroupKeys,
+    mainObjectStage2GroupByKey,
+    orderedMainObjectStage2Groups,
+    renderCandidateMainObjectStage2GroupKeys,
+    searchForcedExpandedGroupKeys,
+  ]);
+  const visibleMainObjectStage2GroupsByParentKey = useMemo(() => {
+    const grouped = new Map<string, Stage2ObjectGroup[]>();
+
+    for (const group of visibleMainObjectStage2Groups) {
+      const parentKey = group.parentKey ?? '__root__';
+      const existing = grouped.get(parentKey);
+      if (existing) {
+        existing.push(group);
+      } else {
+        grouped.set(parentKey, [group]);
+      }
+    }
+
+    return grouped;
+  }, [visibleMainObjectStage2Groups]);
+  const visibleMainObjectStage2RootGroups = visibleMainObjectStage2GroupsByParentKey.get('__root__') ?? [];
+  const renderAvailableStage2GroupCards = (groups: Stage2ObjectGroup[]): JSX.Element[] => {
+    return groups.map((group) => {
+      const isCollapsed = collapsedAvailableGroupKeys.includes(group.key);
+      const childGroups = visibleMainObjectStage2GroupsByParentKey.get(group.key) ?? [];
+
+      return (
+        <div key={group.key} className="space-y-2">
+          <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-1 text-sm font-semibold text-gray-900">
+                  <button
+                    type="button"
+                    onClick={() => toggleAvailableGroupCollapsed(group.key)}
+                    className="flex items-center gap-1 rounded px-1 py-0.5 text-left hover:bg-gray-100"
+                    title={isCollapsed ? 'Déplier cet objet' : 'Replier cet objet'}
+                  >
+                    <span>
+                      {group.label !== group.objectName
+                        ? `${group.label} (${group.objectName})`
+                        : group.label}
+                    </span>
+                    <span className="text-[10px] text-gray-500">{isCollapsed ? '>' : 'v'}</span>
+                  </button>
+                  <InfoHint text={group.tooltip} />
+                </div>
+                {showLinkedObjectCardinalities && group.navigationPath.length > 0 && (
+                  <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600">
+                    {group.navigationPath.length === 1
+                      ? group.navigationPath[0].sourceObjectName
+                      : (group.navigationPath[0].relationLabel ?? group.navigationPath[0].sourceObjectName)
+                    } · {group.cardinality}
+                  </span>
+                )}
+              </div>
+              {!isCollapsed && group.isSelectable ? (
+                <div className="flex items-center gap-1 text-[10px] text-gray-400">
+                  <button
+                    onClick={() => applyMainObjectQuickSelection('smart', group.attributes)}
+                    className="rounded px-1.5 py-0.5 hover:bg-gray-100 hover:text-gray-600"
+                  >
+                    par défaut
+                  </button>
+                  <span className="text-gray-200">|</span>
+                  <button
+                    onClick={() => applyMainObjectQuickSelection('all', group.attributes)}
+                    className="rounded px-1.5 py-0.5 hover:bg-gray-100 hover:text-gray-600"
+                  >
+                    tous
+                  </button>
+                  <span className="text-gray-200">|</span>
+                  <button
+                    onClick={() => applyMainObjectQuickSelection('none', group.attributes)}
+                    className="rounded px-1.5 py-0.5 hover:bg-gray-100 hover:text-gray-600"
+                  >
+                    aucun
+                  </button>
+                </div>
+              ) : !isCollapsed ? (
+                <div className="text-xs text-gray-500">Relation multiple</div>
+              ) : null}
+            </div>
+
+            {!isCollapsed && group.isSelectable ? (
+              <div className="space-y-2">
+                {group.attributes.map((attr) => {
+                  const checked = mainObjectSelectedAttributeIds.has(attr.id);
+                  return (
+                    <label
+                      key={attr.id}
+                      className="flex cursor-pointer items-center justify-between gap-2 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm hover:bg-gray-100"
+                    >
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(event) => toggleMainObjectAttribute(attr, event.target.checked)}
+                        />
+                        <span className="text-gray-800">{getMainObjectAttributeDisplayLabel(attr)}</span>
+                        <InfoHint text={attr.tooltip ?? attr.description} />
+                      </div>
+                      {!!attr.smartSel && (
+                        <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700">
+                          par défaut
+                        </span>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+            ) : !isCollapsed ? (
+              <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                <div className="mb-2">
+                  {group.objectSupportsApplicable && group.objectApplicationDateMandatory
+                    ? 'Cet objet est multi-instance. Une date est obligatoire, le choix par défaut est Applicable à la Date de valeur du rapport.'
+                    : 'Cet objet est multi-instance. Choisissez un mode pour retomber sur une instance exploitable.'}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => openStage2MultiObjectDialog(group, 'aggregation')}
+                    className="rounded border border-amber-300 bg-white px-3 py-1.5 text-sm text-amber-800 hover:bg-amber-100"
+                  >
+                    Opération
+                  </button>
+                  <button
+                    onClick={() => openStage2MultiObjectDialog(group, 'first')}
+                    className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    Première
+                  </button>
+                  <button
+                    onClick={() => openStage2MultiObjectDialog(group, 'last')}
+                    className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    Dernière
+                  </button>
+                  {group.objectSupportsApplicable && (
+                    <button
+                      onClick={() => openStage2MultiObjectDialog(group, 'applicable')}
+                      className="rounded border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm text-indigo-800 hover:bg-indigo-100"
+                    >
+                      Applicable (Date de valeur du rapport)
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          {!isCollapsed && childGroups.length > 0 && (
+            <div className="ml-4 space-y-2 border-l border-gray-200 pl-3">
+              {renderAvailableStage2GroupCards(childGroups)}
+            </div>
+          )}
+        </div>
+      );
+    });
+  };
   const groupableSelectedAttributes = getGroupableSelectedAttributes();
   const groupableById = new Map(groupableSelectedAttributes.map((attr) => [attr.id, attr] as const));
   const availableGroupPickers = groupableSelectedAttributes
@@ -2652,134 +2899,9 @@ export function AttributeSelector() {
                 </div>
 
                 <div className="space-y-3 p-4">
-                  {filteredMainObjectStage2Groups.map((group) => {
-                    const isCollapsed = collapsedAvailableGroupKeys.includes(group.key);
+                  {renderAvailableStage2GroupCards(visibleMainObjectStage2RootGroups)}
 
-                    return (
-                    <div key={group.key} className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
-                      <div className="mb-3 flex items-center justify-between gap-3">
-                        <div>
-                          <div className="flex items-center gap-1 text-sm font-semibold text-gray-900">
-                            <button
-                              type="button"
-                              onClick={() => toggleAvailableGroupCollapsed(group.key)}
-                              className="flex items-center gap-1 rounded px-1 py-0.5 text-left hover:bg-gray-100"
-                              title={isCollapsed ? 'Déplier cet objet' : 'Replier cet objet'}
-                            >
-                              <span>
-                                {group.label !== group.objectName
-                                  ? `${group.label} (${group.objectName})`
-                                  : group.label}
-                              </span>
-                              <span className="text-[10px] text-gray-500">{isCollapsed ? '>' : 'v'}</span>
-                            </button>
-                            <InfoHint text={group.tooltip} />
-                          </div>
-                          {showLinkedObjectCardinalities && group.navigationPath.length > 0 && (
-                            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600">
-                              {group.navigationPath.length === 1
-                                ? group.navigationPath[0].sourceObjectName
-                                : (group.navigationPath[0].relationLabel ?? group.navigationPath[0].sourceObjectName)
-                              } · {group.cardinality}
-                            </span>
-                          )}
-                        </div>
-                        {!isCollapsed && group.isSelectable ? (
-                          <div className="flex items-center gap-1 text-[10px] text-gray-400">
-                            <button
-                              onClick={() => applyMainObjectQuickSelection('smart', group.attributes)}
-                              className="rounded px-1.5 py-0.5 hover:bg-gray-100 hover:text-gray-600"
-                            >
-                              par défaut
-                            </button>
-                            <span className="text-gray-200">|</span>
-                            <button
-                              onClick={() => applyMainObjectQuickSelection('all', group.attributes)}
-                              className="rounded px-1.5 py-0.5 hover:bg-gray-100 hover:text-gray-600"
-                            >
-                              tous
-                            </button>
-                            <span className="text-gray-200">|</span>
-                            <button
-                              onClick={() => applyMainObjectQuickSelection('none', group.attributes)}
-                              className="rounded px-1.5 py-0.5 hover:bg-gray-100 hover:text-gray-600"
-                            >
-                              aucun
-                            </button>
-                          </div>
-                        ) : !isCollapsed ? (
-                          <div className="text-xs text-gray-500">Relation multiple</div>
-                        ) : null}
-                      </div>
-
-                      {!isCollapsed && group.isSelectable ? (
-                        <div className="space-y-2">
-                          {group.attributes.map((attr) => {
-                            const checked = mainObjectSelectedAttributeIds.has(attr.id);
-                            return (
-                              <label
-                                key={attr.id}
-                                className="flex cursor-pointer items-center justify-between gap-2 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm hover:bg-gray-100"
-                              >
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="checkbox"
-                                    checked={checked}
-                                    onChange={(event) => toggleMainObjectAttribute(attr, event.target.checked)}
-                                  />
-                                  <span className="text-gray-800">{getMainObjectAttributeDisplayLabel(attr)}</span>
-                                  <InfoHint text={attr.tooltip ?? attr.description} />
-                                </div>
-                                {!!attr.smartSel && (
-                                  <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700">
-                                    par défaut
-                                  </span>
-                                )}
-                              </label>
-                            );
-                          })}
-                        </div>
-                      ) : !isCollapsed ? (
-                        <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                          <div className="mb-2">
-                            {group.objectSupportsApplicable && group.objectApplicationDateMandatory
-                              ? 'Cet objet est multi-instance. Une date est obligatoire, le choix par défaut est Applicable à la Date de valeur du rapport.'
-                              : 'Cet objet est multi-instance. Choisissez un mode pour retomber sur une instance exploitable.'}
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              onClick={() => openStage2MultiObjectDialog(group, 'aggregation')}
-                              className="rounded border border-amber-300 bg-white px-3 py-1.5 text-sm text-amber-800 hover:bg-amber-100"
-                            >
-                              Opération
-                            </button>
-                            <button
-                              onClick={() => openStage2MultiObjectDialog(group, 'first')}
-                              className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
-                            >
-                              Première
-                            </button>
-                            <button
-                              onClick={() => openStage2MultiObjectDialog(group, 'last')}
-                              className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
-                            >
-                              Dernière
-                            </button>
-                            {group.objectSupportsApplicable && (
-                              <button
-                                onClick={() => openStage2MultiObjectDialog(group, 'applicable')}
-                                className="rounded border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm text-indigo-800 hover:bg-indigo-100"
-                              >
-                                Applicable (Date de valeur du rapport)
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-                  )})}
-
-                  {filteredMainObjectStage2Groups.length === 0 && (
+                  {visibleMainObjectStage2RootGroups.length === 0 && (
                     <div className="rounded border bg-white px-3 py-2 text-sm text-gray-500">
                       {normalizedAvailableAttributeSearch
                         ? 'Aucun attribut ne correspond à la recherche.'
