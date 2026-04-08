@@ -106,4 +106,5 @@ export interface SelectedAttribute {
   columnName?: string; // Nom personnalisé de la colonne
   conditionalConfig?: ConditionalColumnConfig; // Pour les colonnes conditionnelles
   calculatedConfig?: CalculatedColumnConfig; // Pour les colonnes calculées
+  ownObjectOnly?: boolean;
 }

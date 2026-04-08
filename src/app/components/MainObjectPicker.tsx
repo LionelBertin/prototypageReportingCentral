@@ -18,7 +18,10 @@ export function MainObjectPicker({ onSelect }: Props) {
   const lower = search.trim().toLowerCase();
 
   const getSelectableObjects = (theme: (typeof dataStructure)[number]) =>
-    theme.objects;
+    [...theme.objects].sort((a, b) => {
+      if (a.isStarred === b.isStarred) return a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
+      return a.isStarred ? -1 : 1;
+    });
 
   const renderObjectInsertionButtons = (
     themeId: string,
@@ -93,22 +96,47 @@ export function MainObjectPicker({ onSelect }: Props) {
               </button>
 
               {isExpanded && (
-                <div className="space-y-2 border-t px-3 py-3">
-                  {theme.objects.map((obj) => (
-                    <div
-                      key={obj.id}
-                      className="flex items-center justify-between gap-3 rounded border bg-gray-50 px-3 py-2"
-                    >
-                      <div className="flex items-center gap-1.5 text-sm text-gray-800">
-                        <span>{obj.name}</span>
-                        <InfoHint text={obj.description} />
+                <div className="border-t px-3 py-3">
+                  {(() => {
+                    const starred = theme.objects.filter((o) => o.isStarred);
+                    const others = theme.objects.filter((o) => !o.isStarred);
+                    const renderObj = (obj: typeof theme.objects[number]) => (
+                      <div
+                        key={obj.id}
+                        className="flex items-center justify-between gap-3 rounded border bg-gray-50 px-3 py-2"
+                      >
+                        <div className="flex items-center gap-1.5 text-sm text-gray-800">
+                          <span>{obj.name}</span>
+                          <InfoHint text={obj.description} />
+                        </div>
+                        {renderObjectInsertionButtons(theme.id, theme.name, obj.id, obj.name)}
                       </div>
-                      {renderObjectInsertionButtons(theme.id, theme.name, obj.id, obj.name)}
-                    </div>
-                  ))}
-                  {theme.objects.length === 0 && (
-                    <div className="px-1 py-1 text-xs text-gray-500">Aucun objet selectionnable.</div>
-                  )}
+                    );
+                    return (
+                      <>
+                        {starred.length > 0 && (
+                          <div className="mb-2">
+                            <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-gray-400">Données fréquentes</p>
+                            <div className="space-y-2">{starred.map(renderObj)}</div>
+                          </div>
+                        )}
+                        {starred.length > 0 && others.length > 0 && (
+                          <div className="my-2 border-t border-gray-200" />
+                        )}
+                        {others.length > 0 && (
+                          <div>
+                            {starred.length > 0 && (
+                              <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-gray-400">Autres données</p>
+                            )}
+                            <div className="space-y-2">{others.map(renderObj)}</div>
+                          </div>
+                        )}
+                        {theme.objects.length === 0 && (
+                          <div className="px-1 py-1 text-xs text-gray-500">Aucun objet selectionnable.</div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               )}
             </div>

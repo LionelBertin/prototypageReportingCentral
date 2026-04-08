@@ -9,6 +9,7 @@
         {
           "id": "collaborateur",
           "name": "Collaborateur",
+          "isStarred":true,
           "magicSel": true,
           "defaultDateFiltering" :"none",
           "attributes": [
@@ -53,107 +54,6 @@
               "name": "Âge",
               "magicSel": false,
               "dataType": "number"
-            }
-          ]
-        },
-        {
-          "id": "contrat-poste-applicable",
-          "name": "Contrat et poste applicable",
-          "tooltip": "Permet de récupérer un unique contrat et poste pour cibler une données en particulier.",
-          "relations": [
-            {
-              "targetObject": "Collaborateur",
-              "relationName": "Collaborateur",
-              "cardinalityFrom": "one",
-              "cardinalityTo": "one",
-              "recursiveMagicSel": false,
-              "magicSel": true
-            }
-          ],
-          "defaultDateFiltering" :"chooseOne",
-          "attributes": [
-            {
-              "id": "type-de-contrat",
-              "name": "Type de contrat",
-              "magicSel": true,
-              "dataType": "string"
-            },
-            {
-              "id": "document",
-              "name": "Document",
-              "magicSel": false,
-              "dataType": "file"
-            },
-            {
-              "id": "date-signature-contrat",
-              "name": "Date signature du contrat",
-              "magicSel": false,
-              "dataType": "date"
-            },
-            {
-              "id": "date-d-but-contrat",
-              "name": "Date début du contrat",
-              "magicSel": true,
-              "dataType": "date"
-            },
-            {
-              "id": "date-fin-contrat",
-              "name": "Date fin du contrat",
-              "magicSel": true,
-              "dataType": "date"
-            },
-            {
-              "id": "motif-d-but-contrat",
-              "name": "Motif début du contrat",
-              "magicSel": false,
-              "dataType": "string"
-            },
-            {
-              "id": "motif-fin-contrat",
-              "name": "Motif fin du contrat",
-              "magicSel": false,
-              "dataType": "string"
-            },{
-              "id": "intitul-poste",
-              "name": "Intitulé de poste",
-              "magicSel": true,
-              "dataType": "string"
-            },
-            {
-              "id": "document",
-              "name": "Document",
-              "magicSel": false,
-              "dataType": "file"
-            },
-            {
-              "id": "date-d-but-poste",
-              "name": "Date début du poste",
-              "magicSel": true,
-              "dataType": "date"
-            },
-            {
-              "id": "date-fin-poste",
-              "name": "Date fin du poste",
-              "magicSel": true,
-              "dataType": "date"
-            },
-            {
-              "id": "qualifications",
-              "name": "Qualifications",
-              "magicSel": false,
-              "dataType": "string"
-            },
-            {
-              "id": "csp",
-              "name": "CSP",
-              "magicSel": false,
-              "dataType": "string"
-            },
-            {
-              "id": "modalit-de-temps-de-travail",
-              "name": "Modalité de temps de travail",
-              "magicSel": false,
-              "dataType": "string"
             }
           ]
         },
@@ -663,8 +563,8 @@
           ]
         },
         {
-          "id": "partenaire",
-          "name": "Partenaire",
+          "id": "conjoint-partenaire",
+          "name": "Conjoint",
           "relations": [
             {
               "targetObject": "Collaborateur",
@@ -814,7 +714,7 @@
               "cardinalityFrom": "one",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": false
+              "magicSel": true
             }
           ],
           "defaultDateFiltering" :"none",
@@ -877,18 +777,6 @@
           ],
           "defaultDateFiltering" :"none",
           "attributes": [
-            {
-              "id": "prenom",
-              "name": "Prénom",
-              "magicSel": false,
-              "dataType": "string"
-            },
-            {
-              "id": "nom",
-              "name": "Nom",
-              "magicSel": false,
-              "dataType": "string"
-            },
             {
               "id": "abattement-fiscal-enfant",
               "name": "Abattement fiscal enfant",
@@ -2126,16 +2014,11 @@
               "dataType": "string"
             }
           ]
-        }
-      ]
-    },
-    {
-      "id": "les-contrats",
-      "name": "Les contrats",
-      "objects": [
+        },
         {
           "id": "contrats",
           "name": "Contrats",
+          "isStarred":true,
           "applicationDate": {
             "startAttributeId": "date-d-but",
             "endAttributeId": "date-fin",
@@ -2161,6 +2044,7 @@
             {
               "id": "type-de-contrat",
               "name": "Type de contrat",
+              "enum": ["CDI","CDD","Intérim","Apprentissage","Stage","Autre"],
               "magicSel": true,
               "dataType": "string"
             },
@@ -2240,6 +2124,7 @@
         {
           "id": "postes",
           "name": "Postes",
+          "isStarred":true,
           "applicationDate": {
             "startAttributeId": "date-d-but",
             "endAttributeId": "date-fin",
@@ -2376,7 +2261,7 @@
       "objects": [
         {
           "id": "absences",
-          "name": "Liste des absences",
+          "name": "Absences",
           "applicationDate": {
             "startAttributeId": "date-d-but",
             "endAttributeId": "date-fin",
@@ -2396,6 +2281,7 @@
             {
               "targetObject": "Collaborateur",
               "relationName": "Bénéficiaire",
+              "isMainCollaborator":true,
               "cardinalityFrom": "many",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
@@ -2729,7 +2615,7 @@
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
               "magicSel": true
-        }
+            }
           ],
           "defaultDateFiltering" :"choosePeriod",
           "attributes": [
@@ -2813,7 +2699,7 @@
       "objects": [
         {
           "id": "d-penses",
-          "name": "Liste des dépenses",
+          "name": "Dépenses",
           "relations": [
             {
               "targetObject": "Collaborateur",
@@ -2821,22 +2707,6 @@
               "cardinalityFrom": "many",
               "cardinalityTo": "one",
               "recursiveMagicSel": true,
-              "magicSel": false
-            },
-            {
-              "targetObject": "Collaborateur",
-              "relationName": "Refus dépense",
-              "cardinalityFrom": "many",
-              "cardinalityTo": "one",
-              "recursiveMagicSel": false,
-              "magicSel": false
-            },
-            {
-              "targetObject": "Collaborateur",
-              "relationName": "Approbation dépense",
-              "cardinalityFrom": "many",
-              "cardinalityTo": "one",
-              "recursiveMagicSel": false,
               "magicSel": false
             },
             {
@@ -2862,63 +2732,259 @@
           },
           "attributes": [
             {
-              "id": "statut",
-              "name": "Statut",
-              "magicSel": true,
-              "enum": [
-                "à traiter",
-                "refusé",
-                "approuvé"
-              ],
+              "id": "Comptedecréditdenotedefrais",
+              "name": "Compte de crédit de note de frais",
+              "magicSel": false,
               "dataType": "string"
             },
             {
-              "id": "date-d-pense",
-              "name": "Date dépense",
-              "magicSel": true,
-              "dataType": "date"
+              "id": "Comptedecréditnotenotedefraisauxiliaire",
+              "name": "Compte de crédit note de frais auxiliaire",
+              "magicSel": false,
+              "dataType": "string"
             },
             {
-              "id": "date-refus",
-              "name": "Date refus",
-              "magicSel": true,
-              "dataType": "date"
-            },
-            {
-              "id": "motif-de-refus",
-              "name": "Motif de refus",
+              "id": "IDdelanotedefrais",
+              "name": "ID de la note de frais",
               "magicSel": true,
               "dataType": "string"
             },
             {
-              "id": "date-approbation",
-              "name": "Date approbation",
+              "id": "Ligne",
+              "name": "Ligne",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "Titre",
+              "name": "Titre",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "Datecomptable",
+              "name": "Date comptable",
               "magicSel": true,
               "dataType": "date"
             },
             {
-              "id": "nature-de-d-pense",
+              "id": "Datedecreationdenotedefrais",
+              "name": "Date de création de la note de frais",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "Datedeladépense",
+              "name": "Date de la dépense",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "Alertesurcontrôles",
+              "name": "Alerte sur contrôles",
+              "magicSel": false,
+              "dataType": "booleen"
+            },
+            {
+              "id": "Commentaire",
+              "name": "Commentaire",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "Comptedecharge",
+              "name": "Compte de charge",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "Comptedechargesecondaire",
+              "name": "Compte de charge secondaire",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "Fournisseur",
+              "name": "Fournisseur",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "Invitésexternes",
+              "name": "Invités externes",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "Nature",
               "name": "Nature de dépense",
+              "enum":["Déjeuner","Dîner","Hôtel","Frais kilométriques (FR)","Transports","Train","Taxi","Parking","Péages","Location de véhicule","Carburant","Essence avant 2017","Entretien, lavage véhicule","Fournitures","Affranchissement","Télécoms","Salons, séminaires","Cadeaux clientèle","Documentation","Transports en commun","Petit équipement / matériel","Forfait déplacement","Frais kilométriques (Distance)","Divers","Frais kilométriques (UK)","Essence","Déjeuner  - invitation","Frais kilométriques (ES)","Frais kilométriques (Distance ES)","Frais kilométriques (CH)","Frais kilométriques (DE)","Indemnités journalières"],
               "magicSel": true,
               "dataType": "string"
             },
             {
-              "id": "devise",
-              "name": "Devise",
+              "id": "Dépenseàétranger",
+              "name": "Dépense à l’étranger",
+              "magicSel": false,
+              "dataType": "booleen"
+            },
+            {
+              "id": "Participantsinternes",
+              "name": "Participants internes",
               "magicSel": true,
               "dataType": "string"
             },
             {
-              "id": "montant-ht",
+              "id": "QuantitéDistance",
+              "name": "Quantité/Distance",
+              "magicSel": true,
+              "dataType": "number"
+            },
+            {
+              "id": "Régléepar",
+              "name": "Réglée par ",
+              "enum": ["Carte Lucca","Carte société","Collaborateur"],
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "Source",
+              "name": "Source",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "Trajet",
+              "name": "Trajet",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "Centredecoût",
+              "name": "Centre de coût",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "Clients",
+              "name": "Clients",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "Projets",
+              "name": "Projets",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "Devisedetenuedecompte",
+              "name": "Devise de tenue de compte",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "Devisetransaction",
+              "name": "Devise transaction",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "MontantHT",
               "name": "Montant HT",
               "magicSel": false,
               "dataType": "number"
             },
             {
-              "id": "montant-ttc",
-              "name": "Montant TTC",
+              "id": "Montantdépenséconverti",
+              "name": "Montant dépensé converti",
               "magicSel": true,
               "dataType": "number"
+            },
+            {
+              "id": "Montantdépenséendevise",
+              "name": "Montant dépensé en devise",
+              "magicSel": true,
+              "dataType": "number"
+            },
+            {
+              "id": "Montantprisencharge",
+              "name": "Montant pris en charge",
+              "magicSel": true,
+              "dataType": "number"
+            },
+            {
+              "id": "TVAdépensée",
+              "name": "TVA dépensée",
+              "magicSel": true,
+              "dataType": "booleen"
+            },
+            {
+              "id": "TVArécupérée",
+              "name": "TVA récupérée",
+              "magicSel": false,
+              "dataType": "booleen"
+            },
+            {
+              "id": "Contrôlé",
+              "name": "Contrôlé",
+              "magicSel": true,
+              "dataType": "booleen"
+            },
+            {
+              "id": "Datedel’export",
+              "name": "Date de l’export",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "Dateduderniercontrôle",
+              "name": "Date du dernier contrôle",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "Derniercontrôleur",
+              "name": "Dernier contrôleur",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "Etatsd’approbation",
+              "name": "Etats d’approbation",
+              "enum": ["Annulé","Approuvé","Déclaré","Refusé","Semi-approuvé"],
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "Payé",
+              "name": "Payé",
+              "magicSel": false,
+              "dataType": "booleen"
+            },
+            {
+              "id": "Exporté",
+              "name": "Exporté",
+              "magicSel": true,
+              "dataType": "booleen"
+            },
+            {
+              "id": "Paiementrecule",
+              "name": "Paiement reçu le",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "Statut",
+              "name": "Statut",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "Étapesapprobation",
+              "name": "Étapes d’approbation",
+              "magicSel": false,
+              "dataType": "string"
             }
           ],
           "smartObjects": [
@@ -2926,7 +2992,7 @@
               "title": "Dépenses approuvées",
               "columns": [
                 "nature de dépense",
-                "date dépense",
+                "Date de la dépense",
                 "Collaborateur dépense.nom",
                 "Collaborateur dépense.prénom",
                 "Approbation dépense.nom",
@@ -2935,21 +3001,9 @@
               "filters": "statut='approuvé'"
             },
             {
-              "title": "Dépenses refusées",
-              "columns": [
-                "date refus",
-                "motif de refus",
-                "Collaborateur dépense.nom",
-                "Collaborateur dépense.prénom",
-                "Refus dépense.nom",
-                "Refus dépense.prénom"
-              ],
-              "filters": "statut='refusé'"
-            },
-            {
               "title": "Dépenses en attente de validation",
               "columns": [
-                "date dépense",
+                "Date de la dépense",
                 "nature de dépense",
                 "Collaborateur dépense.nom",
                 "Collaborateur dépense.prénom",
@@ -2957,6 +3011,153 @@
                 "Collaborateur dépense.poste[applicable].manager.prénom"
               ],
               "filters": "statut='à traiter'"
+            }
+          ]
+        },
+        {
+          "id": "depenses-non-declarees",
+          "name": "Dépenses non déclarées",
+          "relations": [
+          {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur dépense",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+          },
+          {
+              "targetObject": "Département",
+              "relationName": "Département",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+          },
+          {
+              "targetObject": "Etablissement",
+              "relationName": "Etablissement",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+          }
+          ],
+          "defaultDateFiltering" :{
+          "attrDate1":"date-d-pense",
+          "attrDate2":"date-d-pense"
+          },
+          "attributes": [
+          {
+              "id": "date-d-pense",
+              "name": "Date",
+              "magicSel": true,
+              "dataType": "date"
+          },
+          {
+              "id": "nature-de-d-pense",
+              "name": "Nature",
+              "magicSel": true,
+              "dataType": "string"
+          },
+          {
+              "id": "source-de-d-pense",
+              "name": "Source",
+              "magicSel": false,
+              "dataType": "string"
+          },
+          {
+              "id": "montant-de-d-pense",
+              "name": "Montant dépensé",
+              "magicSel": true,
+              "dataType": "number"
+          },
+          {
+              "id": "devise-montant-de-d-pense",
+              "name": "Devise Montant dépensé",
+              "magicSel": true,
+              "dataType": "string"
+          },
+          {
+              "id": "montant-remboursable",
+              "name": "Montant remboursable",
+              "magicSel": true,
+              "dataType": "number"
+          },
+          {
+              "id": "devise-montant-remboursable",
+              "name": "Devise Montant remboursable",
+              "magicSel": true,
+              "dataType": "string"
+          }
+          ]
+        },
+        {
+          "id": "indemnites-journalieres",
+          "name": "Indemnités journalières",
+          "relations": [
+          {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": true,
+              "magicSel": false
+          }
+          ],
+          "defaultDateFiltering" :{
+          "attrDate1":"date-d-pense",
+          "attrDate2":"date-d-pense"
+          },
+          "attributes": [
+            {
+                "id": "date-d-pense",
+                "name": "Date",
+                "magicSel": true,
+                "dataType": "date"
+            },
+            {
+                "id": "Lieu",
+                "name": "Lieu",
+                "magicSel": true,
+                "dataType": "string"
+            },
+            {
+                "id": "montant-de-d-pense",
+                "name": "Montant dépensé",
+                "magicSel": true,
+                "dataType": "number"
+            },
+            {
+                "id": "indemnite",
+                "name": "Indemnité",
+                "enum":["Réduite", "Complète"],
+                "magicSel": true,
+                "dataType": "string"
+            },
+            {
+                "id": "montant-remboursable",
+                "name": "Petit-déjeuner",
+                "magicSel": true,
+                "dataType": "booleen"
+            },
+            {
+                "id": "montant-remboursable",
+                "name": "Déjeuner",
+                "magicSel": true,
+                "dataType": "booleen"
+            },
+            {
+                "id": "montant-remboursable",
+                "name": "Dîner",
+                "magicSel": true,
+                "dataType": "booleen"
+            },
+            {
+                "id": "montant-remboursable",
+                "name": "Hébergement",
+                "magicSel": true,
+                "dataType": "booleen"
             }
           ]
         }
@@ -3354,6 +3555,52 @@
                 "Bénéficiaire.prénom"
               ],
               "filters": "statut='approuvée' and 'date expiration' > dateDuJour"
+            }
+          ]
+        },
+        {
+          "id": "catalogue-de-formation",
+          "name": "Catalogue de formation",
+          "defaultDateFiltering" :{
+            "attrDate1":"date-sortie-catalogue",
+            "attrDate2":"date-entrée-catalogue"
+          },
+          "attributes": [
+            {
+              "id": "nom",
+              "name": "Nom",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "description",
+              "name": "Description",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "organisme",
+              "name": "Organisme",
+              "magicSel": false,
+              "dataType": "string"
+            },
+            {
+              "id": "obligatoire",
+              "name": "Obligatoire",
+              "magicSel": true,
+              "dataType": "booleen"
+            },
+            {
+              "id": "date-entrée-catalogue",
+              "name": "Date entrée catalogue",
+              "magicSel": false,
+              "dataType": "date"
+            },
+            {
+              "id": "date-sortie-catalogue",
+              "name": "Date sortie catalogue",
+              "magicSel": false,
+              "dataType": "date"
             }
           ]
         }
@@ -3916,52 +4163,6 @@
               "name": "Pays",
               "magicSel": false,
               "dataType": "string"
-            }
-          ]
-        },
-        {
-          "id": "catalogue-de-formation",
-          "name": "Catalogue de formation",
-          "defaultDateFiltering" :{
-            "attrDate1":"date-sortie-catalogue",
-            "attrDate2":"date-entrée-catalogue"
-          },
-          "attributes": [
-            {
-              "id": "nom",
-              "name": "Nom",
-              "magicSel": true,
-              "dataType": "string"
-            },
-            {
-              "id": "description",
-              "name": "Description",
-              "magicSel": false,
-              "dataType": "string"
-            },
-            {
-              "id": "organisme",
-              "name": "Organisme",
-              "magicSel": false,
-              "dataType": "string"
-            },
-            {
-              "id": "obligatoire",
-              "name": "Obligatoire",
-              "magicSel": true,
-              "dataType": "booleen"
-            },
-            {
-              "id": "date-entrée-catalogue",
-              "name": "Date entrée catalogue",
-              "magicSel": true,
-              "dataType": "date"
-            },
-            {
-              "id": "date-sortie-catalogue",
-              "name": "Date sortie catalogue",
-              "magicSel": true,
-              "dataType": "date"
             }
           ]
         }

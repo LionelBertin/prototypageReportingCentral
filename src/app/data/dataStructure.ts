@@ -85,6 +85,7 @@ export interface DataObject {
   defaultDateFiltering?: DefaultDateFiltering;
   description?: string;
   tooltip?: string;
+  isStarred?: boolean;
 }
 
 export interface Theme {
@@ -136,6 +137,7 @@ type ManifestObject = {
     requirementMode?: 'day' | 'period';
   };
   isApplicable?: boolean;
+  isStarred?: boolean;
   description?: string;
   tooltip?: string;
   attributes?: ManifestAttribute[];
@@ -698,6 +700,7 @@ const buildDataStructure = (): Theme[] => {
         relations: relations.length > 0 ? relations : undefined,
         smartObjects: normalizeSmartObjects(obj.smartObjects),
         defaultDateFiltering: normalizeDefaultDateFiltering(obj.defaultDateFiltering),
+        isStarred: !!obj.isStarred,
       } as DataObject;
     }),
   }));

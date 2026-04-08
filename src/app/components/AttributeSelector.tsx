@@ -37,6 +37,9 @@ type PendingObjectInsertion = {
   smartObjects?: SmartObjectDefinition[];
   navigationPath?: NavigationPath;
   directMagicOnly?: boolean;
+  ownObjectOnly?: boolean;
+  linkedPeriodFilter?: { attrDate1: string; attrDate2: string };
+  linkedDateFilterMode?: 'day' | 'period';
   initialConfig?: Partial<ObjectInsertionConfig>;
 };
 
@@ -79,9 +82,46 @@ type Stage2ObjectGroup = {
   attributes: AvailableObjectAttribute[];
 };
 
+type LinkedMultiCardinalityObject = {
+  key: string;
+  themeId: string;
+  themeName: string;
+  objectId: string;
+  objectName: string;
+  linkCardinality: string;
+  navigationPath: NavigationPath;
+  canInsert: boolean;
+  linkedPeriodFilter?: { attrDate1: string; attrDate2: string };
+  linkedDateFilterMode?: 'day' | 'period';
+};
+
 type DepartmentNode = {
   name: string;
   children: DepartmentNode[];
+};
+
+const getObjectGroupTitleFromNavigationPath = (objectName: string, navigationPath: NavigationPath = []) => {
+  if (navigationPath.length === 0) {
+    return objectName;
+  }
+
+  const firstStep = navigationPath[0];
+  const rootRelationLabel = firstStep.relationLabel?.trim() || firstStep.objectName?.trim() || '';
+
+  if (!rootRelationLabel || rootRelationLabel === objectName) {
+    return objectName;
+  }
+
+  return `${objectName} · ${rootRelationLabel}`;
+};
+
+const getAutoFilterAttributeDisplayName = (
+  attribute: AvailableObjectAttribute,
+  baseNavigationPath: NavigationPath = []
+) => {
+  const fullNavigationPath = [...baseNavigationPath, ...attribute.relativeNavigationPath];
+  const groupTitle = getObjectGroupTitleFromNavigationPath(attribute.sourceObjectName, fullNavigationPath);
+  return `${attribute.rawName} – ${groupTitle}`;
 };
 
 const REPORT_DATE_VARIABLE_ID = 'dateRapport';
@@ -274,6 +314,7 @@ export function AttributeSelector() {
   const [showColumnRename, setShowColumnRename] = useState(false);
   const [showDisplayAsColumns, setShowDisplayAsColumns] = useState(false);
   const [showLinkedObjectCardinalities, setShowLinkedObjectCardinalities] = useState(true);
+  const [showOtherCardinalitiesButton, setShowOtherCardinalitiesButton] = useState(true);
   const [showSelectAllButton, setShowSelectAllButton] = useState(true);
   const [reportTemporalContext, setReportTemporalContext] = useState<ReportTemporalContext>(() => createDefaultTemporalContext());
   // Dates pour chooseOne/choosePeriod — modifiables par l'utilisateur dans la config
@@ -300,7 +341,10 @@ export function AttributeSelector() {
   const [draftShowColumnRename, setDraftShowColumnRename] = useState(false);
   const [draftShowDisplayAsColumns, setDraftShowDisplayAsColumns] = useState(false);
   const [draftShowLinkedObjectCardinalities, setDraftShowLinkedObjectCardinalities] = useState(true);
+  const [draftShowOtherCardinalitiesButton, setDraftShowOtherCardinalitiesButton] = useState(true);
   const [draftShowSelectAllButton, setDraftShowSelectAllButton] = useState(true);
+  const [linkedMultiCardinalityDialogGroup, setLinkedMultiCardinalityDialogGroup] = useState<Stage2ObjectGroup | null>(null);
+  const [linkedMultiCardinalityInsertionTarget, setLinkedMultiCardinalityInsertionTarget] = useState<LinkedMultiCardinalityObject | null>(null);
   const [availableAttributeSearchTerm, setAvailableAttributeSearchTerm] = useState('');
   const [collapsedAvailableGroupKeys, setCollapsedAvailableGroupKeys] = useState<string[]>([]);
 
@@ -346,6 +390,7 @@ export function AttributeSelector() {
     dateReference,
     filterGroups,
     navigationPath,
+    ownObjectOnly,
   }: {
     themeId: string;
     themeName: string;
@@ -361,6 +406,7 @@ export function AttributeSelector() {
     dateReference?: DateReference;
     filterGroups?: FilterGroup[];
     navigationPath?: NavigationPath;
+    ownObjectOnly?: boolean;
   }): SelectedAttribute => {
     const effectiveApplicable = insertionType === 'applicable' || !!isApplicable;
 
@@ -384,12 +430,180 @@ export function AttributeSelector() {
       dateReference: effectiveApplicable ? (dateReference ?? { type: 'today' }) : undefined,
       applicationDateConfig: sourceObj?.applicationDateConfig,
       navigationPath,
+      ownObjectOnly,
     };
   };
 
   const isSingleRelationCardinality = (cardinality?: string) => {
     if (!cardinality) return true;
     return !cardinality.includes('n');
+  };
+
+  const getLinkedNavigationPathSignature = (navigationPath: NavigationPath = []) =>
+    navigationPath
+      .map((step) => `${step.objectName}:${step.cardinalityName ?? ''}:${step.relationLabel ?? ''}:${step.sourceObjectName ?? ''}`)
+      .join('>');
+
+  const getLinkedContextKey = (themeId: string, objectId: string, navigationPath: NavigationPath = []) =>
+    `${themeId}::${objectId}::${getLinkedNavigationPathSignature(navigationPath)}`;
+
+  const getLinkedPeriodFilterFromDefaultDateFiltering = (defaultDateFiltering: DefaultDateFiltering | undefined) => {
+    if (!defaultDateFiltering || typeof defaultDateFiltering !== 'object') return undefined;
+    if (!defaultDateFiltering.attrDate1 || !defaultDateFiltering.attrDate2) return undefined;
+    return {
+      attrDate1: defaultDateFiltering.attrDate1,
+      attrDate2: defaultDateFiltering.attrDate2,
+    };
+  };
+
+  const hasReportPeriodVariables = () => {
+    if (!mainObjectDefinition) return false;
+    return mainObjectDefinition.defaultDateFiltering === 'choosePeriod'
+      || (typeof mainObjectDefinition.defaultDateFiltering === 'object' && mainObjectDefinition.defaultDateFiltering !== null);
+  };
+
+  const hasReportSingleDateVariable = () => {
+    if (!mainObjectDefinition) return false;
+    return mainObjectDefinition.defaultDateFiltering === 'chooseOne';
+  };
+
+  const getLinkedMultipleCardinalityObjects = (group: Stage2ObjectGroup) => {
+    const objectByKey = new Map(
+      dataStructure.flatMap((theme) =>
+        theme.objects.map((obj) => [`${theme.id}::${obj.id}`, { theme, obj }] as const)
+      )
+    );
+
+    const current = objectByKey.get(`${group.themeId}::${group.objectId}` as `${string}::${string}`);
+    if (!current) return [] as LinkedMultiCardinalityObject[];
+
+    const linkedByKey = new Map<string, LinkedMultiCardinalityObject>();
+
+    const upsertLinked = (candidate: LinkedMultiCardinalityObject) => {
+      const existing = linkedByKey.get(candidate.key);
+      if (!existing) {
+        linkedByKey.set(candidate.key, candidate);
+        return;
+      }
+
+      if (!existing.canInsert && candidate.canInsert) {
+        linkedByKey.set(candidate.key, candidate);
+      }
+    };
+
+    for (const relation of current.obj.relations ?? []) {
+      if (isSingleRelationCardinality(relation.cardinality)) continue;
+      const target = objectByKey.get(`${relation.targetThemeId}::${relation.targetObjectId}` as `${string}::${string}`);
+      if (!target) continue;
+
+      const targetObjectName = relation.targetObjectName?.trim() || target.obj.name;
+      const nextNavigationPath: NavigationPath = [
+        ...group.navigationPath,
+        {
+          objectName: targetObjectName,
+          cardinalityName: relation.cardinality,
+          relationLabel: relation.label,
+          sourceObjectName: current.obj.name,
+        },
+      ];
+
+      const targetLinkedPeriodFilter = getLinkedPeriodFilterFromDefaultDateFiltering(target.obj.defaultDateFiltering);
+      const targetLinkedDateFilterMode = hasReportPeriodVariables()
+        ? 'period'
+        : hasReportSingleDateVariable()
+        ? 'day'
+        : undefined;
+      const targetCanInsert = target.obj.defaultDateFiltering === 'none'
+        || (!!targetLinkedPeriodFilter && !!targetLinkedDateFilterMode);
+
+      upsertLinked({
+        key: `${target.theme.id}::${target.obj.id}`,
+        themeId: target.theme.id,
+        themeName: target.theme.name,
+        objectId: target.obj.id,
+        objectName: target.obj.name,
+        linkCardinality: relation.cardinalityFrom ?? relation.cardinality,
+        navigationPath: nextNavigationPath,
+        canInsert: targetCanInsert,
+        linkedPeriodFilter: targetLinkedPeriodFilter,
+        linkedDateFilterMode: targetLinkedDateFilterMode,
+      });
+    }
+
+    for (const sourceEntry of objectByKey.values()) {
+      const inboundRelation = (sourceEntry.obj.relations ?? []).find(
+        (relation) =>
+          relation.targetThemeId === group.themeId
+          && relation.targetObjectId === group.objectId
+          && !isSingleRelationCardinality(relation.cardinalityFrom)
+      );
+
+      if (!inboundRelation) continue;
+
+      const nextNavigationPath: NavigationPath = [
+        ...group.navigationPath,
+        {
+          objectName: sourceEntry.obj.name,
+          cardinalityName: inboundRelation.cardinality,
+          relationLabel: inboundRelation.label,
+          sourceObjectName: current.obj.name,
+        },
+      ];
+
+      const sourceLinkedPeriodFilter = getLinkedPeriodFilterFromDefaultDateFiltering(sourceEntry.obj.defaultDateFiltering);
+      const sourceLinkedDateFilterMode = hasReportPeriodVariables()
+        ? 'period'
+        : hasReportSingleDateVariable()
+        ? 'day'
+        : undefined;
+      const sourceCanInsert = sourceEntry.obj.defaultDateFiltering === 'none'
+        || (!!sourceLinkedPeriodFilter && !!sourceLinkedDateFilterMode);
+
+      upsertLinked({
+        key: `${sourceEntry.theme.id}::${sourceEntry.obj.id}`,
+        themeId: sourceEntry.theme.id,
+        themeName: sourceEntry.theme.name,
+        objectId: sourceEntry.obj.id,
+        objectName: sourceEntry.obj.name,
+        linkCardinality: inboundRelation.cardinalityFrom ?? inboundRelation.cardinality,
+        navigationPath: nextNavigationPath,
+        canInsert: sourceCanInsert,
+        linkedPeriodFilter: sourceLinkedPeriodFilter,
+        linkedDateFilterMode: sourceLinkedDateFilterMode,
+      });
+    }
+
+    return Array.from(linkedByKey.values()).sort((a, b) => a.objectName.localeCompare(b.objectName, 'fr', { sensitivity: 'base' }));
+  };
+
+  const openLinkedMultiCardinalityInsertion = (
+    linkedObject: LinkedMultiCardinalityObject,
+    mode: 'selection' | 'operation' | 'reportDate'
+  ) => {
+    const theme = dataStructure.find((candidate) => candidate.id === linkedObject.themeId);
+    const obj = theme?.objects.find((candidate) => candidate.id === linkedObject.objectId);
+    if (!theme || !obj) return;
+
+    setPendingObjectInsertion({
+      themeId: linkedObject.themeId,
+      themeName: linkedObject.themeName,
+      objectId: linkedObject.objectId,
+      objectName: linkedObject.objectName,
+      cardinality: linkedObject.linkCardinality,
+      mode: mode === 'selection' ? 'special' : mode === 'operation' ? 'aggregation' : 'detailed',
+      isApplicable: !!(obj.applicationDate || obj.isApplicable),
+      applicationDateMandatory: !!obj.applicationDateConfig?.mandatory,
+      applicationDateRequirementMode: obj.applicationDateConfig?.requirementMode ?? 'day',
+      smartObjects: obj.smartObjects,
+      navigationPath: linkedObject.navigationPath,
+      ownObjectOnly: true,
+      linkedPeriodFilter: linkedObject.linkedPeriodFilter,
+      linkedDateFilterMode: linkedObject.linkedDateFilterMode,
+    });
+
+    setLinkedMultiCardinalityInsertionTarget(null);
+    setLinkedMultiCardinalityDialogGroup(null);
+    setObjectInsertionDialogOpen(true);
   };
 
   const isObjectLinkedToCollaborateur = (themeId: string, objectId: string) => {
@@ -489,7 +703,7 @@ export function AttributeSelector() {
       value: string,
     ) => ({
       attributeId: `${AUTO_FILTER_COLUMN_PREFIX}${attribute.id}`,
-      attributeName: `${attribute.rawName} [filtre auto]`,
+      attributeName: `${getAutoFilterAttributeDisplayName(attribute)} [filtre auto]`,
       attributeType: 'date' as const,
       operator,
       value,
@@ -503,7 +717,7 @@ export function AttributeSelector() {
       referenceAttributeName: string,
     ) => ({
       attributeId: `${AUTO_FILTER_COLUMN_PREFIX}${attribute.id}`,
-      attributeName: `${attribute.rawName} [filtre auto]`,
+      attributeName: `${getAutoFilterAttributeDisplayName(attribute)} [filtre auto]`,
       attributeType: 'date' as const,
       operator,
       value: '',
@@ -872,6 +1086,31 @@ export function AttributeSelector() {
         sourceObjectName: obj.name,
         relativeNavigationPath: [],
       }));
+  };
+
+  const getOwnObjectAttributes = (themeId: string, objectId: string) => {
+    const theme = dataStructure.find((t) => t.id === themeId);
+    const obj = theme?.objects.find((o) => o.id === objectId);
+    if (!theme || !obj) return [] as AvailableObjectAttribute[];
+
+    return obj.attributes.map((attr) => ({
+      id: attr.id,
+      name: attr.name,
+      rawName: attr.name,
+      description: attr.description,
+      tooltip: attr.tooltip,
+      type: attr.type,
+      magicSel: attr.magicSel,
+      smartSel: !!attr.magicSel,
+      sourceObjectSupportsApplicable: !!(obj.applicationDate || obj.isApplicable),
+      sourceObjectApplicationDateMandatory: !!obj.applicationDateConfig?.mandatory,
+      sourceObjectApplicationDateRequirementMode: obj.applicationDateConfig?.requirementMode ?? 'day',
+      sourceThemeId: theme.id,
+      sourceThemeName: theme.name,
+      sourceObjectId: obj.id,
+      sourceObjectName: obj.name,
+      relativeNavigationPath: [],
+    }));
   };
 
   const getMainObjectModeLabel = () => {
@@ -1269,6 +1508,10 @@ export function AttributeSelector() {
   };
 
   const getInsertionAvailableAttributes = (pending: PendingObjectInsertion) => {
+    if (pending.ownObjectOnly) {
+      return getOwnObjectAttributes(pending.themeId, pending.objectId);
+    }
+
     return pending.directMagicOnly
       ? getDirectMagicAttributes(pending.themeId, pending.objectId)
       : getObjectAttributes(pending.themeId, pending.objectId);
@@ -1310,13 +1553,101 @@ export function AttributeSelector() {
     return [...existing, ...uniqueToAdd];
   };
 
+  const getPendingLinkedAutoPeriodConditions = (
+    pending: PendingObjectInsertion,
+    objectAttributes: AvailableObjectAttribute[]
+  ) => {
+    if (!pending.linkedPeriodFilter || !pending.linkedDateFilterMode) return [] as FilterGroup['conditions'];
+
+    const contextKey = getLinkedContextKey(
+      pending.themeId,
+      pending.objectId,
+      pending.navigationPath ?? []
+    );
+
+    const resolveDateAttribute = (attributeId: string) =>
+      objectAttributes.find(
+        (attr) =>
+          attr.sourceThemeId === pending.themeId
+          && attr.sourceObjectId === pending.objectId
+          && attr.relativeNavigationPath.length === 0
+          && attr.type === 'date'
+          && attr.id === attributeId
+      );
+
+    const firstDateAttribute = resolveDateAttribute(pending.linkedPeriodFilter.attrDate1);
+    const secondDateAttribute = resolveDateAttribute(pending.linkedPeriodFilter.attrDate2);
+
+    const conditions: FilterGroup['conditions'] = [];
+
+    if (firstDateAttribute) {
+      conditions.push({
+        attributeId: `${AUTO_FILTER_COLUMN_PREFIX}${contextKey}::${firstDateAttribute.id}`,
+        attributeName: `${getAutoFilterAttributeDisplayName(firstDateAttribute, pending.navigationPath ?? [])} [filtre auto]`,
+        attributeType: 'date',
+        operator: 'greaterOrEqual',
+        value: '',
+        valueType: 'attribute',
+        referenceAttributeId: pending.linkedDateFilterMode === 'period' ? REPORT_PERIOD_START_VARIABLE_ID : REPORT_DATE_VARIABLE_ID,
+        referenceAttributeName: pending.linkedDateFilterMode === 'period' ? REPORT_PERIOD_START_VARIABLE_LABEL : REPORT_DATE_VARIABLE_LABEL,
+      });
+    }
+
+    if (secondDateAttribute) {
+      conditions.push({
+        attributeId: `${AUTO_FILTER_COLUMN_PREFIX}${contextKey}::${secondDateAttribute.id}`,
+        attributeName: `${getAutoFilterAttributeDisplayName(secondDateAttribute, pending.navigationPath ?? [])} [filtre auto]`,
+        attributeType: 'date',
+        operator: 'lessOrEqual',
+        value: '',
+        valueType: 'attribute',
+        referenceAttributeId: pending.linkedDateFilterMode === 'period' ? REPORT_PERIOD_END_VARIABLE_ID : REPORT_DATE_VARIABLE_ID,
+        referenceAttributeName: pending.linkedDateFilterMode === 'period' ? REPORT_PERIOD_END_VARIABLE_LABEL : REPORT_DATE_VARIABLE_LABEL,
+      });
+    }
+
+    return conditions;
+  };
+
+  const applyPendingLinkedAutoPeriodFilters = (
+    pending: PendingObjectInsertion,
+    objectAttributes: AvailableObjectAttribute[]
+  ) => {
+    const autoConditions = getPendingLinkedAutoPeriodConditions(pending, objectAttributes);
+    if (autoConditions.length === 0) return;
+
+    setGlobalFilterGroups((previous) => {
+      const conditionKey = (condition: FilterGroup['conditions'][number]) => [
+        condition.attributeId,
+        condition.operator,
+        condition.valueType ?? 'fixed',
+        condition.referenceAttributeId ?? '',
+      ].join('|');
+
+      if (!previous || previous.length === 0) {
+        return [{
+          logicalOperator: 'ET',
+          conditions: autoConditions,
+        }];
+      }
+
+      const [firstGroup, ...otherGroups] = previous;
+      const existingKeys = new Set(firstGroup.conditions.map(conditionKey));
+      const conditionsToAdd = autoConditions.filter((condition) => !existingKeys.has(conditionKey(condition)));
+      if (conditionsToAdd.length === 0) return previous;
+
+      return [{
+        ...firstGroup,
+        conditions: [...firstGroup.conditions, ...conditionsToAdd],
+      }, ...otherGroups];
+    });
+  };
+
   const handleObjectInsertionConfirm = (config: ObjectInsertionConfig) => {
     if (!pendingObjectInsertion) return;
 
     if (editingAggregationAttributeId) {
-      const objectAttributes = pendingObjectInsertion.directMagicOnly
-        ? getDirectMagicAttributes(pendingObjectInsertion.themeId, pendingObjectInsertion.objectId)
-        : getObjectAttributes(pendingObjectInsertion.themeId, pendingObjectInsertion.objectId);
+      const objectAttributes = getInsertionAvailableAttributes(pendingObjectInsertion);
       const edited = selectedAttributes.find((attr) => attr.id === editingAggregationAttributeId);
       if (!edited) return;
 
@@ -1339,6 +1670,7 @@ export function AttributeSelector() {
             ...(pendingObjectInsertion.navigationPath ?? []),
             ...aggregatedAttr.relativeNavigationPath,
           ],
+          ownObjectOnly: pendingObjectInsertion.ownObjectOnly,
         });
 
         if (config.sortDirection) {
@@ -1379,9 +1711,7 @@ export function AttributeSelector() {
 
     const isMainObjectSelection = selectingMainObject && !!pendingMainObject;
 
-    const objectAttributes = pendingObjectInsertion.directMagicOnly
-      ? getDirectMagicAttributes(pendingObjectInsertion.themeId, pendingObjectInsertion.objectId)
-      : getObjectAttributes(pendingObjectInsertion.themeId, pendingObjectInsertion.objectId);
+    const objectAttributes = getInsertionAvailableAttributes(pendingObjectInsertion);
 
     if (config.insertionType === 'aggregation') {
       const aggregatedAttr = objectAttributes.find((attr) => attr.id === config.aggregationAttributeId);
@@ -1402,6 +1732,7 @@ export function AttributeSelector() {
           ...(pendingObjectInsertion.navigationPath ?? []),
           ...aggregatedAttr.relativeNavigationPath,
         ],
+        ownObjectOnly: pendingObjectInsertion.ownObjectOnly,
       });
 
       if (config.sortDirection) {
@@ -1437,6 +1768,8 @@ export function AttributeSelector() {
       } else {
         setSelectedAttributes((prev) => appendUniqueAttributes(prev, [newAttr]));
       }
+
+      applyPendingLinkedAutoPeriodFilters(pendingObjectInsertion, objectAttributes);
 
       setPendingObjectInsertion(null);
       return;
@@ -1492,6 +1825,7 @@ export function AttributeSelector() {
               ...(pendingObjectInsertion.navigationPath ?? []),
               ...attr.relativeNavigationPath,
             ],
+            ownObjectOnly: pendingObjectInsertion.ownObjectOnly,
           });
         }
       );
@@ -1526,6 +1860,8 @@ export function AttributeSelector() {
       } else {
         setSelectedAttributes((prev) => appendUniqueAttributes(prev, newAttributes));
       }
+
+      applyPendingLinkedAutoPeriodFilters(pendingObjectInsertion, objectAttributes);
     }
 
     setPendingObjectInsertion(null);
@@ -1662,6 +1998,7 @@ export function AttributeSelector() {
       isApplicable: attr.isApplicable,
       applicationDateRequirementMode: attr.applicationDateConfig?.requirementMode ?? 'day',
       navigationPath: attr.navigationPath,
+      ownObjectOnly: attr.ownObjectOnly ?? !!(attr.navigationPath && attr.navigationPath.length > 0),
     });
     setObjectInsertionDialogOpen(true);
   };
@@ -1833,6 +2170,7 @@ export function AttributeSelector() {
     setDraftShowColumnRename(showColumnRename);
     setDraftShowDisplayAsColumns(showDisplayAsColumns);
     setDraftShowLinkedObjectCardinalities(showLinkedObjectCardinalities);
+    setDraftShowOtherCardinalitiesButton(showOtherCardinalitiesButton);
     setDraftShowSelectAllButton(showSelectAllButton);
     setPrototypeConfigOpen(true);
   };
@@ -1844,6 +2182,7 @@ export function AttributeSelector() {
     setShowColumnRename(draftShowColumnRename);
     setShowDisplayAsColumns(draftShowDisplayAsColumns);
     setShowLinkedObjectCardinalities(draftShowLinkedObjectCardinalities);
+    setShowOtherCardinalitiesButton(draftShowOtherCardinalitiesButton);
     setShowSelectAllButton(draftShowSelectAllButton);
     setPrototypeConfigOpen(false);
   };
@@ -1930,6 +2269,80 @@ export function AttributeSelector() {
     return normalizeSortKey(getSelectedAttributeDisplayName(a)).localeCompare(normalizeSortKey(getSelectedAttributeDisplayName(b)), 'fr');
   };
 
+  const getFilterObjectGroupTitle = (objectName: string, navigationPath?: NavigationPath) => {
+    const path = navigationPath ?? [];
+    if (path.length === 0) return objectName;
+
+    const firstStep = path[0];
+    const rootRelationLabel = firstStep.relationLabel?.trim() || firstStep.objectName?.trim() || '';
+    if (!rootRelationLabel || rootRelationLabel === objectName) {
+      return objectName;
+    }
+
+    return `${objectName} · ${rootRelationLabel}`;
+  };
+
+  const getGlobalFilterTechnicalObjectAttributes = () => {
+    const technicalAttributes: Array<{ id: string; name: string; type: AttributeType; enumValues?: string[] }> = [];
+    const seenContexts = new Set<string>();
+
+    for (const insertedAttribute of selectedAttributes) {
+      if (!['first', 'last', 'aggregation'].includes(insertedAttribute.insertionType)) continue;
+      if (!insertedAttribute.navigationPath || insertedAttribute.navigationPath.length === 0) continue;
+
+      const navigationPathSignature = insertedAttribute.navigationPath
+        .map((step) => `${step.objectName}:${step.cardinalityName ?? ''}:${step.relationLabel ?? ''}:${step.sourceObjectName ?? ''}`)
+        .join('>');
+      const contextKey = getLinkedContextKey(
+        insertedAttribute.themeId,
+        insertedAttribute.objectId,
+        insertedAttribute.navigationPath ?? []
+      );
+      if (seenContexts.has(contextKey)) continue;
+      seenContexts.add(contextKey);
+
+      const sourceTheme = dataStructure.find((theme) => theme.id === insertedAttribute.themeId);
+      const sourceObject = sourceTheme?.objects.find((object) => object.id === insertedAttribute.objectId);
+      if (!sourceTheme || !sourceObject) continue;
+
+      const objectGroupTitle = getFilterObjectGroupTitle(
+        insertedAttribute.objectName,
+        insertedAttribute.navigationPath,
+      );
+
+      for (const sourceAttribute of sourceObject.attributes) {
+        technicalAttributes.push({
+          id: `${AUTO_FILTER_COLUMN_PREFIX}${contextKey}::${sourceAttribute.id}`,
+          name: `${sourceAttribute.name} – ${objectGroupTitle}`,
+          type: sourceAttribute.type,
+          enumValues: sourceAttribute.enumValues,
+        });
+      }
+    }
+
+    return technicalAttributes;
+  };
+
+  const getGlobalFilterObjectAttributes = () => {
+    const selectedObjectAttributes = selectedAttributes.map((attr) => {
+      const sourceTheme = dataStructure.find((theme) => theme.id === attr.themeId);
+      const sourceObject = sourceTheme?.objects.find((object) => object.id === attr.objectId);
+      const sourceAttribute = sourceObject?.attributes.find((attribute) => attribute.id === attr.attributeId);
+
+      return {
+        id: attr.id,
+        name: getSelectedAttributeDisplayName(attr),
+        type: attr.attributeType,
+        enumValues: sourceAttribute?.enumValues,
+      };
+    });
+
+    return [
+      ...selectedObjectAttributes,
+      ...getGlobalFilterTechnicalObjectAttributes(),
+    ];
+  };
+
   const getGlobalSelectedAttributesForFilter = () => {
     const selectedFilterAttributes = [...selectedAttributes]
       .sort(compareSelectedAttributesByAttributeThenContext)
@@ -1938,6 +2351,13 @@ export function AttributeSelector() {
       name: attr.attributeName,
       columnName: getSelectedAttributeDisplayName(attr),
       type: attr.attributeType,
+      }));
+    const technicalFilterAttributes = getGlobalFilterTechnicalObjectAttributes()
+      .map((attr) => ({
+        id: attr.id,
+        name: attr.name,
+        columnName: attr.name,
+        type: attr.type,
       }));
 
     const reportDateVariables = (() => {
@@ -1991,6 +2411,7 @@ export function AttributeSelector() {
 
     return [
       ...selectedFilterAttributes,
+      ...technicalFilterAttributes,
       ...reportDateVariables,
     ];
   };
@@ -2673,19 +3094,25 @@ export function AttributeSelector() {
   const filteredMainObjectStage2Groups = normalizedAvailableAttributeSearch
     ? orderedMainObjectStage2Groups
         .map((group) => {
-          const groupNameMatches =
-            normalizeSearchText(group.label).includes(normalizedAvailableAttributeSearch) ||
-            normalizeSearchText(group.objectName).includes(normalizedAvailableAttributeSearch);
+          const objectMatchesSearch =
+            normalizeSearchText(group.objectName).includes(normalizedAvailableAttributeSearch)
+            || normalizeSearchText(group.label).includes(normalizedAvailableAttributeSearch);
 
-          if (groupNameMatches) return group;
+          // If the object card itself matches, keep all its attributes.
+          if (objectMatchesSearch) {
+            return group;
+          }
+
           if (!group.isSelectable) return null;
 
-          const filteredAttributes = group.attributes.filter((attr) =>
-            normalizeSearchText(getMainObjectAttributeDisplayLabel(attr)).includes(normalizedAvailableAttributeSearch)
-          );
+          // If only attribute names match, keep only matching attributes.
+          const matchingAttributes = group.attributes.filter((attr) => {
+            const attributeLabel = normalizeSearchText(getMainObjectAttributeDisplayLabel(attr));
+            return attributeLabel.includes(normalizedAvailableAttributeSearch);
+          });
 
-          if (filteredAttributes.length === 0) return null;
-          return { ...group, attributes: filteredAttributes };
+          if (matchingAttributes.length === 0) return null;
+          return { ...group, attributes: matchingAttributes };
         })
         .filter((group): group is Stage2ObjectGroup => group !== null)
       : orderedMainObjectStage2Groups;
@@ -2780,10 +3207,15 @@ export function AttributeSelector() {
     return grouped;
   }, [visibleMainObjectStage2Groups]);
   const visibleMainObjectStage2RootGroups = visibleMainObjectStage2GroupsByParentKey.get('__root__') ?? [];
-  const renderAvailableStage2GroupCards = (groups: Stage2ObjectGroup[]): JSX.Element[] => {
+  const linkedMultiCardinalityDialogObjects = useMemo(() => {
+    if (!linkedMultiCardinalityDialogGroup) return [] as LinkedMultiCardinalityObject[];
+    return getLinkedMultipleCardinalityObjects(linkedMultiCardinalityDialogGroup);
+  }, [linkedMultiCardinalityDialogGroup]);
+  const renderAvailableStage2GroupCards = (groups: Stage2ObjectGroup[]) => {
     return groups.map((group) => {
       const isCollapsed = collapsedAvailableGroupKeys.includes(group.key);
       const childGroups = visibleMainObjectStage2GroupsByParentKey.get(group.key) ?? [];
+      const linkedMultipleCardinalityObjects = getLinkedMultipleCardinalityObjects(group);
 
       return (
         <div key={group.key} className="space-y-2">
@@ -2815,32 +3247,43 @@ export function AttributeSelector() {
                   </span>
                 )}
               </div>
-              {!isCollapsed && group.isSelectable ? (
-                <div className="flex items-center gap-1 text-[10px] text-gray-400">
+              <div className="flex items-center gap-2">
+                {showOtherCardinalitiesButton && linkedMultipleCardinalityObjects.length > 0 && (
                   <button
-                    onClick={() => applyMainObjectQuickSelection('smart', group.attributes)}
-                    className="rounded px-1.5 py-0.5 hover:bg-gray-100 hover:text-gray-600"
+                    type="button"
+                    onClick={() => setLinkedMultiCardinalityDialogGroup(group)}
+                    className="rounded border border-teal-300 bg-teal-50 px-2 py-1 text-xs text-teal-800 hover:bg-teal-100"
                   >
-                    par défaut
+                    autre cardinalités ({linkedMultipleCardinalityObjects.length})
                   </button>
-                  <span className="text-gray-200">|</span>
-                  <button
-                    onClick={() => applyMainObjectQuickSelection('all', group.attributes)}
-                    className="rounded px-1.5 py-0.5 hover:bg-gray-100 hover:text-gray-600"
-                  >
-                    tous
-                  </button>
-                  <span className="text-gray-200">|</span>
-                  <button
-                    onClick={() => applyMainObjectQuickSelection('none', group.attributes)}
-                    className="rounded px-1.5 py-0.5 hover:bg-gray-100 hover:text-gray-600"
-                  >
-                    aucun
-                  </button>
-                </div>
-              ) : !isCollapsed ? (
-                <div className="text-xs text-gray-500">Relation multiple</div>
-              ) : null}
+                )}
+                {!isCollapsed && group.isSelectable ? (
+                  <div className="flex items-center gap-1 text-[10px] text-gray-400">
+                    <button
+                      onClick={() => applyMainObjectQuickSelection('smart', group.attributes)}
+                      className="rounded px-1.5 py-0.5 hover:bg-gray-100 hover:text-gray-600"
+                    >
+                      par défaut
+                    </button>
+                    <span className="text-gray-200">|</span>
+                    <button
+                      onClick={() => applyMainObjectQuickSelection('all', group.attributes)}
+                      className="rounded px-1.5 py-0.5 hover:bg-gray-100 hover:text-gray-600"
+                    >
+                      tous
+                    </button>
+                    <span className="text-gray-200">|</span>
+                    <button
+                      onClick={() => applyMainObjectQuickSelection('none', group.attributes)}
+                      className="rounded px-1.5 py-0.5 hover:bg-gray-100 hover:text-gray-600"
+                    >
+                      aucun
+                    </button>
+                  </div>
+                ) : !isCollapsed ? (
+                  <div className="text-xs text-gray-500">Relation multiple</div>
+                ) : null}
+              </div>
             </div>
 
             {!isCollapsed && group.isSelectable ? (
@@ -3162,7 +3605,7 @@ export function AttributeSelector() {
               <div className="h-full overflow-y-auto border-r bg-gray-50">
                 <div className="sticky top-0 z-10 border-b bg-gray-50 px-4 py-4">
                   <div className="flex items-center justify-between gap-2">
-                    <h2 className="font-semibold text-gray-900">Attributs disponibles</h2>
+                    <h2 className="font-semibold text-gray-900">Données disponibles</h2>
                     {showSelectAllButton && (
                       <button
                         onClick={selectAllVisibleAttributes}
@@ -3595,18 +4038,7 @@ export function AttributeSelector() {
         attributeType="string"
         currentFilterGroups={globalFilterGroups}
         onConfirm={handleGlobalFilterConfirm}
-        objectAttributes={selectedAttributes.map((attr) => {
-          const sourceTheme = dataStructure.find((theme) => theme.id === attr.themeId);
-          const sourceObject = sourceTheme?.objects.find((object) => object.id === attr.objectId);
-          const sourceAttribute = sourceObject?.attributes.find((attribute) => attribute.id === attr.attributeId);
-
-          return {
-            id: attr.id,
-            name: getSelectedAttributeDisplayName(attr),
-            type: attr.attributeType,
-            enumValues: sourceAttribute?.enumValues,
-          };
-        })}
+        objectAttributes={getGlobalFilterObjectAttributes()}
         selectedFilterAttributes={getGlobalSelectedAttributesForFilter()}
         compartmentFilterAttributes={getGlobalCompartmentFilterAttributes()}
         showCompartmenting={showCompartmenting}
@@ -3732,6 +4164,11 @@ export function AttributeSelector() {
                   setEnabled: setDraftShowLinkedObjectCardinalities,
                 },
                 {
+                  label: 'Bouton "autre cardinalités"',
+                  enabled: draftShowOtherCardinalitiesButton,
+                  setEnabled: setDraftShowOtherCardinalitiesButton,
+                },
+                {
                   label: 'Bouton débug "Tout (dé)sélectionner"',
                   enabled: draftShowSelectAllButton,
                   setEnabled: setDraftShowSelectAllButton,
@@ -3770,6 +4207,107 @@ export function AttributeSelector() {
               >
                 Appliquer
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {linkedMultiCardinalityDialogGroup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-xl">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">Objets liés via cardinalité multiple</h3>
+                <p className="text-sm text-gray-600">{linkedMultiCardinalityDialogGroup.objectName}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setLinkedMultiCardinalityDialogGroup(null);
+                  setLinkedMultiCardinalityInsertionTarget(null);
+                }}
+                className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-100"
+              >
+                Fermer
+              </button>
+            </div>
+
+            <div className="max-h-80 overflow-y-auto rounded border border-gray-200 bg-gray-50 p-3">
+              {linkedMultiCardinalityDialogObjects.length > 0 ? (
+                <div className="space-y-2 text-sm text-gray-800">
+                  {linkedMultiCardinalityDialogObjects.map((linkedObject) => (
+                    <div key={linkedObject.key} className="flex items-center justify-between gap-2 rounded bg-white px-2 py-1.5">
+                      <span>{linkedObject.objectName}</span>
+                      {linkedObject.canInsert ? (
+                        <button
+                          type="button"
+                          onClick={() => setLinkedMultiCardinalityInsertionTarget(linkedObject)}
+                          className="rounded border border-blue-300 bg-blue-50 px-2 py-0.5 text-xs text-blue-700 hover:bg-blue-100"
+                        >
+                          Insérer
+                        </button>
+                      ) : (
+                        <span className="text-[11px] text-gray-500">Insertion indisponible</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-gray-500">Aucun objet lié en cardinalité multiple.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {linkedMultiCardinalityInsertionTarget && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">Mode d'insertion</h3>
+                <p className="text-sm text-gray-600">{linkedMultiCardinalityInsertionTarget.objectName}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLinkedMultiCardinalityInsertionTarget(null)}
+                className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-100"
+              >
+                Fermer
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {linkedMultiCardinalityInsertionTarget.linkedDateFilterMode === 'day' ? (
+                <button
+                  type="button"
+                  onClick={() => openLinkedMultiCardinalityInsertion(linkedMultiCardinalityInsertionTarget, 'reportDate')}
+                  className="w-full rounded border border-indigo-300 bg-indigo-50 px-3 py-2 text-left text-sm text-indigo-800 hover:bg-indigo-100"
+                >
+                  <div className="font-medium">Insérer la version à la Date de valeur du rapport</div>
+                  <div className="text-xs text-indigo-700">La sélection d'instance est automatiquement basée sur dateRapport.</div>
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => openLinkedMultiCardinalityInsertion(linkedMultiCardinalityInsertionTarget, 'selection')}
+                    className="w-full rounded border border-indigo-300 bg-indigo-50 px-3 py-2 text-left text-sm text-indigo-800 hover:bg-indigo-100"
+                  >
+                    <div className="font-medium">Sélection d'une instance</div>
+                    <div className="text-xs text-indigo-700">Choisir le tri (ascendant/descendant) puis les attributs à insérer.</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => openLinkedMultiCardinalityInsertion(linkedMultiCardinalityInsertionTarget, 'operation')}
+                    className="w-full rounded border border-amber-300 bg-amber-50 px-3 py-2 text-left text-sm text-amber-800 hover:bg-amber-100"
+                  >
+                    <div className="font-medium">Opération sur les instances</div>
+                    <div className="text-xs text-amber-700">Choisir un attribut et une opération (count, sum, min, max, concat, avg).</div>
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

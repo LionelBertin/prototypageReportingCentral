@@ -141,7 +141,7 @@ export function ObjectInsertionDialog({
     setAttributeSearchTerm('');
     setSmartFilterGroups(initialConfig?.smartFilterGroups);
     setApplyApplicableToday(initialConfig?.applyApplicableToday ?? shouldForceApplicableDate);
-  }, [isOpen, availableAttributes, initialConfig, objectSupportsApplicable, objectApplicationDateMandatory, cardinality, shouldForceApplicableDate]);
+  }, [isOpen]);
 
   const normalize = (value: string) =>
     value

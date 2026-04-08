@@ -1,12 +1,22 @@
 
 
 
-
 ###########################################################
 # P1
 
-## ajust
-Dans la liste des Attributs disponibles, à chaque fois qu'un "Collaborateur" est proposé, il faut ajouter un objet "Contrat & Poste applicable" qui reprend la liste conjointe des attributs proposés pour "Contrats" et pour "Postes"
+Avant le filtrage sur les attributs, lorsque l'objet principal est lié à au moins un collaborateur (targetObject=Collaborateur), il faut ajouter une possibilité de filtrer sur certains attribut du contrat et du poste de l'unique collaborateur lié ou de celui marqué isMainCollaborator=true s'il y en a plusieurs (ex : "Bénéficiaire")
+
+L'utilisateur peut changer le collaborateur ciblé s'il y en a plusieurs (ex:  "Demandeur", ou "Approbateur"), et peut filtrer facilement sur les attributts Type de contrat, Département, et Etablissement.
+Pour les types de contrat, on utilise l'enum
+Pour département, on présente la liste hiérarchique des départements avec la possiblité d'en sélectionner plusieurs.
+Pour les établissements on utilise la liste à plat 
+
+
+"Mes managés" => postes où j'apparais comme manager
+
+
+
+
 
 ## liaison implicite à collaborateur
 proposer filtre rapide 
@@ -68,6 +78,10 @@ ex : Axes analytiques pour les dépenses, qui regroupe Centre de coût, Clients,
 
 ###########################################################
 # P3
+
+# Affichage fusionner mais export dissocié
+pour afficher un montant et une devise dans une même cellule à l'écran, mais en exportant bien dans deux cellules différentes pour pouvoir trier/filtrer.
+idem avec le format de présnetation numérique avec séparateur de millier à l'écrna, mais pas en export.
 
 ###########################################################
 
