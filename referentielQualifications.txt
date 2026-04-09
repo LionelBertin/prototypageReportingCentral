@@ -1,0 +1,35 @@
+
+BusinessDevelopment
+    Business Developer Junior (Grade1)
+    Business Developer Confirmed (Grade2)
+    Business Developer Senior (Grade3
+Consultant
+    Consultant Junior (Grade1)
+    Consultant Confirmed (Grade2)
+    Consultant Senior (Grade3)
+    Consultant Chief (Grade4)
+Designer
+    Designer Junior (Grade1)
+    Designer Confirmed (Grade2)
+    Designer Senior (Grade3
+Developer
+    Developer Junior (Grade1)
+    Developer Confirmed (Grade2)
+    Developer Senior (Grade3)
+    Developer Chief (Grade4)
+HRoperations
+    HR Operations Junior (Grade1)
+    HR Operations Confirmed (Grade2)
+    HR Operations Senior (Grade3)
+    HR Operations Director (Grade4)
+Project Manager
+    Project Manager Junior (Grade1)
+    Project Manager Confirmed (Grade2)
+    Project Manager Senior (Grade3)
+    Chief Operations Officer (Grade4)
+Sales
+    Sales Junior (Grade1)
+    Sales Confirmed (Grade2)
+    Sales Senior (Grade3)
+    Sales Chief (Grade4
+

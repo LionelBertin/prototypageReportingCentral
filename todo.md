@@ -1,4 +1,4 @@
-
+ passe l'option Bouton "autre cardinalités" à OFF par défaut dans la conf proto
 
 
 ###########################################################
@@ -14,7 +14,7 @@ Pour les établissements on utilise la liste à plat
 
 "Mes managés" => postes où j'apparais comme manager
 
-
+Ajouter une filtre sur les managers dans le Contexte collaborateur (avant filtrage)
 
 
 

@@ -100,6 +100,19 @@ type DepartmentNode = {
   children: DepartmentNode[];
 };
 
+type QualificationNode = {
+  name: string;
+  children: QualificationNode[];
+};
+
+type CollaboratorTargetOption = {
+  key: string;
+  label: string;
+  isMainCollaborator: boolean;
+};
+
+type CollaboratorContractDateMode = 'today' | 'reportStart' | 'reportEnd' | 'reportColumn';
+
 const getObjectGroupTitleFromNavigationPath = (objectName: string, navigationPath: NavigationPath = []) => {
   if (navigationPath.length === 0) {
     return objectName;
@@ -217,7 +230,48 @@ const parseDepartmentHierarchy = (raw: string): DepartmentNode[] => {
   return roots;
 };
 
+const parseQualificationHierarchy = (raw: string): QualificationNode[] => {
+  const lines = raw
+    .split(/\r?\n/)
+    .map((line) => ({
+      label: line.trim(),
+      indent: (line.match(/^\s*/) ?? [''])[0].length,
+    }))
+    .filter((entry) => entry.label.length > 0);
+
+  const roots: QualificationNode[] = [];
+  const stack: Array<{ indent: number; node: QualificationNode }> = [];
+
+  for (const line of lines) {
+    const currentNode: QualificationNode = { name: line.label, children: [] };
+
+    while (stack.length > 0 && stack[stack.length - 1].indent >= line.indent) {
+      stack.pop();
+    }
+
+    const parent = stack[stack.length - 1]?.node;
+    if (parent) {
+      parent.children.push(currentNode);
+    } else {
+      roots.push(currentNode);
+    }
+
+    stack.push({ indent: line.indent, node: currentNode });
+  }
+
+  return roots;
+};
+
 const parseEstablishmentOptions = (raw: string) => Array.from(
+  new Set(
+    raw
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+  )
+).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+
+const parseCollaboratorOptions = (raw: string) => Array.from(
   new Set(
     raw
       .split(/\r?\n/)
@@ -234,14 +288,14 @@ function DepartmentTreeItem({
   node,
   level,
   disabled,
-  selectedDepartmentFilters,
+  selectedValues,
   onToggle,
   path,
 }: {
   node: DepartmentNode;
   level: number;
   disabled: boolean;
-  selectedDepartmentFilters: string[];
+  selectedValues: string[];
   onToggle: (node: DepartmentNode, checked: boolean) => void;
   path?: string;
 }) {
@@ -257,7 +311,7 @@ function DepartmentTreeItem({
         <input
           id={checkboxId}
           type="checkbox"
-          checked={selectedDepartmentFilters.includes(node.name)}
+          checked={selectedValues.includes(node.name)}
           disabled={disabled}
           onChange={(event) => onToggle(node, event.target.checked)}
         />
@@ -272,7 +326,7 @@ function DepartmentTreeItem({
               node={child}
               level={level + 1}
               disabled={disabled}
-              selectedDepartmentFilters={selectedDepartmentFilters}
+              selectedValues={selectedValues}
               onToggle={onToggle}
               path={checkboxId}
             />
@@ -325,10 +379,19 @@ export function AttributeSelector() {
   const [includePresentCollaborators, setIncludePresentCollaborators] = useState(true);
   const [includeFutureNewCollaborators, setIncludeFutureNewCollaborators] = useState(false);
   const [includeFutureReturnCollaborators, setIncludeFutureReturnCollaborators] = useState(false);
+  const [collaboratorContextExpanded, setCollaboratorContextExpanded] = useState(false);
+  const [selectedCollaboratorTarget, setSelectedCollaboratorTarget] = useState('');
+  const [selectedCollaboratorName, setSelectedCollaboratorName] = useState('');
+  const [collaboratorContractDateMode, setCollaboratorContractDateMode] = useState<CollaboratorContractDateMode>('reportEnd');
+  const [selectedCollaboratorContractDateColumnId, setSelectedCollaboratorContractDateColumnId] = useState('');
+  const [selectedContractTypeFilters, setSelectedContractTypeFilters] = useState<string[]>([]);
+  const [selectedQualificationFilters, setSelectedQualificationFilters] = useState<string[]>([]);
   const [selectedDepartmentFilters, setSelectedDepartmentFilters] = useState<string[]>([]);
   const [selectedEstablishmentFilters, setSelectedEstablishmentFilters] = useState<string[]>([]);
   const [departmentTree, setDepartmentTree] = useState<DepartmentNode[]>([]);
+  const [qualificationTree, setQualificationTree] = useState<QualificationNode[]>([]);
   const [establishmentOptions, setEstablishmentOptions] = useState<string[]>([]);
+  const [collaboratorOptions, setCollaboratorOptions] = useState<string[]>([]);
   const [collaboratorStatusFilterExpanded, setCollaboratorStatusFilterExpanded] = useState(false);
   const [prototypeConfigOpen, setPrototypeConfigOpen] = useState(false);
   const [reportResultOpen, setReportResultOpen] = useState(false);
@@ -351,29 +414,42 @@ export function AttributeSelector() {
   useEffect(() => {
     const loadCollaboratorOrgLists = async () => {
       try {
-        const [departmentsResponse, establishmentsResponse] = await Promise.all([
+        const [departmentsResponse, establishmentsResponse, qualificationsResponse, collaboratorsResponse] = await Promise.all([
           fetch('/arboSimpleDepartements.md'),
           fetch('/mock_listeEtablissements.md'),
+          fetch('/referentielQualifications.txt'),
+          fetch('/listeCollaborateurs.txt'),
         ]);
 
-        if (!departmentsResponse.ok || !establishmentsResponse.ok) {
+        if (!departmentsResponse.ok || !establishmentsResponse.ok || !qualificationsResponse.ok || !collaboratorsResponse.ok) {
           return;
         }
 
-        const [departmentsRaw, establishmentsRaw] = await Promise.all([
+        const [departmentsRaw, establishmentsRaw, qualificationsRaw, collaboratorsRaw] = await Promise.all([
           departmentsResponse.text(),
           establishmentsResponse.text(),
+          qualificationsResponse.text(),
+          collaboratorsResponse.text(),
         ]);
 
         setDepartmentTree(parseDepartmentHierarchy(departmentsRaw));
         setEstablishmentOptions(parseEstablishmentOptions(establishmentsRaw));
+        setQualificationTree(parseQualificationHierarchy(qualificationsRaw));
+        setCollaboratorOptions(parseCollaboratorOptions(collaboratorsRaw));
       } catch (error) {
-        console.warn('Impossible de charger les listes DE/ETAB.', error);
+        console.warn('Impossible de charger les listes DE/ETAB/QUALIF/COLLAB.', error);
       }
     };
 
     loadCollaboratorOrgLists();
   }, []);
+
+  useEffect(() => {
+    setSelectedCollaboratorName((previous) => {
+      if (!previous) return '';
+      return collaboratorOptions.includes(previous) ? previous : '';
+    });
+  }, [collaboratorOptions]);
 
   const buildSelectedAttribute = ({
     themeId,
@@ -668,6 +744,134 @@ export function AttributeSelector() {
   const reportPeriodStartDate = reportTemporalContext.periodStartDate ?? reportTemporalContext.reportDate;
   const reportPeriodEndDate = reportTemporalContext.periodEndDate ?? reportTemporalContext.reportDate;
   const collaboratorStatusReferenceDate = reportPeriodEndDate;
+
+  const collaboratorTargetOptions = useMemo(() => {
+    if (!mainObjectDefinition) return [] as CollaboratorTargetOption[];
+
+    const normalize = (value: string) =>
+      value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLocaleLowerCase()
+        .trim();
+
+    const collaboratorRelations = (mainObjectDefinition.relations ?? [])
+      .filter((relation) => normalize(relation.targetObjectName) === 'collaborateur')
+      .map((relation) => ({
+        key: `${relation.targetThemeId}:${relation.targetObjectId}:${relation.label}`,
+        label: relation.label || relation.targetObjectName,
+        isMainCollaborator: !!relation.isMainCollaborator,
+      }));
+
+    const byLabel = new Map<string, CollaboratorTargetOption>();
+    for (const relation of collaboratorRelations) {
+      const normalizedLabel = normalize(relation.label);
+      const existing = byLabel.get(normalizedLabel);
+      if (!existing) {
+        byLabel.set(normalizedLabel, relation);
+        continue;
+      }
+
+      if (relation.isMainCollaborator && !existing.isMainCollaborator) {
+        byLabel.set(normalizedLabel, relation);
+      }
+    }
+
+    return Array.from(byLabel.values())
+      .sort((a, b) => a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' }));
+  }, [mainObjectDefinition]);
+
+  useEffect(() => {
+    if (collaboratorTargetOptions.length === 0) {
+      setSelectedCollaboratorTarget('');
+      return;
+    }
+
+    setSelectedCollaboratorTarget((previous) => {
+      if (previous && collaboratorTargetOptions.some((option) => option.label === previous)) {
+        return previous;
+      }
+
+      const preferred = collaboratorTargetOptions.find((option) => option.isMainCollaborator);
+      return preferred?.label ?? collaboratorTargetOptions[0].label;
+    });
+  }, [collaboratorTargetOptions]);
+
+  const contractTypeEnumValues = useMemo(() => {
+    const byNormalizedValue = new Map<string, string>();
+    const normalize = (value: string) =>
+      value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLocaleLowerCase()
+        .trim();
+
+    for (const theme of dataStructure) {
+      for (const obj of theme.objects) {
+        for (const attr of obj.attributes) {
+          const normalizedId = normalize(attr.id);
+          const normalizedName = normalize(attr.name);
+          const isContractTypeAttribute = normalizedId === 'type-de-contrat' || normalizedName === 'type de contrat';
+          if (!isContractTypeAttribute || !attr.enumValues || attr.enumValues.length === 0) continue;
+
+          for (const enumValue of attr.enumValues) {
+            const key = normalize(enumValue);
+            if (!key || byNormalizedValue.has(key)) continue;
+            byNormalizedValue.set(key, enumValue);
+          }
+        }
+      }
+    }
+
+    return Array.from(byNormalizedValue.values())
+      .sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+  }, []);
+
+  const getReportColumnLikeLabel = (attr: SelectedAttribute) => {
+    const baseName = attr.columnName || attr.attributeName;
+    if (attr.insertionType === 'conditional' || attr.insertionType === 'calculated') {
+      return baseName;
+    }
+
+    const path = attr.navigationPath ?? [];
+    const groupTitle = (() => {
+      if (path.length === 0) return attr.objectName;
+
+      const firstStep = path[0];
+      const rootRelationLabel = firstStep.relationLabel?.trim() || firstStep.objectName?.trim() || '';
+
+      if (!rootRelationLabel || rootRelationLabel === attr.objectName) {
+        return attr.objectName;
+      }
+
+      return `${attr.objectName} · ${rootRelationLabel}`;
+    })();
+
+    if (!groupTitle) return baseName;
+    return `${baseName} – ${groupTitle}`;
+  };
+
+  const reportDateColumnOptions = useMemo(() => {
+    return selectedAttributes
+      .filter((attr) => attr.attributeType === 'date')
+      .map((attr) => ({
+        id: attr.id,
+        label: getReportColumnLikeLabel(attr),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' }));
+  }, [selectedAttributes]);
+
+  useEffect(() => {
+    if (collaboratorContractDateMode !== 'reportColumn') return;
+
+    setSelectedCollaboratorContractDateColumnId((previous) => {
+      if (previous && reportDateColumnOptions.some((option) => option.id === previous)) {
+        return previous;
+      }
+
+      return reportDateColumnOptions[0]?.id ?? '';
+    });
+  }, [collaboratorContractDateMode, reportDateColumnOptions]);
 
   const getDefaultDateFilteringAttribute = (
     sourceThemeId: string,
@@ -2120,6 +2324,13 @@ export function AttributeSelector() {
     setIncludePresentCollaborators(true);
     setIncludeFutureNewCollaborators(false);
     setIncludeFutureReturnCollaborators(false);
+    setCollaboratorContextExpanded(false);
+    setSelectedCollaboratorTarget('');
+    setSelectedCollaboratorName('');
+    setCollaboratorContractDateMode('reportEnd');
+    setSelectedCollaboratorContractDateColumnId('');
+    setSelectedContractTypeFilters([]);
+    setSelectedQualificationFilters([]);
     setSelectedDepartmentFilters([]);
     setSelectedEstablishmentFilters([]);
     setCollaboratorStatusFilterExpanded(false);
@@ -2138,6 +2349,13 @@ export function AttributeSelector() {
     setDisplayAsColumnsAttributeId('');
     setSortColumnIds([]);
     setPendingSortColumnId('');
+    setSelectedCollaboratorName('');
+    setCollaboratorContractDateMode('reportEnd');
+    setSelectedCollaboratorContractDateColumnId('');
+    setSelectedContractTypeFilters([]);
+    setSelectedQualificationFilters([]);
+    setSelectedDepartmentFilters([]);
+    setSelectedEstablishmentFilters([]);
     setReportPreviewColumns([]);
     setReportPreviewRows([]);
   };
@@ -2557,12 +2775,41 @@ export function AttributeSelector() {
 
     const clauses: string[] = [];
 
+    const dateModeLabel =
+      collaboratorContractDateMode === 'today'
+        ? 'date du jour'
+        : collaboratorContractDateMode === 'reportStart'
+        ? 'début du rapport'
+        : collaboratorContractDateMode === 'reportEnd'
+        ? 'fin du rapport'
+        : (() => {
+            const selectedDateColumn = reportDateColumnOptions.find((option) => option.id === selectedCollaboratorContractDateColumnId);
+            return selectedDateColumn ? `colonne du rapport (${selectedDateColumn.label})` : 'colonne du rapport';
+          })();
+    clauses.push(`Contrat et poste ciblé: ${dateModeLabel}`);
+
+    if (selectedCollaboratorTarget) {
+      clauses.push(`Collaborateur ciblé: ${selectedCollaboratorTarget}`);
+    }
+
+    if (selectedCollaboratorName) {
+      clauses.push(`Collaborateur: ${selectedCollaboratorName}`);
+    }
+
+    if (selectedContractTypeFilters.length > 0) {
+      clauses.push(`Type du contrat dans (${formatOrgFilterList(selectedContractTypeFilters)})`);
+    }
+
+    if (selectedQualificationFilters.length > 0) {
+      clauses.push(`Qualification du poste dans (${formatOrgFilterList(selectedQualificationFilters)})`);
+    }
+
     if (selectedDepartmentFilters.length > 0) {
-      clauses.push(`Départements dans (${formatOrgFilterList(selectedDepartmentFilters)})`);
+      clauses.push(`Département du poste dans (${formatOrgFilterList(selectedDepartmentFilters)})`);
     }
 
     if (selectedEstablishmentFilters.length > 0) {
-      clauses.push(`Etablissements dans (${selectedEstablishmentFilters.join(', ')})`);
+      clauses.push(`Etablissement du poste dans (${selectedEstablishmentFilters.join(', ')})`);
     }
 
     if (clauses.length === 0) return null;
@@ -2573,8 +2820,13 @@ export function AttributeSelector() {
     return [node.name, ...node.children.flatMap(getDepartmentBranchNames)];
   };
 
+  const getQualificationBranchNames = (node: QualificationNode): string[] => {
+    return [node.name, ...node.children.flatMap(getQualificationBranchNames)];
+  };
+
   const toggleDepartmentBranch = (node: DepartmentNode, isChecked: boolean) => {
     const branchNames = getDepartmentBranchNames(node);
+    setSelectedCollaboratorName('');
     setSelectedDepartmentFilters((prev) => {
       const next = new Set(prev);
       for (const name of branchNames) {
@@ -2586,6 +2838,38 @@ export function AttributeSelector() {
       }
       return Array.from(next).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
     });
+  };
+
+  const toggleQualificationBranch = (node: QualificationNode, isChecked: boolean) => {
+    const branchNames = getQualificationBranchNames(node);
+    setSelectedCollaboratorName('');
+    setSelectedQualificationFilters((prev) => {
+      const next = new Set(prev);
+      for (const name of branchNames) {
+        if (isChecked) {
+          next.add(name);
+        } else {
+          next.delete(name);
+        }
+      }
+      return Array.from(next).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+    });
+  };
+
+  const handleCollaboratorNameChange = (value: string) => {
+    setSelectedCollaboratorName(value);
+
+    if (!value) {
+      return;
+    }
+
+    // Keep collaborator target, reset all other collaborator-context filters.
+    setCollaboratorContractDateMode('reportEnd');
+    setSelectedCollaboratorContractDateColumnId('');
+    setSelectedContractTypeFilters([]);
+    setSelectedQualificationFilters([]);
+    setSelectedDepartmentFilters([]);
+    setSelectedEstablishmentFilters([]);
   };
 
   const getSortableSelectedAttributes = () => {
@@ -3003,6 +3287,8 @@ export function AttributeSelector() {
     setIncludePresentCollaborators(true);
     setIncludeFutureNewCollaborators(false);
     setIncludeFutureReturnCollaborators(false);
+    setSelectedCollaboratorName('');
+    setSelectedQualificationFilters([]);
     setSelectedDepartmentFilters([]);
     setSelectedEstablishmentFilters([]);
   };
@@ -3051,12 +3337,19 @@ export function AttributeSelector() {
   const editingAttribute = selectedAttributes.find((attr) => attr.id === editingAttributeId);
   const mainObjectSmartObjects = selectingMainObject ? [] : getMainObjectSmartObjects();
   const mainObjectAvailableAttributes = selectingMainObject ? [] : getMainObjectAvailableAttributes();
-  const mainObjectStage2Groups = selectingMainObject
-    ? [] as Stage2ObjectGroup[]
-    : getMainObjectStage2Groups(mainObjectAvailableAttributes);
+  const mainObjectStage2Groups = useMemo(
+    () => (selectingMainObject ? [] as Stage2ObjectGroup[] : getMainObjectStage2Groups(mainObjectAvailableAttributes)),
+    [selectingMainObject, mainObjectAvailableAttributes]
+  );
   useEffect(() => {
     const validGroupKeys = new Set(mainObjectStage2Groups.map((group) => group.key));
-    setCollapsedAvailableGroupKeys((prev) => prev.filter((key) => validGroupKeys.has(key)));
+    setCollapsedAvailableGroupKeys((prev) => {
+      const next = prev.filter((key) => validGroupKeys.has(key));
+      if (next.length === prev.length && next.every((key, index) => key === prev[index])) {
+        return prev;
+      }
+      return next;
+    });
   }, [mainObjectStage2Groups]);
   const orderedMainObjectStage2Groups = useMemo(() => {
     if (!mainObject) return mainObjectStage2Groups;
@@ -3398,7 +3691,28 @@ export function AttributeSelector() {
     selectedEstablishmentFilters.length === 0
       ? 'Etab. tous'
       : `${selectedEstablishmentFilters.length} Etab.`;
-  const collaboratorOrgFilterSummaryLabel = `${collaboratorDepartmentSummary} - ${collaboratorEstablishmentSummary}`;
+  const collaboratorContractTypeSummary =
+    selectedContractTypeFilters.length === 0
+      ? 'Contrat. tous'
+      : `${selectedContractTypeFilters.length} Contrat.`;
+  const collaboratorQualificationSummary =
+    selectedQualificationFilters.length === 0
+      ? 'Qualif. toutes'
+      : `${selectedQualificationFilters.length} Qualif.`;
+  const collaboratorContractDateSummary =
+    collaboratorContractDateMode === 'today'
+      ? 'Date: jour'
+      : collaboratorContractDateMode === 'reportStart'
+      ? 'Date: début'
+      : collaboratorContractDateMode === 'reportEnd'
+      ? 'Date: fin'
+      : (() => {
+          const selectedDateColumn = reportDateColumnOptions.find((option) => option.id === selectedCollaboratorContractDateColumnId);
+          return `Date: colonne${selectedDateColumn ? ` (${selectedDateColumn.label})` : ''}`;
+        })();
+  const collaboratorTargetSummary = selectedCollaboratorTarget || 'Collaborateur';
+  const collaboratorNameSummary = selectedCollaboratorName || 'Collab. tous';
+  const collaboratorOrgFilterSummaryLabel = `${collaboratorTargetSummary} - ${collaboratorNameSummary} - ${collaboratorContractDateSummary} - ${collaboratorContractTypeSummary} - ${collaboratorQualificationSummary} - ${collaboratorDepartmentSummary} - ${collaboratorEstablishmentSummary}`;
   const collaboratorStatusFilterLines = getCollaboratorStatusFilterLines();
   const collaboratorOrgFilterLine = getCollaboratorOrgFilterLine();
   const collaboratorGeneratedFilterLines = [
@@ -3408,6 +3722,10 @@ export function AttributeSelector() {
   const departmentFilterOptions = useMemo(
     () => Array.from(new Set(flattenDepartmentTree(departmentTree))).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }),),
     [departmentTree]
+  );
+  const qualificationFilterOptions = useMemo(
+    () => Array.from(new Set(flattenDepartmentTree(qualificationTree))).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }),),
+    [qualificationTree]
   );
   const reportPreviewSourceColumns = selectedAttributes.map((attr) => ({
     id: attr.id,
@@ -3457,12 +3775,22 @@ export function AttributeSelector() {
       },
       globalFilterGroups,
       collaboratorFilterEnabled: mainObjectLinkedToCollaborateur,
+      selectedCollaboratorTarget,
+      selectedCollaboratorName,
+      collaboratorContractDateMode,
+      selectedCollaboratorContractDateColumnId,
+      collaboratorTargets: collaboratorTargetOptions.map((option) => option.label),
+      collaboratorUniverse: collaboratorOptions,
+      selectedContractTypeFilters,
+      selectedQualificationFilters,
+      contractTypeUniverse: contractTypeEnumValues,
       includeDepartedCollaborators,
       includePresentCollaborators,
       includeFutureNewCollaborators,
       includeFutureReturnCollaborators,
       selectedDepartmentFilters,
       selectedEstablishmentFilters,
+      qualificationUniverse: qualificationFilterOptions,
       departmentUniverse: departmentFilterOptions,
       establishmentUniverse: establishmentOptions,
       sortColumnIds,
@@ -3762,6 +4090,190 @@ export function AttributeSelector() {
                       )}
                     </div>
                   )}
+                  {mainObjectLinkedToCollaborateur && (
+                    <div className="rounded border border-teal-200 bg-teal-50 p-2 text-xs text-teal-900">
+                      <button
+                        type="button"
+                        onClick={() => setCollaboratorContextExpanded((previous) => !previous)}
+                        className="mb-1 flex w-full items-center justify-between text-left text-[11px] font-medium leading-none text-teal-800"
+                        aria-expanded={collaboratorContextExpanded}
+                      >
+                        <span>Rechercher certains collaborateurs</span>
+                        <span className="text-sm leading-none">{collaboratorContextExpanded ? '▾' : '▸'}</span>
+                      </button>
+
+                      {collaboratorContextExpanded && (
+                        <>
+                          <div className="mb-2 grid gap-2 md:grid-cols-2">
+                            <div>
+                              <div className="mb-1 text-[11px] text-teal-800">Collaborateur ciblé</div>
+                              <select
+                                value={selectedCollaboratorTarget}
+                                onChange={(event) => setSelectedCollaboratorTarget(event.target.value)}
+                                className="w-full rounded border border-teal-300 bg-white px-2 py-1.5 text-xs"
+                              >
+                                {collaboratorTargetOptions.map((option) => (
+                                  <option key={option.key} value={option.label}>
+                                    {option.label}{option.isMainCollaborator ? ' (par défaut)' : ''}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <div className="mb-1 text-[11px] text-teal-800">Un collaborateur précis</div>
+                              <select
+                                value={selectedCollaboratorName}
+                                onChange={(event) => handleCollaboratorNameChange(event.target.value)}
+                                className="w-full rounded border border-teal-300 bg-white px-2 py-1.5 text-xs"
+                              >
+                                <option value="">Tous les collaborateurs</option>
+                                {collaboratorOptions.map((collaborator) => (
+                                  <option key={collaborator} value={collaborator}>{collaborator}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="mb-2 grid gap-2 md:grid-cols-2">
+                            <div>
+                              <div className="mb-1 text-[11px] text-teal-800">Contrat et poste ciblé</div>
+                              <select
+                                value={collaboratorContractDateMode}
+                                onChange={(event) => setCollaboratorContractDateMode(event.target.value as CollaboratorContractDateMode)}
+                                className="w-full rounded border border-teal-300 bg-white px-2 py-1.5 text-xs"
+                              >
+                                <option value="today">date du jour</option>
+                                <option value="reportStart">début du rapport</option>
+                                <option value="reportEnd">fin du rapport</option>
+                                <option value="reportColumn">colonne du rapport</option>
+                              </select>
+                            </div>
+
+                            {collaboratorContractDateMode === 'reportColumn' && (
+                              <div>
+                                <div className="mb-1 text-[11px] text-teal-800">Colonne date du rapport</div>
+                                <select
+                                  value={selectedCollaboratorContractDateColumnId}
+                                  onChange={(event) => setSelectedCollaboratorContractDateColumnId(event.target.value)}
+                                  className="w-full rounded border border-teal-300 bg-white px-2 py-1.5 text-xs"
+                                >
+                                  {reportDateColumnOptions.length === 0 && (
+                                    <option value="">Aucune colonne date disponible</option>
+                                  )}
+                                  {reportDateColumnOptions.map((option) => (
+                                    <option key={option.id} value={option.id}>{option.label}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="mb-2 grid gap-2 md:grid-cols-2">
+                            {contractTypeEnumValues.length > 0 && (
+                              <div>
+                                <div className="mb-1 text-[11px] text-teal-800">Type du contrat</div>
+                                <div className="max-h-20 overflow-auto rounded border border-teal-200 bg-white p-2 text-[10px] font-light">
+                                  {contractTypeEnumValues.map((contractType) => (
+                                    <label key={contractType} className="flex items-center gap-2 whitespace-nowrap font-light">
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedContractTypeFilters.includes(contractType)}
+                                        onChange={(event) => {
+                                          const checked = event.target.checked;
+                                          setSelectedCollaboratorName('');
+                                          setSelectedContractTypeFilters((prev) => {
+                                            const next = new Set(prev);
+                                            if (checked) next.add(contractType);
+                                            else next.delete(contractType);
+                                            return Array.from(next).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+                                          });
+                                        }}
+                                      />
+                                      <span className="font-light">{contractType}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            <div>
+                              <div className="mb-1 text-[11px] text-teal-800">Qualification du poste</div>
+                              <div className="max-h-20 overflow-auto rounded border border-teal-200 bg-white p-2 text-[10px] font-light">
+                                {qualificationTree.length === 0 ? (
+                                  <div className="text-gray-500">Aucune qualification chargée.</div>
+                                ) : (
+                                  <div className="space-y-0.5">
+                                    {qualificationTree.map((rootNode) => (
+                                      <DepartmentTreeItem
+                                        key={`qualification-${rootNode.name}`}
+                                        node={rootNode}
+                                        level={0}
+                                        disabled={!mainObjectLinkedToCollaborateur}
+                                        selectedValues={selectedQualificationFilters}
+                                        onToggle={toggleQualificationBranch}
+                                        path="qualification"
+                                      />
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="grid gap-2 md:grid-cols-2">
+                            <div>
+                              <div className="mb-1 text-[11px] text-teal-800">Département du poste</div>
+                              <div className="h-24 overflow-auto rounded border border-teal-200 bg-white p-2 text-[10px] font-light">
+                                {departmentTree.length === 0 ? (
+                                  <div className="text-gray-500">Aucun département chargé.</div>
+                                ) : (
+                                  <div className="space-y-0.5">
+                                    {departmentTree.map((rootNode) => (
+                                      <DepartmentTreeItem
+                                        key={rootNode.name}
+                                        node={rootNode}
+                                        level={0}
+                                        disabled={!mainObjectLinkedToCollaborateur}
+                                        selectedValues={selectedDepartmentFilters}
+                                        onToggle={toggleDepartmentBranch}
+                                      />
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <div>
+                              <div className="mb-1 text-[11px] text-teal-800">Etablissement du poste</div>
+                              <div className="h-24 overflow-auto rounded border border-teal-200 bg-white p-2 text-[10px] font-light">
+                                {establishmentOptions.map((establishment) => (
+                                  <label key={establishment} className="flex items-center gap-2 whitespace-nowrap font-light">
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedEstablishmentFilters.includes(establishment)}
+                                      onChange={(event) => {
+                                        const checked = event.target.checked;
+                                        setSelectedCollaboratorName('');
+                                        setSelectedEstablishmentFilters((prev) => {
+                                          const next = new Set(prev);
+                                          if (checked) next.add(establishment);
+                                          else next.delete(establishment);
+                                          return Array.from(next).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+                                        });
+                                      }}
+                                    />
+                                    <span className="font-light">{establishment}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+
                   <div className="rounded border border-gray-200 bg-white p-2 text-xs text-gray-800">
                     <div className="mb-1 text-[11px] font-medium leading-none text-gray-700">Filtrage</div>
                     <button
@@ -4110,6 +4622,8 @@ export function AttributeSelector() {
                           includePresentCollaborators,
                           includeFutureNewCollaborators,
                           includeFutureReturnCollaborators,
+                          selectedCollaboratorName,
+                          selectedQualificationFilters,
                           selectedDepartmentFilters,
                           selectedEstablishmentFilters,
                           generatedLines: mainObjectLinkedToCollaborateur ? collaboratorGeneratedFilterLines : [],

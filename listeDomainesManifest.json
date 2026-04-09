@@ -3415,6 +3415,7 @@
               "relationName": "Bénéficiaire",
               "cardinalityFrom": "many",
               "cardinalityTo": "one",
+              "isMainCollaborator":true,
               "recursiveMagicSel": false,
               "magicSel": true
             },

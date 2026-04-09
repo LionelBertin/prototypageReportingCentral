@@ -7,6 +7,10 @@ type PreviewMeta = {
   collaboratorStatus: 'present' | 'departed' | 'futureNew' | 'futureReturn';
   department: string;
   establishment: string;
+  collaboratorTarget: string;
+  collaboratorName: string;
+  contractType: string;
+  qualification: string;
 };
 
 const STATUS_DATE_REFERENCE_ATTRIBUTE_ID = '__status-collaborators-date__';
@@ -54,12 +58,22 @@ export type GenerateReportPreviewInput = {
   temporalContext: ReportTemporalContext;
   globalFilterGroups?: FilterGroup[];
   collaboratorFilterEnabled: boolean;
+  selectedCollaboratorTarget: string;
+  selectedCollaboratorName: string;
+  collaboratorContractDateMode: 'today' | 'reportStart' | 'reportEnd' | 'reportColumn';
+  selectedCollaboratorContractDateColumnId: string;
+  collaboratorTargets: string[];
+  collaboratorUniverse: string[];
+  selectedContractTypeFilters: string[];
+  selectedQualificationFilters: string[];
+  contractTypeUniverse: string[];
   includeDepartedCollaborators: boolean;
   includePresentCollaborators: boolean;
   includeFutureNewCollaborators: boolean;
   includeFutureReturnCollaborators: boolean;
   selectedDepartmentFilters: string[];
   selectedEstablishmentFilters: string[];
+  qualificationUniverse: string[];
   departmentUniverse: string[];
   establishmentUniverse: string[];
   sortColumnIds: string[];
@@ -145,6 +159,14 @@ const buildFakeValue = (
 
   if (normalizedName.includes('etablissement')) {
     return meta.establishment;
+  }
+
+  if (normalizedName.includes('type de contrat') || normalizedName === 'type-de-contrat') {
+    return meta.contractType;
+  }
+
+  if (normalizedName.includes('qualification')) {
+    return meta.qualification;
   }
 
   if (normalizedName.includes('statut')) {
@@ -330,6 +352,18 @@ const applyCollaboratorFilters = (
   if (allowedStatuses.size === 0) return [];
 
   return rows.filter((row) => {
+    if (input.selectedCollaboratorTarget && row.meta.collaboratorTarget !== input.selectedCollaboratorTarget) {
+      return false;
+    }
+
+    if (input.selectedCollaboratorName && row.meta.collaboratorName !== input.selectedCollaboratorName) {
+      return false;
+    }
+
+    if (input.selectedContractTypeFilters.length > 0 && !input.selectedContractTypeFilters.includes(row.meta.contractType)) {
+      return false;
+    }
+
     if (!allowedStatuses.has(row.meta.collaboratorStatus)) {
       return false;
     }
@@ -339,6 +373,10 @@ const applyCollaboratorFilters = (
     }
 
     if (input.selectedEstablishmentFilters.length > 0 && !input.selectedEstablishmentFilters.includes(row.meta.establishment)) {
+      return false;
+    }
+
+    if (input.selectedQualificationFilters.length > 0 && !input.selectedQualificationFilters.includes(row.meta.qualification)) {
       return false;
     }
 
@@ -487,6 +525,22 @@ export const generateReportPreviewRows = (input: GenerateReportPreviewInput): Ge
     ? input.establishmentUniverse
     : ['Lucca FR', 'Lucca UK', 'Lucca Deutschland'];
 
+  const collaboratorTargets = input.collaboratorTargets.length > 0
+    ? input.collaboratorTargets
+    : ['Collaborateur'];
+
+  const collaboratorUniverse = input.collaboratorUniverse.length > 0
+    ? input.collaboratorUniverse
+    : ['Dupont Jean', 'Martin Claire', 'Lefevre Marie'];
+
+  const contractTypeUniverse = input.contractTypeUniverse.length > 0
+    ? input.contractTypeUniverse
+    : ['CDI', 'CDD', 'Stage'];
+
+  const qualificationUniverse = input.qualificationUniverse.length > 0
+    ? input.qualificationUniverse
+    : ['Consultant Junior (Grade1)', 'Developer Confirmed (Grade2)', 'Project Manager Senior (Grade3)'];
+
   const statuses: Array<PreviewMeta['collaboratorStatus']> = ['present', 'departed', 'futureNew', 'futureReturn'];
 
   const rows: PreviewRowInternal[] = Array.from({ length: input.rowCount }).map((_, rowIndex) => {
@@ -494,6 +548,10 @@ export const generateReportPreviewRows = (input: GenerateReportPreviewInput): Ge
       collaboratorStatus: statuses[rowIndex % statuses.length],
       department: departmentUniverse[rowIndex % departmentUniverse.length],
       establishment: establishmentUniverse[rowIndex % establishmentUniverse.length],
+      collaboratorTarget: collaboratorTargets[rowIndex % collaboratorTargets.length],
+      collaboratorName: collaboratorUniverse[rowIndex % collaboratorUniverse.length],
+      contractType: contractTypeUniverse[rowIndex % contractTypeUniverse.length],
+      qualification: qualificationUniverse[rowIndex % qualificationUniverse.length],
     };
 
     const cells: Record<string, PreviewCellValue> = {};
