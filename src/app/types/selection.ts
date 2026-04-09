@@ -107,4 +107,9 @@ export interface SelectedAttribute {
   conditionalConfig?: ConditionalColumnConfig; // Pour les colonnes conditionnelles
   calculatedConfig?: CalculatedColumnConfig; // Pour les colonnes calculées
   ownObjectOnly?: boolean;
+  insertionLotId?: string;
+  insertionLotLabel?: string;
+  insertionLotDateMode?: 'today' | 'reportStart' | 'reportEnd' | 'reportColumn';
+  insertionLotDateColumnId?: string;
+  insertionLotDateLabel?: string;
 }

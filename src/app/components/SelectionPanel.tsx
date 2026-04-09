@@ -18,12 +18,14 @@ interface SelectionPanelProps {
   onRemoveAttribute: (id: string) => void;
   onEditCompartment: (id: string) => void;
   onEditDateReference: (id: string) => void;
+  onEditInsertionLot: (lotId: string) => void;
   onEditConditionalColumn: (id: string) => void;
   onEditCalculatedColumn: (id: string) => void;
   onEditAggregation: (id: string) => void;
   onReorder: (draggedId: string, targetId: string) => void;
   onEditColumnName: (id: string, newName: string) => void;
   getDateAttributeName: (attributeId: string) => string;
+  getInsertionLotDisplayLabel: (lotId: string) => string;
   showCompartmenting: boolean;
   showConditionalColumns: boolean;
   showCalculatedColumns: boolean;
@@ -39,12 +41,14 @@ export function SelectionPanel({
   onRemoveAttribute,
   onEditCompartment,
   onEditDateReference,
+  onEditInsertionLot,
   onEditConditionalColumn,
   onEditCalculatedColumn,
   onEditAggregation,
   onReorder,
   onEditColumnName,
   getDateAttributeName,
+  getInsertionLotDisplayLabel,
   showCompartmenting,
   showConditionalColumns,
   showCalculatedColumns,
@@ -194,6 +198,10 @@ export function SelectionPanel({
   };
 
   const getDateReferenceLabel = (attr: SelectedAttribute) => {
+    if (attr.insertionLotDateLabel) {
+      return attr.insertionLotDateLabel;
+    }
+
     const formatIsoDate = (value: string) => {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
       const [year, month, day] = value.split('-');
@@ -234,6 +242,10 @@ export function SelectionPanel({
   const getObjectInstanceKey = (attr: SelectedAttribute) => {
     if (attr.insertionType === 'conditional' || attr.insertionType === 'calculated') {
       return `${attr.insertionType}|${attr.id}`;
+    }
+
+    if (attr.insertionLotId) {
+      return `lot|${attr.insertionLotId}`;
     }
 
     const path = attr.navigationPath
@@ -352,12 +364,18 @@ export function SelectionPanel({
                                       <span className="font-normal text-gray-500">{` – ${getObjectGroupTitle(attr)}`}</span>
                                     </span>
                                     {isFilterInvolved && (
-                                      <Filter className="size-3 text-orange-600" title="Utilisé dans le filtrage" />
+                                      <span title="Utilisé dans le filtrage">
+                                        <Filter className="size-3 text-orange-600" />
+                                      </span>
                                     )}
                                     {isDisplayAsColumnsAttribute ? (
-                                      <ArrowLeftRight className="size-3 text-blue-600" title="Utilisé pour l'affichage en colonnes" />
+                                      <span title="Utilisé pour l'affichage en colonnes">
+                                        <ArrowLeftRight className="size-3 text-blue-600" />
+                                      </span>
                                     ) : isSortInvolved && (
-                                      <ArrowUpDown className="size-3 text-blue-600" title="Utilisé dans le tri" />
+                                      <span title="Utilisé dans le tri">
+                                        <ArrowUpDown className="size-3 text-blue-600" />
+                                      </span>
                                     )}
                                     {showColumnRename && (
                                       <button
@@ -379,9 +397,7 @@ export function SelectionPanel({
                                   && !(attr.insertionType === 'conditional' && !showConditionalColumns)
                                   && !(attr.insertionType === 'calculated' && !showCalculatedColumns) && (
                                   <span className={`rounded px-2 py-0.5 text-xs ${
-                                    attr.insertionType === 'normal'
-                                      ? 'bg-gray-100 text-gray-700'
-                                      : attr.insertionType === 'first'
+                                    attr.insertionType === 'first'
                                       ? 'bg-green-100 text-green-700'
                                       : attr.insertionType === 'last'
                                       ? 'bg-yellow-100 text-yellow-700'
@@ -391,9 +407,7 @@ export function SelectionPanel({
                                       ? 'bg-teal-100 text-teal-700'
                                       : 'bg-gray-100 text-gray-700'
                                   }`}>
-                                    {attr.insertionType === 'normal'
-                                      ? getAttributeTypeLabel(attr)
-                                      : attr.insertionType === 'first'
+                                    {attr.insertionType === 'first'
                                       ? 'Première instance'
                                       : attr.insertionType === 'last'
                                       ? 'Dernière instance'
@@ -412,6 +426,17 @@ export function SelectionPanel({
                                     title="Modifier la configuration de l'opération"
                                   >
                                     {getOperationDetailLabel(attr)}
+                                  </button>
+                                )}
+
+                                {attr.insertionLotId && attr.insertionLotLabel && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onEditInsertionLot(attr.insertionLotId!)}
+                                    className="rounded bg-indigo-100 px-2 py-0.5 text-xs text-indigo-800 hover:bg-indigo-200"
+                                    title={`Éditer ${getInsertionLotDisplayLabel(attr.insertionLotId)}`}
+                                  >
+                                    {getInsertionLotDisplayLabel(attr.insertionLotId)}
                                   </button>
                                 )}
 

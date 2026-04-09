@@ -11,6 +11,8 @@ type PreviewMeta = {
   collaboratorName: string;
   contractType: string;
   qualification: string;
+  isManagedDirectly: boolean;
+  isManagedIndirectly: boolean;
 };
 
 const STATUS_DATE_REFERENCE_ATTRIBUTE_ID = '__status-collaborators-date__';
@@ -64,6 +66,7 @@ export type GenerateReportPreviewInput = {
   selectedCollaboratorContractDateColumnId: string;
   collaboratorTargets: string[];
   collaboratorUniverse: string[];
+  selectedManagerialRelationFilter: 'all' | 'direct' | 'directAndIndirect';
   selectedContractTypeFilters: string[];
   selectedQualificationFilters: string[];
   contractTypeUniverse: string[];
@@ -364,6 +367,14 @@ const applyCollaboratorFilters = (
       return false;
     }
 
+    if (input.selectedManagerialRelationFilter === 'direct' && !row.meta.isManagedDirectly) {
+      return false;
+    }
+
+    if (input.selectedManagerialRelationFilter === 'directAndIndirect' && !row.meta.isManagedDirectly && !row.meta.isManagedIndirectly) {
+      return false;
+    }
+
     if (!allowedStatuses.has(row.meta.collaboratorStatus)) {
       return false;
     }
@@ -552,6 +563,8 @@ export const generateReportPreviewRows = (input: GenerateReportPreviewInput): Ge
       collaboratorName: collaboratorUniverse[rowIndex % collaboratorUniverse.length],
       contractType: contractTypeUniverse[rowIndex % contractTypeUniverse.length],
       qualification: qualificationUniverse[rowIndex % qualificationUniverse.length],
+      isManagedDirectly: rowIndex % 3 !== 2,
+      isManagedIndirectly: rowIndex % 3 === 1,
     };
 
     const cells: Record<string, PreviewCellValue> = {};

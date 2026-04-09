@@ -49,6 +49,61 @@ export function FilterDialog({
     [compartmentFilterAttributes]
   );
 
+  const splitGroupedLabel = (value: string) => {
+    const separator = ' – ';
+    const separatorIndex = value.lastIndexOf(separator);
+    if (separatorIndex === -1) {
+      return { optionLabel: value, groupLabel: 'Objet courant' };
+    }
+
+    return {
+      optionLabel: value.slice(0, separatorIndex),
+      groupLabel: value.slice(separatorIndex + separator.length),
+    };
+  };
+
+  const buildOptionGroups = <T extends { id: string; name: string }>(items: T[]) => {
+    const groups = new Map<string, Array<T & { optionLabel: string }>>();
+
+    for (const item of items) {
+      const { optionLabel, groupLabel } = splitGroupedLabel(item.name);
+      const existing = groups.get(groupLabel);
+      const nextItem = { ...item, optionLabel };
+      if (existing) {
+        existing.push(nextItem);
+      } else {
+        groups.set(groupLabel, [nextItem]);
+      }
+    }
+
+    return Array.from(groups.entries())
+      .map(([label, options]) => ({
+        label,
+        options: options.sort((a, b) => normalizeSortKey(a.optionLabel).localeCompare(normalizeSortKey(b.optionLabel), 'fr')),
+      }))
+      .sort((a, b) => normalizeSortKey(a.label).localeCompare(normalizeSortKey(b.label), 'fr'));
+  };
+
+  const buildCustomOptionGroups = <T extends { id: string; label: string; group: string }>(items: T[]) => {
+    const groups = new Map<string, T[]>();
+
+    for (const item of items) {
+      const existing = groups.get(item.group);
+      if (existing) {
+        existing.push(item);
+      } else {
+        groups.set(item.group, [item]);
+      }
+    }
+
+    return Array.from(groups.entries())
+      .map(([label, options]) => ({
+        label,
+        options: options.sort((a, b) => normalizeSortKey(a.label).localeCompare(normalizeSortKey(b.label), 'fr')),
+      }))
+      .sort((a, b) => normalizeSortKey(a.label).localeCompare(normalizeSortKey(b.label), 'fr'));
+  };
+
   const filterTargets = useMemo(() => {
     const nativeTargets = sortedObjectAttributes.map((attr) => ({
       id: attr.id,
@@ -479,6 +534,30 @@ export function FilterDialog({
                       (target) => target.targetKind === 'native' && target.id.startsWith(AUTO_FILTER_COLUMN_PREFIX)
                     );
                     const compartmentTargets = filterTargets.filter((target) => target.targetKind === 'compartment');
+                    const standardNativeTargetGroups = buildOptionGroups(standardNativeTargets);
+                    const autoNativeTargetGroups = buildCustomOptionGroups(
+                      autoNativeTargets.map((target) => {
+                        const { optionLabel, groupLabel } = splitGroupedLabel(target.name);
+                        return {
+                          id: target.id,
+                          label: optionLabel,
+                          group: `Attributs auto · ${groupLabel}`,
+                        };
+                      })
+                    );
+                    const compartmentTargetGroups = buildCustomOptionGroups(
+                      compartmentTargets.map((target) => ({
+                        id: target.id,
+                        label: target.name,
+                        group: `Attributs compartimentés · ${target.sourceAttributeName}`,
+                      }))
+                    );
+                    const comparableAttributeGroups = buildOptionGroups(
+                      comparableAttributes.map((attr) => ({
+                        id: attr.id,
+                        name: attr.columnName || attr.name,
+                      }))
+                    );
 
                     return (
                   <div key={conditionIndex} className="flex items-start gap-2">
@@ -500,29 +579,33 @@ export function FilterDialog({
                             onChange={(e) => updateCondition(groupIndex, conditionIndex, 'attributeId', e.target.value)}
                             className="w-full rounded border border-gray-300 px-2 py-2 text-sm"
                           >
-                            {standardNativeTargets.map((target) => (
-                              <option key={target.id} value={target.id}>
-                                {target.name}
-                              </option>
+                            {standardNativeTargetGroups.map((group) => (
+                              <optgroup key={group.label} label={group.label}>
+                                {group.options.map((target) => (
+                                  <option key={target.id} value={target.id}>
+                                    {target.optionLabel}
+                                  </option>
+                                ))}
+                              </optgroup>
                             ))}
-                            {autoNativeTargets.length > 0 && (
-                              <optgroup label="Attributs auto">
-                                {autoNativeTargets.map((target) => (
+                            {autoNativeTargetGroups.map((group) => (
+                              <optgroup key={group.label} label={group.label}>
+                                {group.options.map((target) => (
                                   <option key={target.id} value={target.id}>
-                                    {target.name}
+                                    {target.label}
                                   </option>
                                 ))}
                               </optgroup>
-                            )}
-                            {showCompartmenting && compartmentTargets.length > 0 && (
-                              <optgroup label="Attributs compartimentés">
-                                {compartmentTargets.map((target) => (
+                            ))}
+                            {showCompartmenting && compartmentTargetGroups.map((group) => (
+                              <optgroup key={group.label} label={group.label}>
+                                {group.options.map((target) => (
                                   <option key={target.id} value={target.id}>
-                                    {target.name}
+                                    {target.label}
                                   </option>
                                 ))}
                               </optgroup>
-                            )}
+                            ))}
                           </select>
                         </div>
                       )}
@@ -601,10 +684,14 @@ export function FilterDialog({
                               className="w-full rounded border border-gray-300 px-2 py-2 text-sm"
                             >
                               <option value="">Sélectionner un attribut</option>
-                              {comparableAttributes.map((attr) => (
-                                <option key={attr.id} value={attr.id}>
-                                  {attr.columnName || attr.name}
-                                </option>
+                              {comparableAttributeGroups.map((group) => (
+                                <optgroup key={group.label} label={group.label}>
+                                  {group.options.map((attr) => (
+                                    <option key={attr.id} value={attr.id}>
+                                      {attr.optionLabel}
+                                    </option>
+                                  ))}
+                                </optgroup>
                               ))}
                             </select>
                           ) : hasEnumValues && (condition.valueType || 'fixed') === 'fixed' ? (

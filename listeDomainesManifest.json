@@ -5,6 +5,7 @@
     {
       "id": "les-collaborateurs",
       "name": "Les collaborateurs",
+      "defaultDateFiltering" :"chooseOne",
       "objects": [
         {
           "id": "collaborateur",
@@ -2727,8 +2728,8 @@
             }
           ],
           "defaultDateFiltering" :{
-            "attrDate1":"date-d-pense",
-            "attrDate2":"date-d-pense"
+            "attrDate1":"Datedeladépense",
+            "attrDate2":"Datedeladépense"
           },
           "attributes": [
             {
@@ -3400,6 +3401,7 @@
       "objects": [
         {
           "id": "formations",
+          "isStarred":true,
           "name": "Formations",
           "relations": [
             {

@@ -63,6 +63,18 @@ type AvailableObjectAttribute = {
   relativeNavigationPath: NavigationPath;
 };
 
+type ContractPosteLotAttributeOption = AvailableObjectAttribute & {
+  lotBaseNavigationPath: NavigationPath;
+  sectionKey: string;
+  sectionLabel: string;
+};
+
+type ContractPosteLotAttributeSection = {
+  key: string;
+  label: string;
+  attributes: ContractPosteLotAttributeOption[];
+};
+
 type Stage2ObjectGroup = {
   key: string;
   parentKey?: string;
@@ -112,6 +124,7 @@ type CollaboratorTargetOption = {
 };
 
 type CollaboratorContractDateMode = 'today' | 'reportStart' | 'reportEnd' | 'reportColumn';
+type CollaboratorManagerialRelationMode = 'all' | 'direct' | 'directAndIndirect';
 
 const getObjectGroupTitleFromNavigationPath = (objectName: string, navigationPath: NavigationPath = []) => {
   if (navigationPath.length === 0) {
@@ -145,6 +158,9 @@ const REPORT_PERIOD_END_VARIABLE_ID = 'dateFinRapport';
 const REPORT_PERIOD_END_VARIABLE_LABEL = 'dateFinRapport';
 const AUTO_FILTER_COLUMN_PREFIX = '__auto-filter-col__';
 
+const getContractPosteLotAttributeKey = (themeId: string, objectId: string, attributeId: string) =>
+  `${themeId}::${objectId}::${attributeId}`;
+
 const getTodayIsoDate = () => {
   const today = new Date();
   return [
@@ -163,6 +179,35 @@ const addMonthsIsoDate = (isoDate: string, monthsOffset: number) => {
     String(parsed.getMonth() + 1).padStart(2, '0'),
     String(parsed.getDate()).padStart(2, '0'),
   ].join('-');
+};
+
+const getQuickDatePresets = () => {
+  const d = (date: Date) => [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
+  const today = new Date();
+  const y = today.getFullYear();
+  const m = today.getMonth();
+  // Mois dernier
+  const lastMonthEnd = new Date(y, m, 0);
+  const lastMonthStart = new Date(lastMonthEnd.getFullYear(), lastMonthEnd.getMonth(), 1);
+  // Trimestre dernier
+  const currentQ = Math.floor(m / 3);
+  const prevQ = currentQ === 0 ? 3 : currentQ - 1;
+  const prevQYear = currentQ === 0 ? y - 1 : y;
+  const prevQStartMonth = prevQ * 3;
+  const lastQStart = new Date(prevQYear, prevQStartMonth, 1);
+  const lastQEnd = new Date(prevQYear, prevQStartMonth + 3, 0);
+  // Année dernière
+  const lastYearStart = new Date(y - 1, 0, 1);
+  const lastYearEnd = new Date(y - 1, 11, 31);
+  return [
+    { label: 'Mois dernier', start: d(lastMonthStart), end: d(lastMonthEnd) },
+    { label: 'Trimestre dernier', start: d(lastQStart), end: d(lastQEnd) },
+    { label: 'Année dernière', start: d(lastYearStart), end: d(lastYearEnd) },
+  ];
 };
 
 const isoToFrDate = (isoDate: string) => {
@@ -362,13 +407,19 @@ export function AttributeSelector() {
   const [editingOperationGroupKey, setEditingOperationGroupKey] = useState<string | null>(null);
   const [editingAttributeId, setEditingAttributeId] = useState<string | null>(null);
   const [editingObjectInstanceKey, setEditingObjectInstanceKey] = useState<string | null>(null);
+  const [editingInsertionLotId, setEditingInsertionLotId] = useState<string | null>(null);
+  const [contractPosteLotAttributesDialogOpen, setContractPosteLotAttributesDialogOpen] = useState(false);
+  const [contractPosteLotDateDialogOpen, setContractPosteLotDateDialogOpen] = useState(false);
+  const [draftLotDateMode, setDraftLotDateMode] = useState<CollaboratorContractDateMode>('reportEnd');
+  const [draftLotDateColumnId, setDraftLotDateColumnId] = useState<string>('');
+  const [draftLotAttributeKeys, setDraftLotAttributeKeys] = useState<string[]>([]);
   const [showCompartmenting, setShowCompartmenting] = useState(false);
   const [showConditionalColumns, setShowConditionalColumns] = useState(false);
   const [showCalculatedColumns, setShowCalculatedColumns] = useState(false);
   const [showColumnRename, setShowColumnRename] = useState(false);
   const [showDisplayAsColumns, setShowDisplayAsColumns] = useState(false);
   const [showLinkedObjectCardinalities, setShowLinkedObjectCardinalities] = useState(true);
-  const [showOtherCardinalitiesButton, setShowOtherCardinalitiesButton] = useState(true);
+  const [showOtherCardinalitiesButton, setShowOtherCardinalitiesButton] = useState(false);
   const [showSelectAllButton, setShowSelectAllButton] = useState(true);
   const [reportTemporalContext, setReportTemporalContext] = useState<ReportTemporalContext>(() => createDefaultTemporalContext());
   // Dates pour chooseOne/choosePeriod — modifiables par l'utilisateur dans la config
@@ -384,6 +435,7 @@ export function AttributeSelector() {
   const [selectedCollaboratorName, setSelectedCollaboratorName] = useState('');
   const [collaboratorContractDateMode, setCollaboratorContractDateMode] = useState<CollaboratorContractDateMode>('reportEnd');
   const [selectedCollaboratorContractDateColumnId, setSelectedCollaboratorContractDateColumnId] = useState('');
+  const [selectedManagerialRelationFilter, setSelectedManagerialRelationFilter] = useState<CollaboratorManagerialRelationMode>('all');
   const [selectedContractTypeFilters, setSelectedContractTypeFilters] = useState<string[]>([]);
   const [selectedQualificationFilters, setSelectedQualificationFilters] = useState<string[]>([]);
   const [selectedDepartmentFilters, setSelectedDepartmentFilters] = useState<string[]>([]);
@@ -404,7 +456,7 @@ export function AttributeSelector() {
   const [draftShowColumnRename, setDraftShowColumnRename] = useState(false);
   const [draftShowDisplayAsColumns, setDraftShowDisplayAsColumns] = useState(false);
   const [draftShowLinkedObjectCardinalities, setDraftShowLinkedObjectCardinalities] = useState(true);
-  const [draftShowOtherCardinalitiesButton, setDraftShowOtherCardinalitiesButton] = useState(true);
+  const [draftShowOtherCardinalitiesButton, setDraftShowOtherCardinalitiesButton] = useState(false);
   const [draftShowSelectAllButton, setDraftShowSelectAllButton] = useState(true);
   const [linkedMultiCardinalityDialogGroup, setLinkedMultiCardinalityDialogGroup] = useState<Stage2ObjectGroup | null>(null);
   const [linkedMultiCardinalityInsertionTarget, setLinkedMultiCardinalityInsertionTarget] = useState<LinkedMultiCardinalityObject | null>(null);
@@ -451,6 +503,12 @@ export function AttributeSelector() {
     });
   }, [collaboratorOptions]);
 
+  useEffect(() => {
+    if (!selectingMainObject) {
+      setAvailableAttributeSearchTerm('');
+    }
+  }, [selectingMainObject]);
+
   const buildSelectedAttribute = ({
     themeId,
     themeName,
@@ -467,6 +525,11 @@ export function AttributeSelector() {
     filterGroups,
     navigationPath,
     ownObjectOnly,
+    insertionLotId,
+    insertionLotLabel,
+    insertionLotDateMode,
+    insertionLotDateColumnId,
+    insertionLotDateLabel,
   }: {
     themeId: string;
     themeName: string;
@@ -483,6 +546,11 @@ export function AttributeSelector() {
     filterGroups?: FilterGroup[];
     navigationPath?: NavigationPath;
     ownObjectOnly?: boolean;
+    insertionLotId?: string;
+    insertionLotLabel?: string;
+    insertionLotDateMode?: CollaboratorContractDateMode;
+    insertionLotDateColumnId?: string;
+    insertionLotDateLabel?: string;
   }): SelectedAttribute => {
     const effectiveApplicable = insertionType === 'applicable' || !!isApplicable;
 
@@ -507,6 +575,11 @@ export function AttributeSelector() {
       applicationDateConfig: sourceObj?.applicationDateConfig,
       navigationPath,
       ownObjectOnly,
+      insertionLotId,
+      insertionLotLabel,
+      insertionLotDateMode,
+      insertionLotDateColumnId,
+      insertionLotDateLabel,
     };
   };
 
@@ -872,6 +945,85 @@ export function AttributeSelector() {
       return reportDateColumnOptions[0]?.id ?? '';
     });
   }, [collaboratorContractDateMode, reportDateColumnOptions]);
+
+  const normalizeObjectToken = (value: string) =>
+    value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLocaleLowerCase()
+      .trim();
+
+  const contractPosteObjectRefs = useMemo(() => {
+    const allObjects = dataStructure.flatMap((theme) =>
+      theme.objects.map((obj) => ({ themeId: theme.id, themeName: theme.name, objectId: obj.id, objectName: obj.name }))
+    );
+
+    const findByObjectType = (type: 'contrat' | 'poste') =>
+      allObjects.find((entry) => {
+        const normalizedId = normalizeObjectToken(entry.objectId);
+        const normalizedName = normalizeObjectToken(entry.objectName);
+
+        if (type === 'contrat') {
+          return normalizedId === 'contrats'
+            || normalizedId === 'contrat'
+            || normalizedName === 'contrats'
+            || normalizedName === 'contrat'
+            || normalizedName.includes('contrat');
+        }
+
+        return normalizedId === 'postes'
+          || normalizedId === 'poste'
+          || normalizedName === 'postes'
+          || normalizedName === 'poste'
+          || normalizedName.includes('poste');
+      }) ?? null;
+
+    return {
+      contrat: findByObjectType('contrat'),
+      poste: findByObjectType('poste'),
+    };
+  }, []);
+
+  const isReportInDayMode = mainObjectDefinition?.defaultDateFiltering === 'chooseOne';
+
+  const resolveContractPosteLotDateReference = (
+    mode: CollaboratorContractDateMode,
+    dateColumnId?: string
+  ): DateReference => {
+    if (mode === 'today') {
+      return { type: 'custom', customDate: getTodayIsoDate() };
+    }
+
+    if (mode === 'reportColumn') {
+      const resolvedColumnId = dateColumnId || reportDateColumnOptions[0]?.id;
+      if (resolvedColumnId) {
+        return { type: 'attribute', attributeId: resolvedColumnId };
+      }
+    }
+
+    const reportStart = reportChosenPeriodStart || reportTemporalContext.periodStartDate || reportTemporalContext.reportDate;
+    const reportEnd = isReportInDayMode
+      ? (reportChosenDate || reportTemporalContext.reportDate)
+      : (reportChosenPeriodEnd || reportTemporalContext.periodEndDate || reportTemporalContext.reportDate);
+
+    if (mode === 'reportStart') {
+      return { type: 'custom', customDate: reportStart };
+    }
+
+    return { type: 'custom', customDate: reportEnd };
+  };
+
+  const getContractPosteLotDateLabel = (
+    mode: CollaboratorContractDateMode,
+    dateColumnId?: string
+  ) => {
+    if (mode === 'today') return 'Date du jour';
+    if (mode === 'reportStart') return isReportInDayMode ? 'Date du rapport' : 'Date début du rapport';
+    if (mode === 'reportEnd') return isReportInDayMode ? 'Date du rapport' : 'Date fin du rapport';
+
+    const selectedColumn = reportDateColumnOptions.find((option) => option.id === dateColumnId);
+    return `Colonne date du rapport${selectedColumn ? ` (${selectedColumn.label})` : ''}`;
+  };
 
   const getDefaultDateFilteringAttribute = (
     sourceThemeId: string,
@@ -1317,6 +1469,192 @@ export function AttributeSelector() {
     }));
   };
 
+  const sortAvailableObjectAttributes = (attributes: AvailableObjectAttribute[]) =>
+    [...attributes].sort((a, b) => a.rawName.localeCompare(b.rawName, 'fr', { sensitivity: 'base' }));
+
+  const contractPosteLotAttributeCatalog = useMemo(() => {
+    const contractRef = contractPosteObjectRefs.contrat;
+    const posteRef = contractPosteObjectRefs.poste;
+    if (!contractRef || !posteRef || !mainObject || !selectedCollaboratorTarget) {
+      return {
+        sections: [] as ContractPosteLotAttributeSection[],
+        flatOptions: [] as ContractPosteLotAttributeOption[],
+      };
+    }
+
+    const baseNavigationPath: NavigationPath = [
+      {
+        objectName: 'Collaborateur',
+        cardinalityName: '1',
+        relationLabel: selectedCollaboratorTarget,
+        sourceObjectName: mainObject.objectName,
+      },
+    ];
+
+    const contractNavigationPath: NavigationPath = [
+      ...baseNavigationPath,
+      {
+        objectName: contractRef.objectName,
+        cardinalityName: 'n',
+        relationLabel: 'Contrat',
+        sourceObjectName: 'Collaborateur',
+      },
+    ];
+
+    const posteNavigationPath: NavigationPath = [
+      ...contractNavigationPath,
+      {
+        objectName: posteRef.objectName,
+        cardinalityName: 'n',
+        relationLabel: 'Poste',
+        sourceObjectName: contractRef.objectName,
+      },
+    ];
+
+    const collectRootAttributes = (
+      root: NonNullable<typeof contractRef>,
+      lotBaseNavigationPath: NavigationPath,
+      allowedSourceObjectIds: string[],
+      excludedSourceObjectIds: string[] = [],
+    ) => {
+      const allowedIds = new Set(allowedSourceObjectIds.map((value) => normalizeObjectToken(value)));
+      const excludedIds = new Set(excludedSourceObjectIds.map((value) => normalizeObjectToken(value)));
+
+      return getObjectAttributes(root.themeId, root.objectId)
+        .filter((attr) => {
+          const normalizedSourceId = normalizeObjectToken(attr.sourceObjectId);
+          const normalizedSourceName = normalizeObjectToken(attr.sourceObjectName);
+
+          if (normalizedSourceId === 'collaborateur' || normalizedSourceName === 'collaborateur') {
+            return false;
+          }
+
+          if (!allowedIds.has(normalizedSourceId) && !allowedIds.has(normalizedSourceName)) {
+            return false;
+          }
+
+          if (attr.relativeNavigationPath.length > 0 && excludedIds.has(normalizedSourceId)) {
+            return false;
+          }
+
+          return true;
+        })
+        .map((attr) => ({
+          ...attr,
+          lotBaseNavigationPath,
+          sectionKey: `${attr.sourceThemeId}::${attr.sourceObjectId}`,
+          sectionLabel: attr.sourceObjectName,
+        }));
+    };
+
+    const flatOptions: ContractPosteLotAttributeOption[] = [
+      ...collectRootAttributes(contractRef, contractNavigationPath, [contractRef.objectId]),
+      ...collectRootAttributes(posteRef, posteNavigationPath, [posteRef.objectId, 'departement', 'etablissement', 'entreprise'], [contractRef.objectId]),
+    ];
+
+    const sectionMap = new Map<string, ContractPosteLotAttributeSection>();
+    for (const option of flatOptions) {
+      const existing = sectionMap.get(option.sectionKey);
+      if (existing) {
+        existing.attributes.push(option);
+      } else {
+        sectionMap.set(option.sectionKey, {
+          key: option.sectionKey,
+          label: option.sectionLabel,
+          attributes: [option],
+        });
+      }
+    }
+
+    const preferredSectionOrder = [contractRef.objectId, posteRef.objectId];
+    const sections = Array.from(sectionMap.values())
+      .map((section) => ({
+        ...section,
+        attributes: sortAvailableObjectAttributes(section.attributes),
+      }))
+      .sort((a, b) => {
+        const aObjectId = a.attributes[0]?.sourceObjectId ?? '';
+        const bObjectId = b.attributes[0]?.sourceObjectId ?? '';
+        const aIndex = preferredSectionOrder.indexOf(aObjectId);
+        const bIndex = preferredSectionOrder.indexOf(bObjectId);
+
+        if (aIndex !== -1 || bIndex !== -1) {
+          if (aIndex === -1) return 1;
+          if (bIndex === -1) return -1;
+          return aIndex - bIndex;
+        }
+
+        return a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' });
+      });
+
+    return { sections, flatOptions };
+  }, [contractPosteObjectRefs, mainObject, selectedCollaboratorTarget]);
+
+  const insertionLotDisplayLabels = new Map<string, string>();
+  let insertionLotCounter = 1;
+  for (const attr of selectedAttributes) {
+    if (!attr.insertionLotId || insertionLotDisplayLabels.has(attr.insertionLotId)) continue;
+    insertionLotDisplayLabels.set(
+      attr.insertionLotId,
+      `Lot ${insertionLotCounter} : ${attr.insertionLotLabel ?? 'Sans libellé'}`
+    );
+    insertionLotCounter += 1;
+  }
+
+  const getInsertionLotDisplayLabel = (lotId: string) => insertionLotDisplayLabels.get(lotId) ?? 'Lot';
+
+  const buildContractPosteLotAttributes = ({
+    collaboratorRelationLabel,
+    insertionLotId,
+    selectedAttributeKeys,
+    dateMode,
+    dateColumnId,
+  }: {
+    collaboratorRelationLabel: string;
+    insertionLotId: string;
+    selectedAttributeKeys: string[];
+    dateMode: CollaboratorContractDateMode;
+    dateColumnId?: string;
+  }) => {
+    if (!mainObject || !mainObjectLinkedToCollaborateur) return [] as SelectedAttribute[];
+
+    const contractRef = contractPosteObjectRefs.contrat;
+    const posteRef = contractPosteObjectRefs.poste;
+    if (!contractRef || !posteRef) return [] as SelectedAttribute[];
+
+    const selectedAttributeKeySet = new Set(selectedAttributeKeys);
+    const resolvedDateColumnId = dateMode === 'reportColumn'
+      ? (dateColumnId || reportDateColumnOptions[0]?.id)
+      : undefined;
+    const lotDateReference = resolveContractPosteLotDateReference(dateMode, resolvedDateColumnId);
+    const lotDateLabel = getContractPosteLotDateLabel(dateMode, resolvedDateColumnId);
+
+    const buildLotAttributes = (objectAttributes: ContractPosteLotAttributeOption[]) => objectAttributes
+      .filter((attr) => selectedAttributeKeySet.has(
+        getContractPosteLotAttributeKey(attr.sourceThemeId, attr.sourceObjectId, attr.id)
+      ))
+      .map((attr) => buildSelectedAttribute({
+        themeId: attr.sourceThemeId,
+        themeName: attr.sourceThemeName,
+        objectId: attr.sourceObjectId,
+        objectName: attr.sourceObjectName,
+        attributeId: attr.id,
+        attributeName: attr.rawName,
+        attributeType: attr.type,
+        insertionType: 'applicable',
+        isApplicable: true,
+        dateReference: lotDateReference,
+        navigationPath: [...attr.lotBaseNavigationPath, ...attr.relativeNavigationPath],
+        insertionLotId,
+        insertionLotLabel: collaboratorRelationLabel,
+        insertionLotDateMode: dateMode,
+        insertionLotDateColumnId: resolvedDateColumnId,
+        insertionLotDateLabel: lotDateLabel,
+      }));
+
+    return buildLotAttributes(contractPosteLotAttributeCatalog.flatOptions);
+  };
+
   const getMainObjectModeLabel = () => {
     if (!mainObjectConfig) return '';
 
@@ -1744,6 +2082,9 @@ export function AttributeSelector() {
       attr.sortDirection ?? '',
       attr.aggregationType ?? '',
       dateReferencePart,
+      attr.insertionLotId ?? '',
+      attr.insertionLotDateMode ?? '',
+      attr.insertionLotDateColumnId ?? '',
     ].join('|');
   };
 
@@ -2116,10 +2457,96 @@ export function AttributeSelector() {
 
   const handleEditDateReference = (id: string) => {
     const currentAttr = selectedAttributes.find((attr) => attr.id === id);
-    if (currentAttr?.applicationDateConfig?.requirementMode === 'period') return;
+    if (!currentAttr) return;
+
+    if (currentAttr.insertionLotId) {
+      const initialMode = currentAttr.insertionLotDateMode ?? 'reportEnd';
+      const initialColumnId = currentAttr.insertionLotDateColumnId ?? reportDateColumnOptions[0]?.id ?? '';
+      setEditingInsertionLotId(currentAttr.insertionLotId);
+      setDraftLotDateMode(initialMode);
+      setDraftLotDateColumnId(initialColumnId);
+      setContractPosteLotDateDialogOpen(true);
+      return;
+    }
+
+    if (currentAttr.applicationDateConfig?.requirementMode === 'period') return;
     setEditingAttributeId(id);
-    setEditingObjectInstanceKey(currentAttr ? getObjectInstanceKey(currentAttr) : null);
+    setEditingObjectInstanceKey(getObjectInstanceKey(currentAttr));
     setDateReferenceDialogOpen(true);
+  };
+
+  const handleEditInsertionLot = (lotId: string) => {
+    const lotAttributes = selectedAttributes.filter((attr) => attr.insertionLotId === lotId);
+    if (lotAttributes.length === 0) return;
+
+    setEditingInsertionLotId(lotId);
+    setDraftLotAttributeKeys(
+      Array.from(
+        new Set(
+          lotAttributes.map((attr) =>
+            getContractPosteLotAttributeKey(attr.themeId, attr.objectId, attr.attributeId)
+          )
+        )
+      )
+    );
+    setContractPosteLotAttributesDialogOpen(true);
+  };
+
+  const handleContractPosteLotAttributesConfirm = () => {
+    if (!editingInsertionLotId) return;
+
+    setSelectedAttributes((prev) => {
+      const currentLotAttributes = prev.filter((attr) => attr.insertionLotId === editingInsertionLotId);
+      if (currentLotAttributes.length === 0) return prev;
+
+      const firstLotIndex = prev.findIndex((attr) => attr.insertionLotId === editingInsertionLotId);
+      if (firstLotIndex === -1) return prev;
+
+      const lotPrototype = currentLotAttributes[0];
+      const nextLotAttributes = buildContractPosteLotAttributes({
+        collaboratorRelationLabel: lotPrototype.insertionLotLabel ?? '',
+        insertionLotId: editingInsertionLotId,
+        selectedAttributeKeys: draftLotAttributeKeys,
+        dateMode: lotPrototype.insertionLotDateMode ?? 'reportEnd',
+        dateColumnId: lotPrototype.insertionLotDateColumnId,
+      });
+
+      const beforeLot = prev.slice(0, firstLotIndex);
+      const afterLot = prev.slice(firstLotIndex).filter((attr) => attr.insertionLotId !== editingInsertionLotId);
+
+      return [...beforeLot, ...nextLotAttributes, ...afterLot];
+    });
+
+    setContractPosteLotAttributesDialogOpen(false);
+    setEditingInsertionLotId(null);
+    setDraftLotAttributeKeys([]);
+  };
+
+  const handleContractPosteLotDateConfirm = () => {
+    if (!editingInsertionLotId) return;
+
+    const resolvedColumnId = draftLotDateMode === 'reportColumn'
+      ? (draftLotDateColumnId || reportDateColumnOptions[0]?.id)
+      : undefined;
+    const nextDateReference = resolveContractPosteLotDateReference(draftLotDateMode, resolvedColumnId);
+    const nextDateLabel = getContractPosteLotDateLabel(draftLotDateMode, resolvedColumnId);
+
+    setSelectedAttributes((prev) =>
+      prev.map((attr) =>
+        attr.insertionLotId === editingInsertionLotId
+          ? {
+              ...attr,
+              dateReference: nextDateReference,
+              insertionLotDateMode: draftLotDateMode,
+              insertionLotDateColumnId: resolvedColumnId,
+              insertionLotDateLabel: nextDateLabel,
+            }
+          : attr
+      )
+    );
+
+    setContractPosteLotDateDialogOpen(false);
+    setEditingInsertionLotId(null);
   };
 
   const handleDateReferenceConfirm = (dateReference: DateReference) => {
@@ -2251,6 +2678,27 @@ export function AttributeSelector() {
       }));
   };
 
+  const handleAddContractPosteLot = (collaboratorRelationLabel: string) => {
+    if (!mainObject || !mainObjectLinkedToCollaborateur) return;
+    const insertionLotId = `contract-poste-lot-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+
+    const defaultMode: CollaboratorContractDateMode = 'reportEnd';
+    const defaultSelectedAttributeKeys = contractPosteLotAttributeCatalog.flatOptions
+      .filter((attr) => !!attr.magicSel)
+      .map((attr) => getContractPosteLotAttributeKey(attr.sourceThemeId, attr.sourceObjectId, attr.id));
+
+    const lotAttributes = buildContractPosteLotAttributes({
+      collaboratorRelationLabel,
+      insertionLotId,
+      selectedAttributeKeys: defaultSelectedAttributeKeys,
+      dateMode: defaultMode,
+    });
+
+    if (lotAttributes.length === 0) return;
+
+    setSelectedAttributes((prev) => appendUniqueAttributes(prev, lotAttributes));
+  };
+
   const getAvailableColumnsForCalculated = () => {
     return selectedAttributes
       .filter(attr => attr.insertionType !== 'calculated') // Exclure les autres colonnes calculées
@@ -2329,6 +2777,7 @@ export function AttributeSelector() {
     setSelectedCollaboratorName('');
     setCollaboratorContractDateMode('reportEnd');
     setSelectedCollaboratorContractDateColumnId('');
+    setSelectedManagerialRelationFilter('all');
     setSelectedContractTypeFilters([]);
     setSelectedQualificationFilters([]);
     setSelectedDepartmentFilters([]);
@@ -2352,6 +2801,7 @@ export function AttributeSelector() {
     setSelectedCollaboratorName('');
     setCollaboratorContractDateMode('reportEnd');
     setSelectedCollaboratorContractDateColumnId('');
+    setSelectedManagerialRelationFilter('all');
     setSelectedContractTypeFilters([]);
     setSelectedQualificationFilters([]);
     setSelectedDepartmentFilters([]);
@@ -2403,6 +2853,11 @@ export function AttributeSelector() {
     setShowOtherCardinalitiesButton(draftShowOtherCardinalitiesButton);
     setShowSelectAllButton(draftShowSelectAllButton);
     setPrototypeConfigOpen(false);
+  };
+
+  const handleBackToConfiguration = () => {
+    setAvailableAttributeSearchTerm('');
+    setReportResultOpen(false);
   };
 
   const toggleAvailableGroupCollapsed = (groupKey: string) => {
@@ -2460,6 +2915,45 @@ export function AttributeSelector() {
 
     if (!groupTitle) return baseName;
     return `${baseName} – ${groupTitle}`;
+  };
+
+  const normalizeOptionSortKey = (value: string) =>
+    value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLocaleLowerCase();
+
+  const getSelectedAttributeOptionLabel = (attr: SelectedAttribute) => attr.columnName || attr.attributeName;
+
+  const buildSelectedAttributeOptionGroups = (attributes: SelectedAttribute[]) => {
+    const groups = new Map<string, SelectedAttribute[]>();
+
+    for (const attr of attributes) {
+      const groupLabel = getSelectedAttributeObjectGroupTitle(attr) || attr.objectName;
+      const existing = groups.get(groupLabel);
+      if (existing) {
+        existing.push(attr);
+      } else {
+        groups.set(groupLabel, [attr]);
+      }
+    }
+
+    return Array.from(groups.entries())
+      .map(([label, items]) => ({
+        label,
+        items: [...items].sort((a, b) => {
+          const byAttribute = normalizeOptionSortKey(getSelectedAttributeOptionLabel(a)).localeCompare(
+            normalizeOptionSortKey(getSelectedAttributeOptionLabel(b)),
+            'fr'
+          );
+          if (byAttribute !== 0) return byAttribute;
+          return normalizeOptionSortKey(getSelectedAttributeDisplayName(a)).localeCompare(
+            normalizeOptionSortKey(getSelectedAttributeDisplayName(b)),
+            'fr'
+          );
+        }),
+      }))
+      .sort((a, b) => normalizeOptionSortKey(a.label).localeCompare(normalizeOptionSortKey(b.label), 'fr'));
   };
 
   const compareSelectedAttributesByAttributeThenContext = (a: SelectedAttribute, b: SelectedAttribute) => {
@@ -2789,11 +3283,17 @@ export function AttributeSelector() {
     clauses.push(`Contrat et poste ciblé: ${dateModeLabel}`);
 
     if (selectedCollaboratorTarget) {
-      clauses.push(`Collaborateur ciblé: ${selectedCollaboratorTarget}`);
+      clauses.push(`Collaborateur concerné: ${selectedCollaboratorTarget}`);
     }
 
     if (selectedCollaboratorName) {
       clauses.push(`Collaborateur: ${selectedCollaboratorName}`);
+    }
+
+    if (selectedManagerialRelationFilter === 'direct') {
+      clauses.push('Relation managériale: managés directs uniquement');
+    } else if (selectedManagerialRelationFilter === 'directAndIndirect') {
+      clauses.push('Relation managériale: managés directs et indirects');
     }
 
     if (selectedContractTypeFilters.length > 0) {
@@ -2866,6 +3366,7 @@ export function AttributeSelector() {
     // Keep collaborator target, reset all other collaborator-context filters.
     setCollaboratorContractDateMode('reportEnd');
     setSelectedCollaboratorContractDateColumnId('');
+    setSelectedManagerialRelationFilter('all');
     setSelectedContractTypeFilters([]);
     setSelectedQualificationFilters([]);
     setSelectedDepartmentFilters([]);
@@ -3388,8 +3889,7 @@ export function AttributeSelector() {
     ? orderedMainObjectStage2Groups
         .map((group) => {
           const objectMatchesSearch =
-            normalizeSearchText(group.objectName).includes(normalizedAvailableAttributeSearch)
-            || normalizeSearchText(group.label).includes(normalizedAvailableAttributeSearch);
+            normalizeSearchText(group.objectName).includes(normalizedAvailableAttributeSearch);
 
           // If the object card itself matches, keep all its attributes.
           if (objectMatchesSearch) {
@@ -3664,6 +4164,8 @@ export function AttributeSelector() {
   const availableSortPickers = sortableSelectedAttributes
     .filter((attr) => !sortColumnIds.includes(attr.id) && !groupedColumnIds.includes(attr.id) && attr.id !== displayAsColumnsAttributeId)
     .sort(compareSelectedAttributesByAttributeThenContext);
+  const availableGroupPickerGroups = buildSelectedAttributeOptionGroups(availableGroupPickers);
+  const availableSortPickerGroups = buildSelectedAttributeOptionGroups(availableSortPickers);
   const displayAsColumnsPickers = groupableSelectedAttributes
     .sort(compareSelectedAttributesByAttributeThenContext);
   const mainObjectLinkedToCollaborateur = !!(
@@ -3712,7 +4214,20 @@ export function AttributeSelector() {
         })();
   const collaboratorTargetSummary = selectedCollaboratorTarget || 'Collaborateur';
   const collaboratorNameSummary = selectedCollaboratorName || 'Collab. tous';
-  const collaboratorOrgFilterSummaryLabel = `${collaboratorTargetSummary} - ${collaboratorNameSummary} - ${collaboratorContractDateSummary} - ${collaboratorContractTypeSummary} - ${collaboratorQualificationSummary} - ${collaboratorDepartmentSummary} - ${collaboratorEstablishmentSummary}`;
+  const collaboratorManagerialRelationSummary =
+    selectedManagerialRelationFilter === 'direct'
+      ? 'Managés directs'
+      : selectedManagerialRelationFilter === 'directAndIndirect'
+      ? 'Managés directs+indirects'
+      : 'Relation managériale: tous';
+  const collaboratorOrgFilterSummaryLabel = `${collaboratorTargetSummary} - ${collaboratorNameSummary} - ${collaboratorContractDateSummary} - ${collaboratorManagerialRelationSummary} - ${collaboratorContractTypeSummary} - ${collaboratorQualificationSummary} - ${collaboratorDepartmentSummary} - ${collaboratorEstablishmentSummary}`;
+  const hasSpecificCollaboratorSelected = selectedCollaboratorName.trim().length > 0;
+  const hasActiveOrgFilters =
+    selectedManagerialRelationFilter !== 'all' ||
+    selectedContractTypeFilters.length > 0 ||
+    selectedQualificationFilters.length > 0 ||
+    selectedDepartmentFilters.length > 0 ||
+    selectedEstablishmentFilters.length > 0;
   const collaboratorStatusFilterLines = getCollaboratorStatusFilterLines();
   const collaboratorOrgFilterLine = getCollaboratorOrgFilterLine();
   const collaboratorGeneratedFilterLines = [
@@ -3781,6 +4296,7 @@ export function AttributeSelector() {
       selectedCollaboratorContractDateColumnId,
       collaboratorTargets: collaboratorTargetOptions.map((option) => option.label),
       collaboratorUniverse: collaboratorOptions,
+      selectedManagerialRelationFilter,
       selectedContractTypeFilters,
       selectedQualificationFilters,
       contractTypeUniverse: contractTypeEnumValues,
@@ -3889,7 +4405,7 @@ export function AttributeSelector() {
       <div className="flex flex-1 overflow-hidden">
         {reportResultOpen ? (
           <ReportResultDrawer
-            onBackToConfiguration={() => setReportResultOpen(false)}
+            onBackToConfiguration={handleBackToConfiguration}
             mainObjectName={mainObject?.objectName ?? 'Rapport'}
             columns={reportPreviewColumns}
             rows={reportPreviewRows}
@@ -3945,13 +4461,26 @@ export function AttributeSelector() {
                     )}
                   </div>
                   <div className="mt-3">
-                    <input
-                      type="text"
-                      value={availableAttributeSearchTerm}
-                      onChange={(event) => setAvailableAttributeSearchTerm(event.target.value)}
-                      placeholder="Rechercher un attribut..."
-                      className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:border-indigo-400 focus:outline-none"
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={availableAttributeSearchTerm}
+                        onChange={(event) => setAvailableAttributeSearchTerm(event.target.value)}
+                        placeholder="Rechercher un attribut..."
+                        className="w-full rounded border border-gray-300 bg-white px-3 py-2 pr-9 text-sm text-gray-800 placeholder:text-gray-400 focus:border-indigo-400 focus:outline-none"
+                      />
+                      {availableAttributeSearchTerm && (
+                        <button
+                          type="button"
+                          onClick={() => setAvailableAttributeSearchTerm('')}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                          title="Effacer la recherche"
+                          aria-label="Effacer la recherche"
+                        >
+                          x
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -3993,12 +4522,14 @@ export function AttributeSelector() {
                   onRemoveAttribute={handleRemoveAttribute}
                   onEditCompartment={handleEditCompartment}
                   onEditDateReference={handleEditDateReference}
+                  onEditInsertionLot={handleEditInsertionLot}
                   onEditConditionalColumn={handleEditConditionalColumn}
                   onEditCalculatedColumn={handleEditCalculatedColumn}
                   onEditAggregation={handleEditAggregation}
                   onReorder={handleReorder}
                   onEditColumnName={handleEditColumnName}
                   getDateAttributeName={getDateAttributeName}
+                  getInsertionLotDisplayLabel={getInsertionLotDisplayLabel}
                   showCompartmenting={showCompartmenting}
                   showConditionalColumns={showConditionalColumns}
                   showCalculatedColumns={showCalculatedColumns}
@@ -4008,6 +4539,25 @@ export function AttributeSelector() {
                   displayAsColumnsAttributeId={displayAsColumnsAttributeId}
                 />
               </div>
+
+              {mainObjectLinkedToCollaborateur && collaboratorTargetOptions.length > 0 && (
+                <div className="border-t bg-gray-50 px-4 py-3">
+                  <div className="mb-2 text-[11px] font-medium text-gray-700">Insertion rapide contrat/poste</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {collaboratorTargetOptions.map((option) => (
+                      <button
+                        key={`add-contract-poste-${option.key}`}
+                        type="button"
+                        onClick={() => handleAddContractPosteLot(option.label)}
+                        className="rounded border border-indigo-300 bg-indigo-50 px-2 py-1 text-[11px] text-indigo-800 hover:bg-indigo-100"
+                        title={`Ajouter un lot contrat/poste pour ${option.label}`}
+                      >
+                        {`Ajouter contrat/poste du ${option.label}`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex w-5/12 flex-col border-l bg-gray-50">
@@ -4024,68 +4574,119 @@ export function AttributeSelector() {
                     || mainObjectDefinition?.defaultDateFiltering === 'choosePeriod'
                     || (typeof mainObjectDefinition?.defaultDateFiltering === 'object' && mainObjectDefinition.defaultDateFiltering !== null)) && (
                     <div className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
-                      <div className="mb-1 font-semibold">Sélecteur de date du rapport</div>
                       {mainObjectDefinition.defaultDateFiltering === 'chooseOne' ? (
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-medium">Rapport le dateRapport (dd/mm/yyyy)</span>
-                          <input
-                            type="date"
-                            value={reportChosenDate}
-                            onChange={(e) => {
-                              setReportChosenDate(e.target.value);
-                              if (mainObject) {
-                                const ctx = { ...reportTemporalContext, chosenDate: e.target.value };
-                                applyMainObjectDefaultDateFiltering(
-                                  mainObject.themeId, mainObject.objectId,
-                                  getMainObjectAvailableAttributes(),
-                                  mainObjectDefinition.defaultDateFiltering,
-                                  ctx,
-                                  { start: mainObjectDefinition.applicationDateConfig?.startAttributeId, end: mainObjectDefinition.applicationDateConfig?.endAttributeId }
-                                );
-                              }
-                            }}
-                            className="rounded border border-blue-300 bg-white px-2 py-1 text-xs"
-                          />
+                        <div className="flex flex-wrap items-center justify-between gap-1.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-medium">Rapport le</span>
+                            <input
+                              type="date"
+                              value={reportChosenDate}
+                              onChange={(e) => {
+                                setReportChosenDate(e.target.value);
+                                if (mainObject) {
+                                  const ctx = { ...reportTemporalContext, chosenDate: e.target.value };
+                                  applyMainObjectDefaultDateFiltering(
+                                    mainObject.themeId, mainObject.objectId,
+                                    getMainObjectAvailableAttributes(),
+                                    mainObjectDefinition.defaultDateFiltering,
+                                    ctx,
+                                    { start: mainObjectDefinition.applicationDateConfig?.startAttributeId, end: mainObjectDefinition.applicationDateConfig?.endAttributeId }
+                                  );
+                                }
+                              }}
+                              className="rounded border border-blue-300 bg-white px-2 py-1 text-xs"
+                            />
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1">
+                            {getQuickDatePresets().map(({ label, end }) => (
+                              <button
+                                key={label}
+                                type="button"
+                                onClick={() => {
+                                  setReportChosenDate(end);
+                                  if (mainObject) {
+                                    applyMainObjectDefaultDateFiltering(
+                                      mainObject.themeId, mainObject.objectId,
+                                      getMainObjectAvailableAttributes(),
+                                      mainObjectDefinition.defaultDateFiltering,
+                                      { ...reportTemporalContext, chosenDate: end },
+                                      { start: mainObjectDefinition.applicationDateConfig?.startAttributeId, end: mainObjectDefinition.applicationDateConfig?.endAttributeId }
+                                    );
+                                  }
+                                }}
+                                className="rounded border border-blue-300 bg-white px-1.5 py-0.5 text-[10px] text-blue-800 hover:bg-blue-100"
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       ) : (
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-medium">Rapport entre dateDébutRapport et dateFinRapport (dd/mm/yyyy)</span>
-                          <input
-                            type="date"
-                            value={reportChosenPeriodStart}
-                            onChange={(e) => {
-                              setReportChosenPeriodStart(e.target.value);
-                              if (mainObject) {
-                                const ctx = { ...reportTemporalContext, chosenPeriodStart: e.target.value, chosenPeriodEnd: reportChosenPeriodEnd };
-                                applyMainObjectDefaultDateFiltering(
-                                  mainObject.themeId, mainObject.objectId,
-                                  getMainObjectAvailableAttributes(),
-                                  mainObjectDefinition.defaultDateFiltering,
-                                  ctx,
-                                  { start: mainObjectDefinition.applicationDateConfig?.startAttributeId, end: mainObjectDefinition.applicationDateConfig?.endAttributeId }
-                                );
-                              }
-                            }}
-                            className="rounded border border-blue-300 bg-white px-2 py-1 text-xs"
-                          />
-                          <input
-                            type="date"
-                            value={reportChosenPeriodEnd}
-                            onChange={(e) => {
-                              setReportChosenPeriodEnd(e.target.value);
-                              if (mainObject) {
-                                const ctx = { ...reportTemporalContext, chosenPeriodStart: reportChosenPeriodStart, chosenPeriodEnd: e.target.value };
-                                applyMainObjectDefaultDateFiltering(
-                                  mainObject.themeId, mainObject.objectId,
-                                  getMainObjectAvailableAttributes(),
-                                  mainObjectDefinition.defaultDateFiltering,
-                                  ctx,
-                                  { start: mainObjectDefinition.applicationDateConfig?.startAttributeId, end: mainObjectDefinition.applicationDateConfig?.endAttributeId }
-                                );
-                              }
-                            }}
-                            className="rounded border border-blue-300 bg-white px-2 py-1 text-xs"
-                          />
+                        <div className="flex flex-wrap items-center justify-between gap-1.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-medium">Rapport entre</span>
+                            <input
+                              type="date"
+                              value={reportChosenPeriodStart}
+                              onChange={(e) => {
+                                setReportChosenPeriodStart(e.target.value);
+                                if (mainObject) {
+                                  const ctx = { ...reportTemporalContext, chosenPeriodStart: e.target.value, chosenPeriodEnd: reportChosenPeriodEnd };
+                                  applyMainObjectDefaultDateFiltering(
+                                    mainObject.themeId, mainObject.objectId,
+                                    getMainObjectAvailableAttributes(),
+                                    mainObjectDefinition.defaultDateFiltering,
+                                    ctx,
+                                    { start: mainObjectDefinition.applicationDateConfig?.startAttributeId, end: mainObjectDefinition.applicationDateConfig?.endAttributeId }
+                                  );
+                                }
+                              }}
+                              className="rounded border border-blue-300 bg-white px-2 py-1 text-xs"
+                            />
+                            <span className="font-medium">et</span>
+                            <input
+                              type="date"
+                              value={reportChosenPeriodEnd}
+                              onChange={(e) => {
+                                setReportChosenPeriodEnd(e.target.value);
+                                if (mainObject) {
+                                  const ctx = { ...reportTemporalContext, chosenPeriodStart: reportChosenPeriodStart, chosenPeriodEnd: e.target.value };
+                                  applyMainObjectDefaultDateFiltering(
+                                    mainObject.themeId, mainObject.objectId,
+                                    getMainObjectAvailableAttributes(),
+                                    mainObjectDefinition.defaultDateFiltering,
+                                    ctx,
+                                    { start: mainObjectDefinition.applicationDateConfig?.startAttributeId, end: mainObjectDefinition.applicationDateConfig?.endAttributeId }
+                                  );
+                                }
+                              }}
+                              className="rounded border border-blue-300 bg-white px-2 py-1 text-xs"
+                            />
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1">
+                            {getQuickDatePresets().map(({ label, start, end }) => (
+                              <button
+                                key={label}
+                                type="button"
+                                onClick={() => {
+                                  setReportChosenPeriodStart(start);
+                                  setReportChosenPeriodEnd(end);
+                                  if (mainObject) {
+                                    applyMainObjectDefaultDateFiltering(
+                                      mainObject.themeId, mainObject.objectId,
+                                      getMainObjectAvailableAttributes(),
+                                      mainObjectDefinition.defaultDateFiltering,
+                                      { ...reportTemporalContext, chosenPeriodStart: start, chosenPeriodEnd: end },
+                                      { start: mainObjectDefinition.applicationDateConfig?.startAttributeId, end: mainObjectDefinition.applicationDateConfig?.endAttributeId }
+                                    );
+                                  }
+                                }}
+                                className="rounded border border-blue-300 bg-white px-1.5 py-0.5 text-[10px] text-blue-800 hover:bg-blue-100"
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -4098,7 +4699,7 @@ export function AttributeSelector() {
                         className="mb-1 flex w-full items-center justify-between text-left text-[11px] font-medium leading-none text-teal-800"
                         aria-expanded={collaboratorContextExpanded}
                       >
-                        <span>Rechercher certains collaborateurs</span>
+                        <span>Filtrer les collaborateurs</span>
                         <span className="text-sm leading-none">{collaboratorContextExpanded ? '▾' : '▸'}</span>
                       </button>
 
@@ -4106,7 +4707,7 @@ export function AttributeSelector() {
                         <>
                           <div className="mb-2 grid gap-2 md:grid-cols-2">
                             <div>
-                              <div className="mb-1 text-[11px] text-teal-800">Collaborateur ciblé</div>
+                              <div className="mb-1 text-[11px] text-teal-800">Collaborateur concerné</div>
                               <select
                                 value={selectedCollaboratorTarget}
                                 onChange={(event) => setSelectedCollaboratorTarget(event.target.value)}
@@ -4125,7 +4726,8 @@ export function AttributeSelector() {
                               <select
                                 value={selectedCollaboratorName}
                                 onChange={(event) => handleCollaboratorNameChange(event.target.value)}
-                                className="w-full rounded border border-teal-300 bg-white px-2 py-1.5 text-xs"
+                                disabled={hasActiveOrgFilters}
+                                className={`w-full rounded border px-2 py-1.5 text-xs ${hasActiveOrgFilters ? 'cursor-not-allowed border-teal-200 bg-gray-100 text-gray-400' : 'border-teal-300 bg-white'}`}
                               >
                                 <option value="">Tous les collaborateurs</option>
                                 {collaboratorOptions.map((collaborator) => (
@@ -4135,138 +4737,158 @@ export function AttributeSelector() {
                             </div>
                           </div>
 
-                          <div className="mb-2 grid gap-2 md:grid-cols-2">
-                            <div>
-                              <div className="mb-1 text-[11px] text-teal-800">Contrat et poste ciblé</div>
-                              <select
-                                value={collaboratorContractDateMode}
-                                onChange={(event) => setCollaboratorContractDateMode(event.target.value as CollaboratorContractDateMode)}
-                                className="w-full rounded border border-teal-300 bg-white px-2 py-1.5 text-xs"
-                              >
-                                <option value="today">date du jour</option>
-                                <option value="reportStart">début du rapport</option>
-                                <option value="reportEnd">fin du rapport</option>
-                                <option value="reportColumn">colonne du rapport</option>
-                              </select>
-                            </div>
-
-                            {collaboratorContractDateMode === 'reportColumn' && (
+                          <div className={hasSpecificCollaboratorSelected ? 'pointer-events-none opacity-50' : ''}>
+                            <div className="mb-2 grid gap-2 md:grid-cols-2">
                               <div>
-                                <div className="mb-1 text-[11px] text-teal-800">Colonne date du rapport</div>
+                                <div className="mb-1 text-[11px] text-teal-800">Relation managériale</div>
                                 <select
-                                  value={selectedCollaboratorContractDateColumnId}
-                                  onChange={(event) => setSelectedCollaboratorContractDateColumnId(event.target.value)}
+                                  value={selectedManagerialRelationFilter}
+                                  disabled={hasSpecificCollaboratorSelected}
+                                  onChange={(event) => setSelectedManagerialRelationFilter(event.target.value as CollaboratorManagerialRelationMode)}
                                   className="w-full rounded border border-teal-300 bg-white px-2 py-1.5 text-xs"
                                 >
-                                  {reportDateColumnOptions.length === 0 && (
-                                    <option value="">Aucune colonne date disponible</option>
-                                  )}
-                                  {reportDateColumnOptions.map((option) => (
-                                    <option key={option.id} value={option.id}>{option.label}</option>
-                                  ))}
+                                  <option value="all">Tous</option>
+                                  <option value="direct">Mes managés directs uniquement</option>
+                                  <option value="directAndIndirect">Mes managés directs et indirects</option>
                                 </select>
                               </div>
-                            )}
-                          </div>
 
-                          <div className="mb-2 grid gap-2 md:grid-cols-2">
-                            {contractTypeEnumValues.length > 0 && (
+                              {contractTypeEnumValues.length > 0 && (
+                                <div>
+                                  <div className="mb-1 text-[11px] text-teal-800">Type du contrat</div>
+                                  <div className="max-h-20 overflow-auto rounded border border-teal-200 bg-white p-2 text-[10px] font-light">
+                                    {contractTypeEnumValues.map((contractType) => (
+                                      <label key={contractType} className="flex items-center gap-2 whitespace-nowrap font-light">
+                                        <input
+                                          type="checkbox"
+                                          disabled={hasSpecificCollaboratorSelected}
+                                          checked={selectedContractTypeFilters.includes(contractType)}
+                                          onChange={(event) => {
+                                            const checked = event.target.checked;
+                                            setSelectedCollaboratorName('');
+                                            setSelectedContractTypeFilters((prev) => {
+                                              const next = new Set(prev);
+                                              if (checked) next.add(contractType);
+                                              else next.delete(contractType);
+                                              return Array.from(next).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+                                            });
+                                          }}
+                                        />
+                                        <span className="font-light">{contractType}</span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
                               <div>
-                                <div className="mb-1 text-[11px] text-teal-800">Type du contrat</div>
+                                <div className="mb-1 text-[11px] text-teal-800">Qualification du poste</div>
                                 <div className="max-h-20 overflow-auto rounded border border-teal-200 bg-white p-2 text-[10px] font-light">
-                                  {contractTypeEnumValues.map((contractType) => (
-                                    <label key={contractType} className="flex items-center gap-2 whitespace-nowrap font-light">
+                                  {qualificationTree.length === 0 ? (
+                                    <div className="text-gray-500">Aucune qualification chargée.</div>
+                                  ) : (
+                                    <div className="space-y-0.5">
+                                      {qualificationTree.map((rootNode) => (
+                                        <DepartmentTreeItem
+                                          key={`qualification-${rootNode.name}`}
+                                          node={rootNode}
+                                          level={0}
+                                          disabled={!mainObjectLinkedToCollaborateur || hasSpecificCollaboratorSelected}
+                                          selectedValues={selectedQualificationFilters}
+                                          onToggle={toggleQualificationBranch}
+                                          path="qualification"
+                                        />
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="mb-2 grid gap-2 md:grid-cols-2">
+                              <div>
+                                <div className="mb-1 text-[11px] text-teal-800">Département du poste</div>
+                                <div className="h-24 overflow-auto rounded border border-teal-200 bg-white p-2 text-[10px] font-light">
+                                  {departmentTree.length === 0 ? (
+                                    <div className="text-gray-500">Aucun département chargé.</div>
+                                  ) : (
+                                    <div className="space-y-0.5">
+                                      {departmentTree.map((rootNode) => (
+                                        <DepartmentTreeItem
+                                          key={rootNode.name}
+                                          node={rootNode}
+                                          level={0}
+                                          disabled={!mainObjectLinkedToCollaborateur || hasSpecificCollaboratorSelected}
+                                          selectedValues={selectedDepartmentFilters}
+                                          onToggle={toggleDepartmentBranch}
+                                        />
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div>
+                                <div className="mb-1 text-[11px] text-teal-800">Etablissement du poste</div>
+                                <div className="h-24 overflow-auto rounded border border-teal-200 bg-white p-2 text-[10px] font-light">
+                                  {establishmentOptions.map((establishment) => (
+                                    <label key={establishment} className="flex items-center gap-2 whitespace-nowrap font-light">
                                       <input
                                         type="checkbox"
-                                        checked={selectedContractTypeFilters.includes(contractType)}
+                                        disabled={hasSpecificCollaboratorSelected}
+                                        checked={selectedEstablishmentFilters.includes(establishment)}
                                         onChange={(event) => {
                                           const checked = event.target.checked;
                                           setSelectedCollaboratorName('');
-                                          setSelectedContractTypeFilters((prev) => {
+                                          setSelectedEstablishmentFilters((prev) => {
                                             const next = new Set(prev);
-                                            if (checked) next.add(contractType);
-                                            else next.delete(contractType);
+                                            if (checked) next.add(establishment);
+                                            else next.delete(establishment);
                                             return Array.from(next).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
                                           });
                                         }}
                                       />
-                                      <span className="font-light">{contractType}</span>
+                                      <span className="font-light">{establishment}</span>
                                     </label>
                                   ))}
                                 </div>
                               </div>
-                            )}
-
-                            <div>
-                              <div className="mb-1 text-[11px] text-teal-800">Qualification du poste</div>
-                              <div className="max-h-20 overflow-auto rounded border border-teal-200 bg-white p-2 text-[10px] font-light">
-                                {qualificationTree.length === 0 ? (
-                                  <div className="text-gray-500">Aucune qualification chargée.</div>
-                                ) : (
-                                  <div className="space-y-0.5">
-                                    {qualificationTree.map((rootNode) => (
-                                      <DepartmentTreeItem
-                                        key={`qualification-${rootNode.name}`}
-                                        node={rootNode}
-                                        level={0}
-                                        disabled={!mainObjectLinkedToCollaborateur}
-                                        selectedValues={selectedQualificationFilters}
-                                        onToggle={toggleQualificationBranch}
-                                        path="qualification"
-                                      />
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="grid gap-2 md:grid-cols-2">
-                            <div>
-                              <div className="mb-1 text-[11px] text-teal-800">Département du poste</div>
-                              <div className="h-24 overflow-auto rounded border border-teal-200 bg-white p-2 text-[10px] font-light">
-                                {departmentTree.length === 0 ? (
-                                  <div className="text-gray-500">Aucun département chargé.</div>
-                                ) : (
-                                  <div className="space-y-0.5">
-                                    {departmentTree.map((rootNode) => (
-                                      <DepartmentTreeItem
-                                        key={rootNode.name}
-                                        node={rootNode}
-                                        level={0}
-                                        disabled={!mainObjectLinkedToCollaborateur}
-                                        selectedValues={selectedDepartmentFilters}
-                                        onToggle={toggleDepartmentBranch}
-                                      />
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
                             </div>
 
-                            <div>
-                              <div className="mb-1 text-[11px] text-teal-800">Etablissement du poste</div>
-                              <div className="h-24 overflow-auto rounded border border-teal-200 bg-white p-2 text-[10px] font-light">
-                                {establishmentOptions.map((establishment) => (
-                                  <label key={establishment} className="flex items-center gap-2 whitespace-nowrap font-light">
-                                    <input
-                                      type="checkbox"
-                                      checked={selectedEstablishmentFilters.includes(establishment)}
-                                      onChange={(event) => {
-                                        const checked = event.target.checked;
-                                        setSelectedCollaboratorName('');
-                                        setSelectedEstablishmentFilters((prev) => {
-                                          const next = new Set(prev);
-                                          if (checked) next.add(establishment);
-                                          else next.delete(establishment);
-                                          return Array.from(next).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
-                                        });
-                                      }}
-                                    />
-                                    <span className="font-light">{establishment}</span>
-                                  </label>
-                                ))}
+                            <div className="grid gap-2 md:grid-cols-2">
+                              <div>
+                                <div className="mb-1 text-[11px] text-teal-800">Contrat et poste ciblé</div>
+                                <select
+                                  value={collaboratorContractDateMode}
+                                  disabled={hasSpecificCollaboratorSelected}
+                                  onChange={(event) => setCollaboratorContractDateMode(event.target.value as CollaboratorContractDateMode)}
+                                  className="w-full rounded border border-teal-300 bg-white px-2 py-1.5 text-xs"
+                                >
+                                  <option value="today">date du jour</option>
+                                  <option value="reportStart">début du rapport</option>
+                                  <option value="reportEnd">fin du rapport</option>
+                                  <option value="reportColumn">colonne du rapport</option>
+                                </select>
                               </div>
+
+                              {collaboratorContractDateMode === 'reportColumn' && (
+                                <div>
+                                  <div className="mb-1 text-[11px] text-teal-800">Colonne date du rapport</div>
+                                  <select
+                                    value={selectedCollaboratorContractDateColumnId}
+                                    disabled={hasSpecificCollaboratorSelected}
+                                    onChange={(event) => setSelectedCollaboratorContractDateColumnId(event.target.value)}
+                                    className="w-full rounded border border-teal-300 bg-white px-2 py-1.5 text-xs"
+                                  >
+                                    {reportDateColumnOptions.length === 0 && (
+                                      <option value="">Aucune colonne date disponible</option>
+                                    )}
+                                    {reportDateColumnOptions.map((option) => (
+                                      <option key={option.id} value={option.id}>{option.label}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </>
@@ -4275,7 +4897,7 @@ export function AttributeSelector() {
                   )}
 
                   <div className="rounded border border-gray-200 bg-white p-2 text-xs text-gray-800">
-                    <div className="mb-1 text-[11px] font-medium leading-none text-gray-700">Filtrage</div>
+                    <div className="mb-1 text-[11px] font-medium leading-none text-gray-700">Filtrer les données</div>
                     <button
                       onClick={() => setGlobalFilterDialogOpen(true)}
                       className="w-full rounded border border-orange-200 bg-orange-50 p-2 text-left text-xs text-orange-800 hover:bg-orange-100"
@@ -4308,10 +4930,14 @@ export function AttributeSelector() {
                         className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs"
                       >
                         <option value="">Sélectionner une colonne</option>
-                        {availableSortPickers.map((attr) => (
-                          <option key={attr.id} value={attr.id}>
-                            {getSelectedAttributeDisplayName(attr)}
-                          </option>
+                        {availableSortPickerGroups.map((group) => (
+                          <optgroup key={group.label} label={group.label}>
+                            {group.items.map((attr) => (
+                              <option key={attr.id} value={attr.id}>
+                                {getSelectedAttributeOptionLabel(attr)}
+                              </option>
+                            ))}
+                          </optgroup>
                         ))}
                       </select>
                     </div>
@@ -4359,10 +4985,14 @@ export function AttributeSelector() {
                         className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs"
                       >
                         <option value="">Sélectionner une colonne</option>
-                        {availableGroupPickers.map((attr) => (
-                          <option key={attr.id} value={attr.id}>
-                            {getSelectedAttributeDisplayName(attr)}
-                          </option>
+                        {availableGroupPickerGroups.map((group) => (
+                          <optgroup key={group.label} label={group.label}>
+                            {group.items.map((attr) => (
+                              <option key={attr.id} value={attr.id}>
+                                {getSelectedAttributeOptionLabel(attr)}
+                              </option>
+                            ))}
+                          </optgroup>
                         ))}
                       </select>
                     </div>
@@ -4467,6 +5097,166 @@ export function AttributeSelector() {
           }
           onConfirm={handleObjectInsertionConfirm}
         />
+      )}
+
+      {contractPosteLotAttributesDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-lg bg-white p-5 shadow-xl">
+            <h3 className="mb-1 text-base font-semibold text-gray-900">
+              {editingInsertionLotId ? getInsertionLotDisplayLabel(editingInsertionLotId) : 'Éditer le lot'}
+            </h3>
+            <p className="mb-4 text-sm text-gray-600">
+              Ajoutez ou retirez les attributs du contrat, du poste et des objets liés en cardinalité simple pour ce lot uniquement.
+            </p>
+
+            <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto md:grid-cols-2">
+              {contractPosteLotAttributeCatalog.sections.map((section) => (
+                <div key={section.key} className="rounded border border-gray-200 p-3">
+                  <div className="mb-2 text-sm font-medium text-gray-900">{section.label}</div>
+                  <div className="space-y-1 text-sm text-gray-800">
+                    {section.attributes.map((attr) => {
+                      const attributeKey = getContractPosteLotAttributeKey(attr.sourceThemeId, attr.sourceObjectId, attr.id);
+                      const checked = draftLotAttributeKeys.includes(attributeKey);
+                      return (
+                        <label key={attributeKey} className="flex items-start gap-2 rounded px-2 py-1 hover:bg-gray-50">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) => {
+                              const nextChecked = event.target.checked;
+                              setDraftLotAttributeKeys((prev) => {
+                                const next = new Set(prev);
+                                if (nextChecked) {
+                                  next.add(attributeKey);
+                                } else {
+                                  next.delete(attributeKey);
+                                }
+                                return Array.from(next);
+                              });
+                            }}
+                          />
+                          <span>{attr.rawName}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setContractPosteLotAttributesDialogOpen(false);
+                  setEditingInsertionLotId(null);
+                  setDraftLotAttributeKeys([]);
+                }}
+                className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleContractPosteLotAttributesConfirm}
+                className="rounded bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-700"
+              >
+                Appliquer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {contractPosteLotDateDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl">
+            <h3 className="mb-4 text-base font-semibold text-gray-900">
+              {editingInsertionLotId
+                ? `Date de ciblage - ${getInsertionLotDisplayLabel(editingInsertionLotId)}`
+                : 'Date de ciblage du lot contrat/poste'}
+            </h3>
+            <div className="space-y-3 text-sm text-gray-800">
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="lot-date-mode"
+                  value="today"
+                  checked={draftLotDateMode === 'today'}
+                  onChange={() => setDraftLotDateMode('today')}
+                />
+                <span>Date du jour</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="lot-date-mode"
+                  value="reportStart"
+                  checked={draftLotDateMode === 'reportStart'}
+                  onChange={() => setDraftLotDateMode('reportStart')}
+                />
+                <span>Début du rapport</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="lot-date-mode"
+                  value="reportEnd"
+                  checked={draftLotDateMode === 'reportEnd'}
+                  onChange={() => setDraftLotDateMode('reportEnd')}
+                />
+                <span>Fin du rapport</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="lot-date-mode"
+                  value="reportColumn"
+                  checked={draftLotDateMode === 'reportColumn'}
+                  onChange={() => {
+                    setDraftLotDateMode('reportColumn');
+                    if (!draftLotDateColumnId) {
+                      setDraftLotDateColumnId(reportDateColumnOptions[0]?.id ?? '');
+                    }
+                  }}
+                />
+                <span>Colonne date du rapport</span>
+              </label>
+
+              {draftLotDateMode === 'reportColumn' && (
+                <select
+                  value={draftLotDateColumnId}
+                  onChange={(event) => setDraftLotDateColumnId(event.target.value)}
+                  className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+                >
+                  {reportDateColumnOptions.length === 0 && <option value="">Aucune colonne date disponible</option>}
+                  {reportDateColumnOptions.map((option) => (
+                    <option key={option.id} value={option.id}>{option.label}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setContractPosteLotDateDialogOpen(false);
+                  setEditingInsertionLotId(null);
+                }}
+                className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleContractPosteLotDateConfirm}
+                className="rounded bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-700"
+              >
+                Appliquer
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {editingAttribute && (
@@ -4623,6 +5413,8 @@ export function AttributeSelector() {
                           includeFutureNewCollaborators,
                           includeFutureReturnCollaborators,
                           selectedCollaboratorName,
+                          selectedManagerialRelationFilter,
+                          selectedContractTypeFilters,
                           selectedQualificationFilters,
                           selectedDepartmentFilters,
                           selectedEstablishmentFilters,

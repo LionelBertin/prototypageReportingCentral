@@ -1,99 +1,64 @@
- passe l'option Bouton "autre cardinalités" à OFF par défaut dans la conf proto
-
 
 ###########################################################
 # P1
 
-Avant le filtrage sur les attributs, lorsque l'objet principal est lié à au moins un collaborateur (targetObject=Collaborateur), il faut ajouter une possibilité de filtrer sur certains attribut du contrat et du poste de l'unique collaborateur lié ou de celui marqué isMainCollaborator=true s'il y en a plusieurs (ex : "Bénéficiaire")
-
-L'utilisateur peut changer le collaborateur ciblé s'il y en a plusieurs (ex:  "Demandeur", ou "Approbateur"), et peut filtrer facilement sur les attributts Type de contrat, Département, et Etablissement.
-Pour les types de contrat, on utilise l'enum
-Pour département, on présente la liste hiérarchique des départements avec la possiblité d'en sélectionner plusieurs.
-Pour les établissements on utilise la liste à plat 
-
-
-"Mes managés" => postes où j'apparais comme manager
-
-Ajouter une filtre sur les managers dans le Contexte collaborateur (avant filtrage)
+pour les insertions des valeurs applicables à une date pour les contrats/postes des collaborateurs impliqués dans données des rapports, on va remplacer les boutons d'insertion rapide contrat/poste en bas de la zone "Colonnes du rapport" par des tuiles supplémentaires qu'on affiche dans la liste des "Données disponibles" juste après chacun des objets collaborateurs.
+On les affiche avec la hiérarchie et dans l'ordre suivant :
+- Postes 
+-- Contrat
+-- Département
+-- Etablissement
+--- Entreprise
 
 
-
-## liaison implicite à collaborateur
-proposer filtre rapide 
-- "Mes managés" (direct / indirects)
-- "Mon département" (direct / indirects)
-
-dès qu'un collaborateur est impliqué dans le rapport
-
-
-## valeur applicable
-
-- defaultDateFiltering" :"date de début et fin"
-on utiliser les attributs dans le filtrage
-    => dateDebutRapport < date1 & date2 < dateFinRapport 
-    => dateDebutRapport < dateX  & dateX < dateFinRapport
-
-    attrDate1 > dateDebutRapport ET  attrdate2<dateFinRapport
-
-- defaultDateFiltering" :"none"
-    Collaborateur
-    DossierRH
-    Paliers d'objectifs
-    Candidats
-    Département
-    Etablissement
-    Organisation
-- defaultDateFiltering" :"chooseOne"
-    Solde de congés
-- defaultDateFiltering"  "dateDebutRapport":dateDebutRapport & dateFinRapport":dateFinRapport
-    Évolution des soldes
-    Suivi forfaits jours
-    Statistiques des absences
-
-On a toujours deux dates de début/fin pour borner le rapport (la seule exception serait pour les soldes de congés)
-La question est de savoir comment permettre de cibler 
-Pour un objet par défaut on peut présupposer des dates à utiliser, mais il faut laisser à l'utilisateur la possibliité de changer d'attribut ciblé (ex : date de la dépense ou date de déclaration ou d'approbation de la dépense)
-
-
-
-## objets liés
-Si l'objet principal est en lien avec le Collaborateur, ajoute un bouton en bas des Colonnes du rapport pour "ajouter des objets spéciaux".
-Dans le fenêtre qui s'ouvre l'utilisateur commnence par choisir l'objet à travailler (tous les objetd sont proposés)
-puis il doit choisir entre
-- une instance en particulier : il indique alors l'attribut sur lequel trier et l'ordre (première/dernière) et les attributs qu'il veut ajouter au rapport
-- le résultat d'une opération : il indique alors sur lequel appliquer l'opération et en choisissant l'opérateur selon le format de colonne (Nombre, Somme, Min, Max, Concat, ...)
-
-
-
-
-## réduction des cardinalités
-réintégrer "opération" et "valeur spéciale" suite à l'insertion par défaut de la liste détaillée ?
 
 
 
 ###########################################################
 # P2
+## catégorie pour regrouper des attributs
 ajouter une notion de catégorie pour regrouper des attributs
 ex : Axes analytiques pour les dépenses, qui regroupe Centre de coût, Clients, et Projets
+
+## Filtrage intélligent
+"Mes managés" => postes où j'apparais comme manager
+Ajouter une filtre sur les managers dans le Contexte collaborateur (avant filtrage)
+
+
+
 
 ###########################################################
 # P3
 
-# Affichage fusionner mais export dissocié
-pour afficher un montant et une devise dans une même cellule à l'écran, mais en exportant bien dans deux cellules différentes pour pouvoir trier/filtrer.
-idem avec le format de présnetation numérique avec séparateur de millier à l'écrna, mais pas en export.
+###########################################################
+# QUESTIONS EN SUSPENS
+## réduction des cardinalités 
+Faut-il réintégrer "opération" et "valeur spéciale" suite à l'insertion par défaut de la liste détaillée ?
+
 
 ###########################################################
 
+***************** AJOUT DES PAGES PERIPHERIQUES ***************** 
 
-TODO
-Vérifier dans génération spec la présence des règles
-=> Pour objet applicable 
-    - requirementMode=period alors choix date début et date fin
-    - sinon choix date jour uniquement
-        -- possibilité date libre autre que rapport et conditionner date à autre attribut du rapport.
+Ajouter une page qui fait office de page d'accueil du module de rapport.
+Elle liste dans plusieurs zones :
+- mes rapports fraichements générés
+- mes rapports favoris
+- mes rapports enregistrés
+- des rapports préconçus par les BU
+- des rapports qu’on m’a partagé
+- les rapports que j’ai exécuté par le passé
+un bouton "configurer nouveau rapport" est disponible
 
-=> Pour un objet applicable avec requirementMode=period on ne laisse pas d'autre possibilité que le choix de "Date de valeur du rapport"
+Si je clique sur une des entrées des zones de rapports listés, j'arrive directement en consultation du rapport.
+Si je clique sur "configurer nouveau rapport" j'arrive sur la page de sélection de l'objet principal du rapport puis ça déroule sur la configuration et génération/consultation du rapport. 
 
-=> Si l'objet principal du rapport n'est pas lié à un collaborateur, alors il n'y a pas de "Contexte temporel du rapport"
+Depuis la page de consultation du rapport, je peux revenir à la configuration du rapport
 
+
+Permissions à faire apparaitre en mode débug dans la "conf proto" pour conditionner les comportements : 
+- Créer des rapports
+- Editer des rapports
+- Partager des rapports
+- Générer automatiquement des rapports
+- Diffuser des rapports
