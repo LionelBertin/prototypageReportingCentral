@@ -23,99 +23,16 @@ type ReportPreviewColumn = {
 
 type ReportPreviewRow = Record<string, string | number | boolean | null>;
 
-type DepartmentTreeNode = {
-  name: string;
-  children: DepartmentTreeNode[];
-};
-
 type ReportResultDrawerProps = {
   onBackToConfiguration: () => void;
   mainObjectName: string;
   columns: ReportPreviewColumn[];
   rows: ReportPreviewRow[];
   mainObjectLinkedToCollaborateur: boolean;
-  includeDepartedCollaborators: boolean;
-  includePresentCollaborators: boolean;
-  includeFutureNewCollaborators: boolean;
-  includeFutureReturnCollaborators: boolean;
-  selectedDepartmentFilters: string[];
-  selectedEstablishmentFilters: string[];
-  departmentTree: DepartmentTreeNode[];
-  establishmentOptions: string[];
-  onIncludeDepartedChange: (value: boolean) => void;
-  onIncludePresentChange: (value: boolean) => void;
-  onIncludeFutureNewChange: (value: boolean) => void;
-  onIncludeFutureReturnChange: (value: boolean) => void;
-  onSelectedDepartmentsChange: (next: string[]) => void;
-  onSelectedEstablishmentsChange: (next: string[]) => void;
+  collaboratorTargetingLines: string[];
   globalFilterSummaryLines: string[];
-  collaboratorGeneratedFilterLines: string[];
-  collaboratorStatusSummaryLabel: string;
+  collaboratorTargetingSummaryLabel: string;
   onEditGlobalFilters: () => void;
-};
-
-function DepartmentTreeItem({
-  node,
-  level,
-  disabled,
-  selectedDepartmentFilters,
-  onToggle,
-  path,
-}: {
-  node: DepartmentTreeNode;
-  level: number;
-  disabled: boolean;
-  selectedDepartmentFilters: string[];
-  onToggle: (node: DepartmentTreeNode, checked: boolean) => void;
-  path?: string;
-}) {
-  const checkboxId = `${path ?? 'drawer-dept'}-${node.name}`;
-
-  return (
-    <div>
-      <label
-        htmlFor={checkboxId}
-        className="flex items-center gap-2 whitespace-nowrap"
-        style={{ paddingLeft: `${level * 14}px` }}
-      >
-        <input
-          id={checkboxId}
-          type="checkbox"
-          checked={selectedDepartmentFilters.includes(node.name)}
-          disabled={disabled}
-          onChange={(event) => onToggle(node, event.target.checked)}
-        />
-        <span className="font-light whitespace-nowrap">{node.name}</span>
-      </label>
-
-      {node.children.length > 0 && (
-        <div>
-          {node.children.map((child) => (
-            <DepartmentTreeItem
-              key={`${checkboxId}-${child.name}`}
-              node={child}
-              level={level + 1}
-              disabled={disabled}
-              selectedDepartmentFilters={selectedDepartmentFilters}
-              onToggle={onToggle}
-              path={checkboxId}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-const toggleListValue = (values: string[], targetValue: string, shouldCheck: boolean) => {
-  const next = new Set(values);
-  if (shouldCheck) {
-    next.add(targetValue);
-  } else {
-    next.delete(targetValue);
-  }
-
-  return Array.from(next).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
 };
 
 export function ReportResultDrawer({
@@ -123,26 +40,12 @@ export function ReportResultDrawer({
   columns,
   rows,
   mainObjectLinkedToCollaborateur,
-  includeDepartedCollaborators,
-  includePresentCollaborators,
-  includeFutureNewCollaborators,
-  includeFutureReturnCollaborators,
-  selectedDepartmentFilters,
-  selectedEstablishmentFilters,
-  departmentTree,
-  establishmentOptions,
-  onIncludeDepartedChange,
-  onIncludePresentChange,
-  onIncludeFutureNewChange,
-  onIncludeFutureReturnChange,
-  onSelectedDepartmentsChange,
-  onSelectedEstablishmentsChange,
+  collaboratorTargetingLines,
   globalFilterSummaryLines,
-  collaboratorGeneratedFilterLines,
-  collaboratorStatusSummaryLabel,
+  collaboratorTargetingSummaryLabel,
   onEditGlobalFilters,
 }: ReportResultDrawerProps) {
-  const [collaboratorStatusFilterExpanded, setCollaboratorStatusFilterExpanded] = useState(false);
+  const [collaboratorTargetingExpanded, setCollaboratorTargetingExpanded] = useState(false);
   const [saveDialogMode, setSaveDialogMode] = useState<'model' | 'report' | null>(null);
   const [saveName, setSaveName] = useState('');
 
@@ -164,23 +67,6 @@ export function ReportResultDrawer({
   const saveDialogTitle = saveDialogMode === 'model' ? 'Enregistrer le modèle' : 'Enregistrer ce rapport';
   const saveDialogLabel = saveDialogMode === 'model' ? 'Nom du modèle' : 'Nom du rapport';
 
-  const getDepartmentBranchNames = (node: DepartmentTreeNode): string[] => {
-    return [node.name, ...node.children.flatMap(getDepartmentBranchNames)];
-  };
-
-  const toggleDepartmentBranch = (node: DepartmentTreeNode, isChecked: boolean) => {
-    const branchNames = getDepartmentBranchNames(node);
-    const next = new Set(selectedDepartmentFilters);
-    for (const name of branchNames) {
-      if (isChecked) {
-        next.add(name);
-      } else {
-        next.delete(name);
-      }
-    }
-    onSelectedDepartmentsChange(Array.from(next).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' })));
-  };
-
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
       <div className="min-h-0 flex-1 overflow-y-auto py-4">
@@ -189,143 +75,61 @@ export function ReportResultDrawer({
               <div className="rounded border p-3">
                 <button
                   type="button"
-                  onClick={() => setCollaboratorStatusFilterExpanded((prev) => !prev)}
+                  onClick={() => setCollaboratorTargetingExpanded((prev) => !prev)}
                   className="flex w-full items-center justify-between text-left"
                 >
                   <span className="flex items-center gap-1 text-sm font-medium text-gray-800">
-                    <span className="inline-block w-2">{collaboratorStatusFilterExpanded ? 'v' : '>'}</span>
-                    <span>Statuts collaborateurs</span>
+                    <span className="inline-block w-2">{collaboratorTargetingExpanded ? 'v' : '>'}</span>
+                    <span>Cibler des contrats et postes</span>
                   </span>
                   <span className="text-xs text-gray-600">
-                    {mainObjectLinkedToCollaborateur ? collaboratorStatusSummaryLabel : 'Non applicable'}
+                    {mainObjectLinkedToCollaborateur ? collaboratorTargetingSummaryLabel : 'Non applicable'}
                   </span>
                 </button>
 
-                {collaboratorStatusFilterExpanded && (
+                {collaboratorTargetingExpanded && (
                   <div className={`space-y-2 pt-2 ${mainObjectLinkedToCollaborateur ? 'border-t border-gray-200' : ''}`}>
                     {!mainObjectLinkedToCollaborateur && (
                       <div className="text-xs text-gray-600">
                         Aucun lien (même indirect) avec Collaborateur depuis l'objet principal.
                       </div>
                     )}
-
-                    <div className="flex flex-wrap gap-3 text-xs text-gray-700">
-                      <label className="flex items-center gap-1">
-                        <input
-                          type="checkbox"
-                          checked={includeDepartedCollaborators}
-                          disabled={!mainObjectLinkedToCollaborateur}
-                          onChange={(event) => onIncludeDepartedChange(event.target.checked)}
-                        />
-                        partis
-                      </label>
-                      <label className="flex items-center gap-1">
-                        <input
-                          type="checkbox"
-                          checked={includePresentCollaborators}
-                          disabled={!mainObjectLinkedToCollaborateur}
-                          onChange={(event) => onIncludePresentChange(event.target.checked)}
-                        />
-                        présents
-                      </label>
-                      <label className="flex items-center gap-1">
-                        <input
-                          type="checkbox"
-                          checked={includeFutureNewCollaborators}
-                          disabled={!mainObjectLinkedToCollaborateur}
-                          onChange={(event) => onIncludeFutureNewChange(event.target.checked)}
-                        />
-                        nouveaux
-                      </label>
-                      <label className="flex items-center gap-1">
-                        <input
-                          type="checkbox"
-                          checked={includeFutureReturnCollaborators}
-                          disabled={!mainObjectLinkedToCollaborateur}
-                          onChange={(event) => onIncludeFutureReturnChange(event.target.checked)}
-                        />
-                        retours
-                      </label>
-                    </div>
-
-                    <div className="grid gap-2 md:grid-cols-2">
-                      <div className="space-y-1 text-[11px] text-gray-700">
-                        <div className="font-medium">Départements</div>
-                        <div className="h-24 overflow-auto rounded border border-gray-300 p-2 text-[10px] font-light">
-                          {departmentTree.length === 0 ? (
-                            <div className="text-gray-500">Aucun département chargé.</div>
-                          ) : (
-                            <div className="space-y-0.5">
-                              {departmentTree.map((rootNode) => (
-                                <DepartmentTreeItem
-                                  key={rootNode.name}
-                                  node={rootNode}
-                                  level={0}
-                                  disabled={!mainObjectLinkedToCollaborateur}
-                                  selectedDepartmentFilters={selectedDepartmentFilters}
-                                  onToggle={toggleDepartmentBranch}
-                                />
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                    {mainObjectLinkedToCollaborateur && collaboratorTargetingLines.length > 0 && (
+                      <div className="mt-2 rounded border border-orange-200 bg-orange-50 p-2 text-xs text-orange-800">
+                        {collaboratorTargetingLines.map((line, index) => (
+                          <div key={index}>• {line}</div>
+                        ))}
                       </div>
+                    )}
 
-                      <div className="space-y-1 text-[11px] text-gray-700">
-                        <div className="font-medium">Etablissements</div>
-                        <div className="h-24 overflow-auto rounded border border-gray-300 p-2 text-[10px] font-light">
-                          {establishmentOptions.map((establishment) => (
-                            <label key={establishment} className="flex items-center gap-2 whitespace-nowrap">
-                              <input
-                                type="checkbox"
-                                checked={selectedEstablishmentFilters.includes(establishment)}
-                                disabled={!mainObjectLinkedToCollaborateur}
-                                onChange={(event) => onSelectedEstablishmentsChange(
-                                  toggleListValue(selectedEstablishmentFilters, establishment, event.target.checked)
-                                )}
-                              />
-                              <span className="font-light whitespace-nowrap">{establishment}</span>
-                            </label>
-                          ))}
-                        </div>
+                    {mainObjectLinkedToCollaborateur && collaboratorTargetingLines.length === 0 && (
+                      <div className="mt-2 rounded border border-gray-200 bg-gray-50 p-2 text-xs text-gray-600">
+                        Aucun filtre collaborateur appliqué.
                       </div>
-                    </div>
-                  </div>
-                )}
-
-                {mainObjectLinkedToCollaborateur && collaboratorGeneratedFilterLines.length > 0 && (
-                  <div className="mt-2 rounded border border-orange-200 bg-orange-50 p-2 text-xs text-orange-800">
-                    {collaboratorGeneratedFilterLines.map((line, index) => (
-                      <div key={index}>• {line}</div>
-                    ))}
+                    )}
                   </div>
                 )}
               </div>
 
               <div className="rounded border p-3">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <div className="text-sm font-medium text-gray-800">Filtrage global</div>
-                  <button
-                    onClick={onEditGlobalFilters}
-                    className="rounded border border-orange-300 bg-orange-50 px-2 py-1 text-xs text-orange-700 hover:bg-orange-100"
-                  >
-                    Modifier
-                  </button>
-                </div>
+                <div className="mb-1 text-[11px] font-medium leading-none text-gray-700">Filtrer les colonnes du rapport</div>
 
                 {globalFilterSummaryLines.length > 0 ? (
                   <button
                     type="button"
                     onClick={onEditGlobalFilters}
-                    className="w-full space-y-1 rounded border border-orange-200 bg-orange-50 p-2 text-left text-xs text-orange-800 hover:bg-orange-100"
+                    className="w-full rounded border border-orange-200 bg-orange-50 p-2 text-left text-xs text-orange-800 hover:bg-orange-100"
                     title="Modifier le filtrage global"
                   >
-                    {globalFilterSummaryLines.map((line, index) => (
-                      <div key={index}>
-                        {index > 0 && <div className="my-1 text-orange-900">OU</div>}
-                        <div className="ml-2">{line}</div>
-                      </div>
-                    ))}
+                    <div className="mb-1 font-normal">Filtres actifs :</div>
+                    <div className="space-y-1 font-normal">
+                      {globalFilterSummaryLines.map((line, index) => (
+                        <div key={index}>
+                          {index > 0 && <div className="my-1 font-normal text-orange-900">OU</div>}
+                          <div className="ml-2 font-normal">{line}</div>
+                        </div>
+                      ))}
+                    </div>
                   </button>
                 ) : (
                   <button
@@ -334,7 +138,7 @@ export function ReportResultDrawer({
                     className="w-full rounded border border-gray-200 bg-gray-50 p-2 text-left text-xs text-gray-600 hover:bg-gray-100"
                     title="Configurer le filtrage global"
                   >
-                    Aucun filtre global défini.
+                    <span>Aucun filtre global défini</span>
                   </button>
                 )}
               </div>

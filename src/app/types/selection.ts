@@ -112,4 +112,5 @@ export interface SelectedAttribute {
   insertionLotDateMode?: 'today' | 'reportStart' | 'reportEnd' | 'reportColumn';
   insertionLotDateColumnId?: string;
   insertionLotDateLabel?: string;
+  lockedDateReferenceLabel?: string;
 }

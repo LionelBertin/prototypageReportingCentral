@@ -198,6 +198,10 @@ export function SelectionPanel({
   };
 
   const getDateReferenceLabel = (attr: SelectedAttribute) => {
+    if (attr.lockedDateReferenceLabel) {
+      return attr.lockedDateReferenceLabel;
+    }
+
     if (attr.insertionLotDateLabel) {
       return attr.insertionLotDateLabel;
     }
@@ -274,14 +278,28 @@ export function SelectionPanel({
       return attr.objectName;
     }
 
-    const firstStep = navigationPath[0];
-    const rootRelationLabel = firstStep.relationLabel?.trim() || firstStep.objectName?.trim() || '';
+    const relationParts: string[] = [];
 
-    if (!rootRelationLabel || rootRelationLabel === attr.objectName) {
-      return attr.objectName;
+    for (let index = navigationPath.length - 1; index >= 1; index -= 1) {
+      const step = navigationPath[index];
+      const stepLabel = step.relationLabel?.trim() || step.objectName?.trim() || '';
+      if (stepLabel) {
+        relationParts.push(stepLabel);
+      }
     }
 
-    return `${attr.objectName} · ${rootRelationLabel}`;
+    const rootStep = navigationPath[0];
+    const rootObjectName = rootStep.objectName?.trim() || attr.objectName;
+    const rootRelationLabel = rootStep.relationLabel?.trim() || '';
+    const rootPart = rootRelationLabel && rootRelationLabel !== rootObjectName
+      ? `${rootObjectName} • ${rootRelationLabel}`
+      : rootObjectName;
+
+    if (rootPart) {
+      relationParts.push(rootPart);
+    }
+
+    return relationParts.length > 0 ? relationParts.join(' < ') : attr.objectName;
   };
 
   return (
@@ -429,17 +447,6 @@ export function SelectionPanel({
                                   </button>
                                 )}
 
-                                {attr.insertionLotId && attr.insertionLotLabel && (
-                                  <button
-                                    type="button"
-                                    onClick={() => onEditInsertionLot(attr.insertionLotId!)}
-                                    className="rounded bg-indigo-100 px-2 py-0.5 text-xs text-indigo-800 hover:bg-indigo-200"
-                                    title={`Éditer ${getInsertionLotDisplayLabel(attr.insertionLotId)}`}
-                                  >
-                                    {getInsertionLotDisplayLabel(attr.insertionLotId)}
-                                  </button>
-                                )}
-
                                 {attr.insertionType === 'applicable' && attr.applicationDateConfig?.requirementMode === 'period' && (
                                   <span
                                     className="flex items-center gap-1 rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-700"
@@ -450,7 +457,17 @@ export function SelectionPanel({
                                   </span>
                                 )}
 
-                                {attr.insertionType === 'applicable' && attr.applicationDateConfig?.requirementMode !== 'period' && (
+                                {attr.insertionType === 'applicable' && (attr.lockedDateReferenceLabel || attr.insertionLotId) && (
+                                  <span
+                                    className="flex items-center gap-1 rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600"
+                                    title={getDateReferenceLabel(attr)}
+                                  >
+                                    <Calendar className="size-3" />
+                                    <span>{getDateReferenceLabel(attr)}</span>
+                                  </span>
+                                )}
+
+                                {attr.insertionType === 'applicable' && !attr.lockedDateReferenceLabel && !attr.insertionLotId && attr.applicationDateConfig?.requirementMode !== 'period' && (
                                   <button
                                     onClick={() => onEditDateReference(attr.id)}
                                     className="flex items-center gap-1 rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-700 hover:bg-purple-200"

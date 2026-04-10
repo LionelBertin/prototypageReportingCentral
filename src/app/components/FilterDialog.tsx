@@ -647,7 +647,7 @@ export function FilterDialog({
                                       : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
                                   }`}
                                 >
-                                  Valeur fixe
+                                  Fixe
                                 </button>
                                 <button
                                   type="button"
@@ -658,7 +658,7 @@ export function FilterDialog({
                                       : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
                                   }`}
                                 >
-                                  Attribut
+                                  Dynamique
                                 </button>
                               </div>
                             </>

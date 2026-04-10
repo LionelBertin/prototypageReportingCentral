@@ -9,6 +9,7 @@ type PreviewMeta = {
   establishment: string;
   collaboratorTarget: string;
   collaboratorName: string;
+  managerName: string;
   contractType: string;
   qualification: string;
   isManagedDirectly: boolean;
@@ -66,7 +67,8 @@ export type GenerateReportPreviewInput = {
   selectedCollaboratorContractDateColumnId: string;
   collaboratorTargets: string[];
   collaboratorUniverse: string[];
-  selectedManagerialRelationFilter: 'all' | 'direct' | 'directAndIndirect';
+  selectedManagerCollaboratorName: string;
+  includeManagerDescendants: boolean;
   selectedContractTypeFilters: string[];
   selectedQualificationFilters: string[];
   contractTypeUniverse: string[];
@@ -367,12 +369,18 @@ const applyCollaboratorFilters = (
       return false;
     }
 
-    if (input.selectedManagerialRelationFilter === 'direct' && !row.meta.isManagedDirectly) {
+    if (input.selectedManagerCollaboratorName && row.meta.managerName !== input.selectedManagerCollaboratorName) {
       return false;
     }
 
-    if (input.selectedManagerialRelationFilter === 'directAndIndirect' && !row.meta.isManagedDirectly && !row.meta.isManagedIndirectly) {
-      return false;
+    if (input.selectedManagerCollaboratorName) {
+      if (input.includeManagerDescendants) {
+        if (!row.meta.isManagedDirectly && !row.meta.isManagedIndirectly) {
+          return false;
+        }
+      } else if (!row.meta.isManagedDirectly) {
+        return false;
+      }
     }
 
     if (!allowedStatuses.has(row.meta.collaboratorStatus)) {
@@ -561,6 +569,7 @@ export const generateReportPreviewRows = (input: GenerateReportPreviewInput): Ge
       establishment: establishmentUniverse[rowIndex % establishmentUniverse.length],
       collaboratorTarget: collaboratorTargets[rowIndex % collaboratorTargets.length],
       collaboratorName: collaboratorUniverse[rowIndex % collaboratorUniverse.length],
+      managerName: collaboratorUniverse[(rowIndex + 1) % collaboratorUniverse.length],
       contractType: contractTypeUniverse[rowIndex % contractTypeUniverse.length],
       qualification: qualificationUniverse[rowIndex % qualificationUniverse.length],
       isManagedDirectly: rowIndex % 3 !== 2,

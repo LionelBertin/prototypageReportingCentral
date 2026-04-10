@@ -17,8 +17,24 @@ export function MainObjectPicker({ onSelect }: Props) {
 
   const lower = search.trim().toLowerCase();
 
+  const normalizeToken = (value: string) => value.trim().toLowerCase();
+
+  const isCollaboratorsTheme = (theme: (typeof dataStructure)[number]) =>
+    normalizeToken(theme.id) === 'les-collaborateurs' || normalizeToken(theme.name) === 'les collaborateurs';
+
+  const isCollaborateurObject = (object: (typeof dataStructure)[number]['objects'][number]) =>
+    normalizeToken(object.id) === 'collaborateur' || normalizeToken(object.name) === 'collaborateur';
+
+  const isMultipleCardinalityObject = (object: (typeof dataStructure)[number]['objects'][number]) =>
+    object.cardinality.toLowerCase().includes('n');
+
   const getSelectableObjects = (theme: (typeof dataStructure)[number]) =>
-    [...theme.objects].sort((a, b) => {
+    [...theme.objects]
+      .filter((obj) => {
+        if (!isCollaboratorsTheme(theme)) return true;
+        return isCollaborateurObject(obj) || isMultipleCardinalityObject(obj);
+      })
+      .sort((a, b) => {
       if (a.isStarred === b.isStarred) return a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
       return a.isStarred ? -1 : 1;
     });

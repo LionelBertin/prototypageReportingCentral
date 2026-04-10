@@ -62,6 +62,10 @@ export interface SmartObjectDefinition {
   filters?: {
     groups: SmartObjectFilterGroupDefinition[];
   };
+  setDateRapport?: {
+    dateDebutRapport?: string;
+    dateFinRapport?: string;
+  };
 }
 
 export type DefaultDateFiltering =
@@ -148,6 +152,7 @@ type ManifestObject = {
     title?: string;
     columns?: unknown;
     filters?: unknown;
+    setDateRapport?: unknown;
   }>;
 };
 
@@ -601,6 +606,44 @@ const normalizeSmartFilter = (value: unknown): SmartObjectDefinition['filters'] 
 
 const normalizeSmartObjects = (value: ManifestObject['smartObjects']): SmartObjectDefinition[] | undefined => {
   if (!Array.isArray(value) || value.length === 0) return undefined;
+
+  const normalizeKeyToken = (raw: string) =>
+    raw
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLocaleLowerCase()
+      .trim();
+
+  const normalizeSetDateRapport = (
+    setDateRapportValue: unknown
+  ): SmartObjectDefinition['setDateRapport'] | undefined => {
+    if (!setDateRapportValue || typeof setDateRapportValue !== 'object') return undefined;
+
+    const entries = Object.entries(setDateRapportValue as Record<string, unknown>);
+    if (entries.length === 0) return undefined;
+
+    const byNormalizedKey = new Map<string, unknown>(
+      entries.map(([key, entryValue]) => [normalizeKeyToken(key), entryValue])
+    );
+
+    const readString = (key: string) => {
+      const raw = byNormalizedKey.get(key);
+      if (typeof raw !== 'string') return undefined;
+      const trimmed = raw.trim();
+      return trimmed || undefined;
+    };
+
+    const dateDebutRapport = readString('datedebutrapport');
+    const dateFinRapport = readString('datefinrapport');
+
+    if (!dateDebutRapport && !dateFinRapport) return undefined;
+
+    return {
+      dateDebutRapport,
+      dateFinRapport,
+    };
+  };
+
   const valid = value
     .map((item) => {
       if (!item || typeof item.title !== 'string' || !Array.isArray(item.columns)) return null;
@@ -615,6 +658,7 @@ const normalizeSmartObjects = (value: ManifestObject['smartObjects']): SmartObje
         title: item.title,
         columns,
         filters: normalizeSmartFilter(item.filters),
+        setDateRapport: normalizeSetDateRapport(item.setDateRapport),
       } as SmartObjectDefinition;
     })
     .filter((item): item is SmartObjectDefinition => item !== null);

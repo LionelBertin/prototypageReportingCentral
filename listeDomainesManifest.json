@@ -5,14 +5,12 @@
     {
       "id": "les-collaborateurs",
       "name": "Les collaborateurs",
-      "defaultDateFiltering" :"chooseOne",
       "objects": [
         {
           "id": "collaborateur",
           "name": "Collaborateur",
           "isStarred":true,
-          "magicSel": true,
-          "defaultDateFiltering" :"none",
+          "defaultDateFiltering" :"chooseOne",
           "attributes": [
             {
               "id": "photo",
@@ -219,7 +217,7 @@
               "magicSel": true
             }
           ],
-          "defaultDateFiltering" :"none",
+          "defaultDateFiltering" :"chooseOne",
           "attributes": [
             {
               "id": "type-de-document",
@@ -260,7 +258,7 @@
               "magicSel": true
             }
           ],
-          "defaultDateFiltering" :"none",
+          "defaultDateFiltering" :"chooseOne",
           "attributes": [
             {
               "id": "nom",
@@ -447,7 +445,7 @@
               "magicSel": true
             }
           ],
-          "defaultDateFiltering" :"none",
+          "defaultDateFiltering" :"chooseOne",
           "attributes": [
             {
               "id": "langue",
@@ -2096,7 +2094,11 @@
                 "Collaborateur.nom",
                 "Collaborateur.prénom"
               ],
-              "filters": "'date fin' < dateDuJour"
+              "filters": "'date fin' < dateFinRapport",
+              "setDateRapport":{
+                "dateDébutRapport": "dateDuJour - 12 months",
+                "dateFinRapport": "dateDuJour - 1 day"
+              }
             },
             {
               "title": "Contrats actifs",
@@ -2107,7 +2109,11 @@
                 "Collaborateur.nom",
                 "Collaborateur.prénom"
               ],
-              "filters": "'date début' <= dateDuJour and ('date fin' >= dateDuJour or 'date fin' is null)"
+              "filters": "'date début' <= dateFinRapport and ('date fin' >= dateDébutRapport or 'date fin' is null)",
+              "setDateRapport":{
+                "dateDébutRapport": "dateDuJour",
+                "dateFinRapport": "dateDuJour"
+              }
             },
             {
               "title": "Contrats futurs",
@@ -2118,7 +2124,11 @@
                 "Collaborateur.nom",
                 "Collaborateur.prénom"
               ],
-              "filters": "'date début' > dateDuJour"
+              "filters": "'date début' > dateDébutRapport",
+              "setDateRapport":{
+                "dateDébutRapport": "dateDuJour + 1 day",
+                "dateFinRapport": "dateDuJour + 12 months"
+              }
             }
           ]
         },
@@ -2226,7 +2236,10 @@
                 "Manager.prénom",
                 "Département.nom"
               ],
-              "filters": "'date fin' < dateDuJour"
+              "setDateRapport":{
+                "dateDébutRapport": "dateDuJour - 12 months",
+                "dateFinRapport": "dateDuJour - 1 day"
+              }
             },
             {
               "title": "Postes actifs",
@@ -2238,7 +2251,10 @@
                 "Manager.prénom",
                 "Département.nom"
               ],
-              "filters": "('date début' <= dateDuJour and 'date fin' >= dateDuJour) or ('date début' <= dateDuJour and 'date fin' is null)"
+              "setDateRapport":{
+                "dateDébutRapport": "dateDuJour",
+                "dateFinRapport": "dateDuJour"
+              }
             },
             {
               "title": "Postes futurs",
@@ -2250,7 +2266,10 @@
                 "Manager.prénom",
                 "Département.nom"
               ],
-              "filters": "'date début' > dateDuJour"
+              "setDateRapport":{
+                "dateDébutRapport": "dateDuJour + 1 day",
+                "dateFinRapport": "dateDuJour + 12 months"
+              }
             }
           ]
         }
@@ -2278,6 +2297,14 @@
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
               "magicSel": false
+            },
+            {
+              "targetObject": "Compte Absence",
+              "relationName": "Type de compte",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSel": true
             },
             {
               "targetObject": "Collaborateur",
@@ -4164,6 +4191,26 @@
             {
               "id": "pays",
               "name": "Pays",
+              "magicSel": false,
+              "dataType": "string"
+            }
+          ]
+        }
+        ,
+        {
+          "id": "CompteAbsence",
+          "name": "Compte Absence",
+          "defaultDateFiltering" :"none",
+          "attributes": [
+            {
+              "id": "nom",
+              "name": "Nom",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "code",
+              "name": "Code",
               "magicSel": false,
               "dataType": "string"
             }

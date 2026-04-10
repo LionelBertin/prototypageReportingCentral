@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { SelectionPanel } from './SelectionPanel';
 import MainObjectPicker from './MainObjectPicker';
 import { ObjectInsertionDialog, ObjectInsertionConfig } from './ObjectInsertionDialog';
@@ -75,6 +75,13 @@ type ContractPosteLotAttributeSection = {
   attributes: ContractPosteLotAttributeOption[];
 };
 
+type ContractPosteTargetTileNode = {
+  key: string;
+  label: string;
+  attributes: ContractPosteLotAttributeOption[];
+  children: ContractPosteTargetTileNode[];
+};
+
 type Stage2ObjectGroup = {
   key: string;
   parentKey?: string;
@@ -124,21 +131,34 @@ type CollaboratorTargetOption = {
 };
 
 type CollaboratorContractDateMode = 'today' | 'reportStart' | 'reportEnd' | 'reportColumn';
-type CollaboratorManagerialRelationMode = 'all' | 'direct' | 'directAndIndirect';
 
 const getObjectGroupTitleFromNavigationPath = (objectName: string, navigationPath: NavigationPath = []) => {
   if (navigationPath.length === 0) {
     return objectName;
   }
 
-  const firstStep = navigationPath[0];
-  const rootRelationLabel = firstStep.relationLabel?.trim() || firstStep.objectName?.trim() || '';
+  const relationParts: string[] = [];
 
-  if (!rootRelationLabel || rootRelationLabel === objectName) {
-    return objectName;
+  for (let index = navigationPath.length - 1; index >= 1; index -= 1) {
+    const step = navigationPath[index];
+    const stepLabel = step.relationLabel?.trim() || step.objectName?.trim() || '';
+    if (stepLabel) {
+      relationParts.push(stepLabel);
+    }
   }
 
-  return `${objectName} · ${rootRelationLabel}`;
+  const rootStep = navigationPath[0];
+  const rootObjectName = rootStep.objectName?.trim() || objectName;
+  const rootRelationLabel = rootStep.relationLabel?.trim() || '';
+  const rootPart = rootRelationLabel && rootRelationLabel !== rootObjectName
+    ? `${rootObjectName} • ${rootRelationLabel}`
+    : rootObjectName;
+
+  if (rootPart) {
+    relationParts.push(rootPart);
+  }
+
+  return relationParts.length > 0 ? relationParts.join(' < ') : objectName;
 };
 
 const getAutoFilterAttributeDisplayName = (
@@ -151,15 +171,25 @@ const getAutoFilterAttributeDisplayName = (
 };
 
 const REPORT_DATE_VARIABLE_ID = 'dateRapport';
-const REPORT_DATE_VARIABLE_LABEL = 'dateRapport';
+const REPORT_DATE_VARIABLE_LABEL = 'date du rapport';
 const REPORT_PERIOD_START_VARIABLE_ID = 'dateDebutRapport';
-const REPORT_PERIOD_START_VARIABLE_LABEL = 'dateDébutRapport';
+const REPORT_PERIOD_START_VARIABLE_LABEL = 'date de début du rapport';
 const REPORT_PERIOD_END_VARIABLE_ID = 'dateFinRapport';
-const REPORT_PERIOD_END_VARIABLE_LABEL = 'dateFinRapport';
+const REPORT_PERIOD_END_VARIABLE_LABEL = 'date de fin du rapport';
 const AUTO_FILTER_COLUMN_PREFIX = '__auto-filter-col__';
+const MAX_APPLICABLE_MANAGER_DEPTH = 3;
 
-const getContractPosteLotAttributeKey = (themeId: string, objectId: string, attributeId: string) =>
-  `${themeId}::${objectId}::${attributeId}`;
+const getNavigationPathSignature = (path: NavigationPath = []) =>
+  path
+    .map((item) => `${item.sourceObjectName ?? ''}:${item.relationLabel ?? ''}:${item.objectName}:${item.cardinalityName ?? ''}`)
+    .join('>');
+
+const getContractPosteLotAttributeKey = (
+  themeId: string,
+  objectId: string,
+  attributeId: string,
+  navigationPath: NavigationPath = []
+) => `${themeId}::${objectId}::${attributeId}::${getNavigationPathSignature(navigationPath)}`;
 
 const getTodayIsoDate = () => {
   const today = new Date();
@@ -178,6 +208,54 @@ const addMonthsIsoDate = (isoDate: string, monthsOffset: number) => {
     parsed.getFullYear(),
     String(parsed.getMonth() + 1).padStart(2, '0'),
     String(parsed.getDate()).padStart(2, '0'),
+  ].join('-');
+};
+
+const parseRelativeTodayExpression = (expression: string, todayIsoDate: string) => {
+  const normalized = expression.trim();
+  if (!normalized) return undefined;
+
+  const relativeMatch = normalized.match(/^dateDuJour(?:\s*([+-])\s*(\d+)\s*([a-zA-Zéèêûùîïëäöüç]+))?$/i);
+  if (!relativeMatch) return undefined;
+
+  const [, sign, amountRaw, unitRaw] = relativeMatch;
+  const baseDate = new Date(`${todayIsoDate}T00:00:00`);
+  if (Number.isNaN(baseDate.getTime())) return undefined;
+
+  if (sign && amountRaw && unitRaw) {
+    const amount = Number(amountRaw);
+    if (!Number.isFinite(amount)) return undefined;
+    const offset = sign === '-' ? -amount : amount;
+
+    const unit = unitRaw
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLocaleLowerCase();
+
+    if (unit === 'day' || unit === 'days' || unit === 'jour' || unit === 'jours') {
+      baseDate.setDate(baseDate.getDate() + offset);
+    } else if (unit === 'week' || unit === 'weeks' || unit === 'semaine' || unit === 'semaines') {
+      baseDate.setDate(baseDate.getDate() + offset * 7);
+    } else if (unit === 'month' || unit === 'months' || unit === 'mois') {
+      baseDate.setMonth(baseDate.getMonth() + offset);
+    } else if (
+      unit === 'year'
+      || unit === 'years'
+      || unit === 'an'
+      || unit === 'ans'
+      || unit === 'annee'
+      || unit === 'annees'
+    ) {
+      baseDate.setFullYear(baseDate.getFullYear() + offset);
+    } else {
+      return undefined;
+    }
+  }
+
+  return [
+    baseDate.getFullYear(),
+    String(baseDate.getMonth() + 1).padStart(2, '0'),
+    String(baseDate.getDate()).padStart(2, '0'),
   ].join('-');
 };
 
@@ -435,7 +513,8 @@ export function AttributeSelector() {
   const [selectedCollaboratorName, setSelectedCollaboratorName] = useState('');
   const [collaboratorContractDateMode, setCollaboratorContractDateMode] = useState<CollaboratorContractDateMode>('reportEnd');
   const [selectedCollaboratorContractDateColumnId, setSelectedCollaboratorContractDateColumnId] = useState('');
-  const [selectedManagerialRelationFilter, setSelectedManagerialRelationFilter] = useState<CollaboratorManagerialRelationMode>('all');
+  const [selectedManagerCollaboratorName, setSelectedManagerCollaboratorName] = useState('');
+  const [includeManagerDescendants, setIncludeManagerDescendants] = useState(false);
   const [selectedContractTypeFilters, setSelectedContractTypeFilters] = useState<string[]>([]);
   const [selectedQualificationFilters, setSelectedQualificationFilters] = useState<string[]>([]);
   const [selectedDepartmentFilters, setSelectedDepartmentFilters] = useState<string[]>([]);
@@ -462,6 +541,8 @@ export function AttributeSelector() {
   const [linkedMultiCardinalityInsertionTarget, setLinkedMultiCardinalityInsertionTarget] = useState<LinkedMultiCardinalityObject | null>(null);
   const [availableAttributeSearchTerm, setAvailableAttributeSearchTerm] = useState('');
   const [collapsedAvailableGroupKeys, setCollapsedAvailableGroupKeys] = useState<string[]>([]);
+  const [collapsedApplicableTileKeys, setCollapsedApplicableTileKeys] = useState<string[]>([]);
+  const availableDataListRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const loadCollaboratorOrgLists = async () => {
@@ -509,6 +590,12 @@ export function AttributeSelector() {
     }
   }, [selectingMainObject]);
 
+  useEffect(() => {
+    if (!selectingMainObject && mainObject) {
+      availableDataListRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+    }
+  }, [mainObject, selectingMainObject]);
+
   const buildSelectedAttribute = ({
     themeId,
     themeName,
@@ -530,6 +617,7 @@ export function AttributeSelector() {
     insertionLotDateMode,
     insertionLotDateColumnId,
     insertionLotDateLabel,
+    lockedDateReferenceLabel,
   }: {
     themeId: string;
     themeName: string;
@@ -551,6 +639,7 @@ export function AttributeSelector() {
     insertionLotDateMode?: CollaboratorContractDateMode;
     insertionLotDateColumnId?: string;
     insertionLotDateLabel?: string;
+    lockedDateReferenceLabel?: string;
   }): SelectedAttribute => {
     const effectiveApplicable = insertionType === 'applicable' || !!isApplicable;
 
@@ -580,6 +669,7 @@ export function AttributeSelector() {
       insertionLotDateMode,
       insertionLotDateColumnId,
       insertionLotDateLabel,
+      lockedDateReferenceLabel,
     };
   };
 
@@ -836,6 +926,18 @@ export function AttributeSelector() {
         isMainCollaborator: !!relation.isMainCollaborator,
       }));
 
+    const isMainObjectCollaborateur =
+      normalize(mainObjectDefinition.id) === 'collaborateur'
+      || normalize(mainObjectDefinition.name) === 'collaborateur';
+
+    if (isMainObjectCollaborateur) {
+      collaboratorRelations.unshift({
+        key: `${mainObjectDefinition.id}:self:collaborateur`,
+        label: 'Collaborateur',
+        isMainCollaborator: true,
+      });
+    }
+
     const byLabel = new Map<string, CollaboratorTargetOption>();
     for (const relation of collaboratorRelations) {
       const normalizedLabel = normalize(relation.label);
@@ -924,15 +1026,21 @@ export function AttributeSelector() {
     return `${baseName} – ${groupTitle}`;
   };
 
+  const reportDateColumnAttributes = useMemo(
+    () => selectedAttributes.filter((attr) => attr.attributeType === 'date'),
+    [selectedAttributes]
+  );
+
   const reportDateColumnOptions = useMemo(() => {
-    return selectedAttributes
-      .filter((attr) => attr.attributeType === 'date')
+    return reportDateColumnAttributes
       .map((attr) => ({
         id: attr.id,
         label: getReportColumnLikeLabel(attr),
       }))
       .sort((a, b) => a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' }));
-  }, [selectedAttributes]);
+  }, [reportDateColumnAttributes]);
+
+  const isReportInDayMode = mainObjectDefinition?.defaultDateFiltering === 'chooseOne';
 
   useEffect(() => {
     if (collaboratorContractDateMode !== 'reportColumn') return;
@@ -945,6 +1053,15 @@ export function AttributeSelector() {
       return reportDateColumnOptions[0]?.id ?? '';
     });
   }, [collaboratorContractDateMode, reportDateColumnOptions]);
+
+  useEffect(() => {
+    if (!isReportInDayMode) return;
+
+    if (collaboratorContractDateMode === 'reportStart' || collaboratorContractDateMode === 'reportColumn') {
+      setCollaboratorContractDateMode('reportEnd');
+      setSelectedCollaboratorContractDateColumnId('');
+    }
+  }, [isReportInDayMode, collaboratorContractDateMode]);
 
   const normalizeObjectToken = (value: string) =>
     value
@@ -983,8 +1100,6 @@ export function AttributeSelector() {
       poste: findByObjectType('poste'),
     };
   }, []);
-
-  const isReportInDayMode = mainObjectDefinition?.defaultDateFiltering === 'chooseOne';
 
   const resolveContractPosteLotDateReference = (
     mode: CollaboratorContractDateMode,
@@ -1479,17 +1594,70 @@ export function AttributeSelector() {
       return {
         sections: [] as ContractPosteLotAttributeSection[],
         flatOptions: [] as ContractPosteLotAttributeOption[],
+        tileNodes: [] as ContractPosteTargetTileNode[],
       };
     }
 
-    const baseNavigationPath: NavigationPath = [
-      {
-        objectName: 'Collaborateur',
-        cardinalityName: '1',
-        relationLabel: selectedCollaboratorTarget,
-        sourceObjectName: mainObject.objectName,
-      },
-    ];
+    const objectByKey = new Map(
+      dataStructure.flatMap((theme) =>
+        theme.objects.map((obj) => [`${theme.id}::${obj.id}`, { theme, obj }] as const)
+      )
+    );
+
+    const getObjectRef = (themeId: string, objectId: string) => {
+      const found = objectByKey.get(`${themeId}::${objectId}` as `${string}::${string}`);
+      if (!found) return null;
+      return {
+        themeId,
+        themeName: found.theme.name,
+        objectId,
+        objectName: found.obj.name,
+      };
+    };
+
+    const allObjectRefs = dataStructure.flatMap((theme) =>
+      theme.objects.map((obj) => ({
+        themeId: theme.id,
+        themeName: theme.name,
+        objectId: obj.id,
+        objectName: obj.name,
+      }))
+    );
+
+    const findObjectRef = (...tokens: string[]) => allObjectRefs.find((entry) => {
+      const normalizedId = normalizeObjectToken(entry.objectId);
+      const normalizedName = normalizeObjectToken(entry.objectName);
+      return tokens.some((token) => normalizedId === token || normalizedName === token);
+    }) ?? null;
+
+    const collaboratorRef = findObjectRef('collaborateur');
+    const departmentRef = findObjectRef('departement');
+    const establishmentRef = findObjectRef('etablissement');
+    const companyRef = findObjectRef('entreprise');
+    if (!collaboratorRef) {
+      return {
+        sections: [] as ContractPosteLotAttributeSection[],
+        flatOptions: [] as ContractPosteLotAttributeOption[],
+        tileNodes: [] as ContractPosteTargetTileNode[],
+      };
+    }
+
+    const normalizedMainObjectId = normalizeObjectToken(mainObject.objectId);
+    const normalizedMainObjectName = normalizeObjectToken(mainObject.objectName);
+    const isMainObjectCollaborateur =
+      normalizedMainObjectId === 'collaborateur'
+      || normalizedMainObjectName === 'collaborateur';
+
+    const baseNavigationPath: NavigationPath = isMainObjectCollaborateur
+      ? []
+      : [
+          {
+            objectName: 'Collaborateur',
+            cardinalityName: '1',
+            relationLabel: selectedCollaboratorTarget,
+            sourceObjectName: mainObject.objectName,
+          },
+        ];
 
     const contractNavigationPath: NavigationPath = [
       ...baseNavigationPath,
@@ -1511,83 +1679,218 @@ export function AttributeSelector() {
       },
     ];
 
-    const collectRootAttributes = (
-      root: NonNullable<typeof contractRef>,
+    const buildStep = (
+      objectName: string,
+      cardinalityName: string,
+      relationLabel: string,
+      sourceObjectName: string,
+    ) => ({
+      objectName,
+      cardinalityName,
+      relationLabel,
+      sourceObjectName,
+    });
+
+    const sortContractPosteOptions = (attributes: ContractPosteLotAttributeOption[]) =>
+      [...attributes].sort((a, b) => a.rawName.localeCompare(b.rawName, 'fr', { sensitivity: 'base' }));
+
+    const buildSectionAttributes = (
+      sourceRef: NonNullable<ReturnType<typeof getObjectRef>>,
       lotBaseNavigationPath: NavigationPath,
-      allowedSourceObjectIds: string[],
-      excludedSourceObjectIds: string[] = [],
+      sectionKey: string,
+      sectionLabel: string,
     ) => {
-      const allowedIds = new Set(allowedSourceObjectIds.map((value) => normalizeObjectToken(value)));
-      const excludedIds = new Set(excludedSourceObjectIds.map((value) => normalizeObjectToken(value)));
+      const found = objectByKey.get(`${sourceRef.themeId}::${sourceRef.objectId}` as `${string}::${string}`);
+      if (!found) return [] as ContractPosteLotAttributeOption[];
 
-      return getObjectAttributes(root.themeId, root.objectId)
-        .filter((attr) => {
-          const normalizedSourceId = normalizeObjectToken(attr.sourceObjectId);
-          const normalizedSourceName = normalizeObjectToken(attr.sourceObjectName);
-
-          if (normalizedSourceId === 'collaborateur' || normalizedSourceName === 'collaborateur') {
-            return false;
-          }
-
-          if (!allowedIds.has(normalizedSourceId) && !allowedIds.has(normalizedSourceName)) {
-            return false;
-          }
-
-          if (attr.relativeNavigationPath.length > 0 && excludedIds.has(normalizedSourceId)) {
-            return false;
-          }
-
-          return true;
-        })
-        .map((attr) => ({
-          ...attr,
+      return sortContractPosteOptions(
+        found.obj.attributes.map((attr) => ({
+          id: attr.id,
+          name: attr.name,
+          rawName: attr.name,
+          description: attr.description,
+          tooltip: attr.tooltip,
+          type: attr.type,
+          magicSel: attr.magicSel,
+          smartSel: !!attr.magicSel,
+          autoSmartSel: !!attr.magicSel,
+          sourceObjectSupportsApplicable: !!(found.obj.applicationDate || found.obj.isApplicable),
+          sourceObjectApplicationDateMandatory: !!found.obj.applicationDateConfig?.mandatory,
+          sourceObjectApplicationDateRequirementMode: found.obj.applicationDateConfig?.requirementMode ?? 'day',
+          sourceThemeId: sourceRef.themeId,
+          sourceThemeName: sourceRef.themeName,
+          sourceObjectId: sourceRef.objectId,
+          sourceObjectName: sourceRef.objectName,
+          relativeNavigationPath: [],
           lotBaseNavigationPath,
-          sectionKey: `${attr.sourceThemeId}::${attr.sourceObjectId}`,
-          sectionLabel: attr.sourceObjectName,
-        }));
+          sectionKey,
+          sectionLabel,
+        }))
+      );
     };
 
-    const flatOptions: ContractPosteLotAttributeOption[] = [
-      ...collectRootAttributes(contractRef, contractNavigationPath, [contractRef.objectId]),
-      ...collectRootAttributes(posteRef, posteNavigationPath, [posteRef.objectId, 'departement', 'etablissement', 'entreprise'], [contractRef.objectId]),
+    const createTileNode = (
+      key: string,
+      label: string,
+      sourceRef: ReturnType<typeof getObjectRef> | null,
+      lotBaseNavigationPath: NavigationPath,
+      sectionLabelParts: string[],
+      children: ContractPosteTargetTileNode[] = []
+    ): ContractPosteTargetTileNode | null => {
+      if (!sourceRef) {
+        if (children.length === 0) return null;
+        return { key, label, attributes: [], children };
+      }
+
+      const attributes = buildSectionAttributes(
+        sourceRef,
+        lotBaseNavigationPath,
+        `${key}::${getNavigationPathSignature(lotBaseNavigationPath)}`,
+        sectionLabelParts.join(' > '),
+      );
+
+      if (attributes.length === 0 && children.length === 0) {
+        return null;
+      }
+
+      return { key, label, attributes, children };
+    };
+
+    const buildContractPath = (collaboratorPath: NavigationPath): NavigationPath => [
+      ...collaboratorPath,
+      buildStep(contractRef.objectName, 'n', 'Contrat', collaboratorRef.objectName),
     ];
 
-    const sectionMap = new Map<string, ContractPosteLotAttributeSection>();
-    for (const option of flatOptions) {
-      const existing = sectionMap.get(option.sectionKey);
-      if (existing) {
-        existing.attributes.push(option);
-      } else {
-        sectionMap.set(option.sectionKey, {
-          key: option.sectionKey,
-          label: option.sectionLabel,
-          attributes: [option],
-        });
+    const buildPostePath = (collaboratorPath: NavigationPath): NavigationPath => [
+      ...buildContractPath(collaboratorPath),
+      buildStep(posteRef.objectName, 'n', 'Poste', contractRef.objectName),
+    ];
+
+    const buildDepartmentPath = (targetPostePath: NavigationPath): NavigationPath => (
+      departmentRef
+        ? [...targetPostePath, buildStep(departmentRef.objectName, '1', 'Département', posteRef.objectName)]
+        : targetPostePath
+    );
+
+    const buildEstablishmentPath = (targetPostePath: NavigationPath): NavigationPath => (
+      establishmentRef
+        ? [...targetPostePath, buildStep(establishmentRef.objectName, '1', 'Etablissement', posteRef.objectName)]
+        : targetPostePath
+    );
+
+    const buildCompanyPath = (targetPostePath: NavigationPath): NavigationPath => (
+      establishmentRef && companyRef
+        ? [...buildEstablishmentPath(targetPostePath), buildStep(companyRef.objectName, '1', 'Entreprise', establishmentRef.objectName)]
+        : targetPostePath
+    );
+
+    const buildManagerPath = (targetPostePath: NavigationPath): NavigationPath => [
+      ...targetPostePath,
+      buildStep(collaboratorRef.objectName, '1', 'Manager', posteRef.objectName),
+    ];
+
+    const buildPosteNode = (
+      collaboratorPath: NavigationPath,
+      managerDepth: number,
+      labelPath: string[],
+    ): ContractPosteTargetTileNode | null => {
+      const currentPostePath = managerDepth === 0 ? posteNavigationPath : buildPostePath(collaboratorPath);
+      const children: ContractPosteTargetTileNode[] = [];
+
+      const contractNode = createTileNode(
+        'contrat',
+        'Contrat',
+        contractRef,
+        managerDepth === 0 ? contractNavigationPath : buildContractPath(collaboratorPath),
+        [...labelPath, 'Contrat'],
+      );
+      if (contractNode) children.push(contractNode);
+
+      const departmentNode = createTileNode(
+        'departement',
+        'Département',
+        departmentRef,
+        buildDepartmentPath(currentPostePath),
+        [...labelPath, 'Département'],
+      );
+      if (departmentNode) children.push(departmentNode);
+
+      const companyNode = createTileNode(
+        'entreprise',
+        'Entreprise',
+        companyRef,
+        buildCompanyPath(currentPostePath),
+        [...labelPath, 'Etablissement', 'Entreprise'],
+      );
+
+      const establishmentChildren = companyNode ? [companyNode] : [];
+      const establishmentNode = createTileNode(
+        'etablissement',
+        'Etablissement',
+        establishmentRef,
+        buildEstablishmentPath(currentPostePath),
+        [...labelPath, 'Etablissement'],
+        establishmentChildren,
+      );
+      if (establishmentNode) children.push(establishmentNode);
+
+      if (managerDepth < MAX_APPLICABLE_MANAGER_DEPTH) {
+        const managerPath = buildManagerPath(currentPostePath);
+        const managerChildren: ContractPosteTargetTileNode[] = [];
+
+        const nestedPosteNode = buildPosteNode(
+          managerPath,
+          managerDepth + 1,
+          [...labelPath, 'Manager', 'Postes'],
+        );
+        if (nestedPosteNode) managerChildren.push(nestedPosteNode);
+
+        const managerNode = createTileNode(
+          'manager',
+          'Manager',
+          collaboratorRef,
+          managerPath,
+          [...labelPath, 'Manager'],
+          managerChildren,
+        );
+        if (managerNode) children.push(managerNode);
       }
-    }
 
-    const preferredSectionOrder = [contractRef.objectId, posteRef.objectId];
-    const sections = Array.from(sectionMap.values())
-      .map((section) => ({
-        ...section,
-        attributes: sortAvailableObjectAttributes(section.attributes),
-      }))
-      .sort((a, b) => {
-        const aObjectId = a.attributes[0]?.sourceObjectId ?? '';
-        const bObjectId = b.attributes[0]?.sourceObjectId ?? '';
-        const aIndex = preferredSectionOrder.indexOf(aObjectId);
-        const bIndex = preferredSectionOrder.indexOf(bObjectId);
+      return createTileNode(
+        'poste',
+        'Postes',
+        posteRef,
+        currentPostePath,
+        labelPath,
+        children,
+      );
+    };
 
-        if (aIndex !== -1 || bIndex !== -1) {
-          if (aIndex === -1) return 1;
-          if (bIndex === -1) return -1;
-          return aIndex - bIndex;
+    const rootNode = buildPosteNode(baseNavigationPath, 0, ['Postes']);
+    const tileNodes = rootNode ? [rootNode] : [];
+
+    const sections: ContractPosteLotAttributeSection[] = [];
+    const flatOptions: ContractPosteLotAttributeOption[] = [];
+    const collectSections = (nodes: ContractPosteTargetTileNode[]) => {
+      for (const node of nodes) {
+        if (node.attributes.length > 0) {
+          sections.push({
+            key: node.attributes[0].sectionKey,
+            label: node.attributes[0].sectionLabel,
+            attributes: node.attributes,
+          });
+          flatOptions.push(...node.attributes);
         }
 
-        return a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' });
-      });
+        if (node.children.length > 0) {
+          collectSections(node.children);
+        }
+      }
+    };
 
-    return { sections, flatOptions };
+    collectSections(tileNodes);
+
+    return { sections, flatOptions, tileNodes };
   }, [contractPosteObjectRefs, mainObject, selectedCollaboratorTarget]);
 
   const insertionLotDisplayLabels = new Map<string, string>();
@@ -1631,7 +1934,7 @@ export function AttributeSelector() {
 
     const buildLotAttributes = (objectAttributes: ContractPosteLotAttributeOption[]) => objectAttributes
       .filter((attr) => selectedAttributeKeySet.has(
-        getContractPosteLotAttributeKey(attr.sourceThemeId, attr.sourceObjectId, attr.id)
+        getContractPosteLotAttributeKey(attr.sourceThemeId, attr.sourceObjectId, attr.id, attr.lotBaseNavigationPath)
       ))
       .map((attr) => buildSelectedAttribute({
         themeId: attr.sourceThemeId,
@@ -1889,6 +2192,35 @@ export function AttributeSelector() {
   const applyMainObjectSmartPreset = (smartObject: SmartObjectDefinition) => {
     if (!mainObject) return;
 
+    const todayIsoDate = getTodayIsoDate();
+    const resolvedPresetStartDate = smartObject.setDateRapport?.dateDebutRapport
+      ? parseRelativeTodayExpression(smartObject.setDateRapport.dateDebutRapport, todayIsoDate)
+      : undefined;
+    const resolvedPresetEndDate = smartObject.setDateRapport?.dateFinRapport
+      ? parseRelativeTodayExpression(smartObject.setDateRapport.dateFinRapport, todayIsoDate)
+      : undefined;
+
+    if (resolvedPresetStartDate) {
+      setReportChosenPeriodStart(resolvedPresetStartDate);
+    }
+
+    if (resolvedPresetEndDate) {
+      setReportChosenPeriodEnd(resolvedPresetEndDate);
+      setReportChosenDate(resolvedPresetEndDate);
+    }
+
+    if (resolvedPresetStartDate || resolvedPresetEndDate) {
+      setReportTemporalContext((previous) => ({
+        ...previous,
+        reportDate: todayIsoDate,
+        periodStartDate: resolvedPresetStartDate ?? previous.periodStartDate,
+        periodEndDate: resolvedPresetEndDate ?? previous.periodEndDate,
+        chosenDate: resolvedPresetEndDate ?? previous.chosenDate,
+        chosenPeriodStart: resolvedPresetStartDate ?? previous.chosenPeriodStart,
+        chosenPeriodEnd: resolvedPresetEndDate ?? previous.chosenPeriodEnd,
+      }));
+    }
+
     const availableAttributes = getObjectAttributes(mainObject.themeId, mainObject.objectId);
     const columnAttributeIds = Array.from(
       new Set(
@@ -2085,6 +2417,7 @@ export function AttributeSelector() {
       attr.insertionLotId ?? '',
       attr.insertionLotDateMode ?? '',
       attr.insertionLotDateColumnId ?? '',
+      attr.lockedDateReferenceLabel ?? '',
     ].join('|');
   };
 
@@ -2097,6 +2430,103 @@ export function AttributeSelector() {
 
     return [...existing, ...uniqueToAdd];
   };
+
+  const contractPosteTargetTileNodes = contractPosteLotAttributeCatalog.tileNodes;
+
+  const buildContractPosteTargetedAttribute = (attr: ContractPosteLotAttributeOption): SelectedAttribute => {
+    const resolvedDateColumnId = collaboratorContractDateMode === 'reportColumn'
+      ? (selectedCollaboratorContractDateColumnId || reportDateColumnOptions[0]?.id)
+      : undefined;
+
+    return buildSelectedAttribute({
+      themeId: attr.sourceThemeId,
+      themeName: attr.sourceThemeName,
+      objectId: attr.sourceObjectId,
+      objectName: attr.sourceObjectName,
+      attributeId: attr.id,
+      attributeName: attr.rawName,
+      attributeType: attr.type,
+      insertionType: 'applicable',
+      isApplicable: true,
+      dateReference: resolveContractPosteLotDateReference(collaboratorContractDateMode, resolvedDateColumnId),
+      navigationPath: [...attr.lotBaseNavigationPath, ...attr.relativeNavigationPath],
+      lockedDateReferenceLabel: 'date ciblée',
+    });
+  };
+
+  const targetedContractPosteAttributeKeys = useMemo(
+    () => new Set(
+      selectedAttributes
+        .filter((attr) => attr.lockedDateReferenceLabel === 'date ciblée')
+        .map(getSelectedAttributeUniquenessKey)
+    ),
+    [selectedAttributes]
+  );
+
+  const isContractPosteTargetedAttributeSelected = (attr: ContractPosteLotAttributeOption) =>
+    targetedContractPosteAttributeKeys.has(getSelectedAttributeUniquenessKey(buildContractPosteTargetedAttribute(attr)));
+
+  const toggleContractPosteTargetedAttribute = (attr: ContractPosteLotAttributeOption, checked: boolean) => {
+    const candidate = buildContractPosteTargetedAttribute(attr);
+    const candidateKey = getSelectedAttributeUniquenessKey(candidate);
+
+    setSelectedAttributes((prev) => {
+      if (checked) {
+        return appendUniqueAttributes(prev, [candidate]);
+      }
+
+      return prev.filter((existing) => getSelectedAttributeUniquenessKey(existing) !== candidateKey);
+    });
+  };
+
+  const applyContractPosteTargetTileSelection = (
+    mode: 'smart' | 'all' | 'none',
+    attributes: ContractPosteLotAttributeOption[]
+  ) => {
+    const candidates = attributes.map(buildContractPosteTargetedAttribute);
+    const candidateKeys = new Set(candidates.map(getSelectedAttributeUniquenessKey));
+
+    setSelectedAttributes((prev) => {
+      if (mode === 'none') {
+        return prev.filter((existing) => !candidateKeys.has(getSelectedAttributeUniquenessKey(existing)));
+      }
+
+      const toAdd = mode === 'smart'
+        ? candidates.filter((candidate, index) => !!attributes[index]?.magicSel)
+        : candidates;
+
+      return appendUniqueAttributes(prev, toAdd);
+    });
+  };
+
+  useEffect(() => {
+    setSelectedAttributes((prev) => {
+      let changed = false;
+      const resolvedDateColumnId = collaboratorContractDateMode === 'reportColumn'
+        ? (selectedCollaboratorContractDateColumnId || reportDateColumnOptions[0]?.id)
+        : undefined;
+      const nextDateReference = resolveContractPosteLotDateReference(collaboratorContractDateMode, resolvedDateColumnId);
+
+      const next = prev.map((attr) => {
+        if (attr.lockedDateReferenceLabel !== 'date ciblée') {
+          return attr;
+        }
+
+        const sameReference = JSON.stringify(attr.dateReference ?? null) === JSON.stringify(nextDateReference ?? null);
+        if (sameReference) {
+          return attr;
+        }
+
+        changed = true;
+        return {
+          ...attr,
+          dateReference: nextDateReference,
+        };
+      });
+
+      return changed ? next : prev;
+    });
+  }, [collaboratorContractDateMode, reportDateColumnOptions, selectedCollaboratorContractDateColumnId]);
 
   const getPendingLinkedAutoPeriodConditions = (
     pending: PendingObjectInsertion,
@@ -2484,7 +2914,7 @@ export function AttributeSelector() {
       Array.from(
         new Set(
           lotAttributes.map((attr) =>
-            getContractPosteLotAttributeKey(attr.themeId, attr.objectId, attr.attributeId)
+            getContractPosteLotAttributeKey(attr.themeId, attr.objectId, attr.attributeId, attr.navigationPath ?? [])
           )
         )
       )
@@ -2685,7 +3115,7 @@ export function AttributeSelector() {
     const defaultMode: CollaboratorContractDateMode = 'reportEnd';
     const defaultSelectedAttributeKeys = contractPosteLotAttributeCatalog.flatOptions
       .filter((attr) => !!attr.magicSel)
-      .map((attr) => getContractPosteLotAttributeKey(attr.sourceThemeId, attr.sourceObjectId, attr.id));
+      .map((attr) => getContractPosteLotAttributeKey(attr.sourceThemeId, attr.sourceObjectId, attr.id, attr.lotBaseNavigationPath));
 
     const lotAttributes = buildContractPosteLotAttributes({
       collaboratorRelationLabel,
@@ -2777,7 +3207,8 @@ export function AttributeSelector() {
     setSelectedCollaboratorName('');
     setCollaboratorContractDateMode('reportEnd');
     setSelectedCollaboratorContractDateColumnId('');
-    setSelectedManagerialRelationFilter('all');
+    setSelectedManagerCollaboratorName('');
+    setIncludeManagerDescendants(false);
     setSelectedContractTypeFilters([]);
     setSelectedQualificationFilters([]);
     setSelectedDepartmentFilters([]);
@@ -2801,7 +3232,8 @@ export function AttributeSelector() {
     setSelectedCollaboratorName('');
     setCollaboratorContractDateMode('reportEnd');
     setSelectedCollaboratorContractDateColumnId('');
-    setSelectedManagerialRelationFilter('all');
+    setSelectedManagerCollaboratorName('');
+    setIncludeManagerDescendants(false);
     setSelectedContractTypeFilters([]);
     setSelectedQualificationFilters([]);
     setSelectedDepartmentFilters([]);
@@ -2868,6 +3300,24 @@ export function AttributeSelector() {
     );
   };
 
+  const toggleApplicableTileCollapsed = (tileKey: string) => {
+    setCollapsedApplicableTileKeys((prev) =>
+      prev.includes(tileKey)
+        ? prev.filter((key) => key !== tileKey)
+        : [...prev, tileKey]
+    );
+  };
+
+  const collapseAllAvailableObjects = () => {
+    setCollapsedAvailableGroupKeys(Array.from(renderCandidateMainObjectStage2GroupKeys));
+    setCollapsedApplicableTileKeys([...applicableTileKeys]);
+  };
+
+  const expandAllAvailableObjects = () => {
+    setCollapsedAvailableGroupKeys([]);
+    setCollapsedApplicableTileKeys([]);
+  };
+
   const getDateAttributeName = (attributeId: string): string => {
     const attr = selectedAttributes.find((a) => a.id === attributeId);
     if (attr) {
@@ -2893,19 +3343,7 @@ export function AttributeSelector() {
       return '';
     }
 
-    const navigationPath = attr.navigationPath ?? [];
-    if (navigationPath.length === 0) {
-      return attr.objectName;
-    }
-
-    const firstStep = navigationPath[0];
-    const rootRelationLabel = firstStep.relationLabel?.trim() || firstStep.objectName?.trim() || '';
-
-    if (!rootRelationLabel || rootRelationLabel === attr.objectName) {
-      return attr.objectName;
-    }
-
-    return `${attr.objectName} · ${rootRelationLabel}`;
+    return getObjectGroupTitleFromNavigationPath(attr.objectName, attr.navigationPath ?? []);
 
   };
 
@@ -2956,6 +3394,11 @@ export function AttributeSelector() {
       .sort((a, b) => normalizeOptionSortKey(a.label).localeCompare(normalizeOptionSortKey(b.label), 'fr'));
   };
 
+  const reportDateColumnOptionGroups = useMemo(
+    () => buildSelectedAttributeOptionGroups(reportDateColumnAttributes),
+    [reportDateColumnAttributes]
+  );
+
   const compareSelectedAttributesByAttributeThenContext = (a: SelectedAttribute, b: SelectedAttribute) => {
     const normalizeSortKey = (value: string) =>
       value
@@ -2982,16 +3425,7 @@ export function AttributeSelector() {
   };
 
   const getFilterObjectGroupTitle = (objectName: string, navigationPath?: NavigationPath) => {
-    const path = navigationPath ?? [];
-    if (path.length === 0) return objectName;
-
-    const firstStep = path[0];
-    const rootRelationLabel = firstStep.relationLabel?.trim() || firstStep.objectName?.trim() || '';
-    if (!rootRelationLabel || rootRelationLabel === objectName) {
-      return objectName;
-    }
-
-    return `${objectName} · ${rootRelationLabel}`;
+    return getObjectGroupTitleFromNavigationPath(objectName, navigationPath ?? []);
   };
 
   const getGlobalFilterTechnicalObjectAttributes = () => {
@@ -3075,10 +3509,12 @@ export function AttributeSelector() {
     const reportDateVariables = (() => {
       if (!mainObjectDefinition || !mainObject) return [] as Array<{ id: string; name: string; columnName: string; type: 'date' }>;
 
+      const reportDateGroupLabel = 'Date du rapport';
+
       if (mainObjectDefinition.defaultDateFiltering === 'chooseOne') {
         return [{
           id: REPORT_DATE_VARIABLE_ID,
-          name: REPORT_DATE_VARIABLE_LABEL,
+          name: `${REPORT_DATE_VARIABLE_LABEL} – ${reportDateGroupLabel}`,
           columnName: REPORT_DATE_VARIABLE_LABEL,
           type: 'date' as const,
         }];
@@ -3088,13 +3524,13 @@ export function AttributeSelector() {
         return [
           {
             id: REPORT_PERIOD_START_VARIABLE_ID,
-            name: REPORT_PERIOD_START_VARIABLE_LABEL,
+            name: `${REPORT_PERIOD_START_VARIABLE_LABEL} – ${reportDateGroupLabel}`,
             columnName: REPORT_PERIOD_START_VARIABLE_LABEL,
             type: 'date' as const,
           },
           {
             id: REPORT_PERIOD_END_VARIABLE_ID,
-            name: REPORT_PERIOD_END_VARIABLE_LABEL,
+            name: `${REPORT_PERIOD_END_VARIABLE_LABEL} – ${reportDateGroupLabel}`,
             columnName: REPORT_PERIOD_END_VARIABLE_LABEL,
             type: 'date' as const,
           },
@@ -3105,13 +3541,13 @@ export function AttributeSelector() {
         return [
           {
             id: REPORT_PERIOD_START_VARIABLE_ID,
-            name: REPORT_PERIOD_START_VARIABLE_LABEL,
+            name: `${REPORT_PERIOD_START_VARIABLE_LABEL} – ${reportDateGroupLabel}`,
             columnName: REPORT_PERIOD_START_VARIABLE_LABEL,
             type: 'date' as const,
           },
           {
             id: REPORT_PERIOD_END_VARIABLE_ID,
-            name: REPORT_PERIOD_END_VARIABLE_LABEL,
+            name: `${REPORT_PERIOD_END_VARIABLE_LABEL} – ${reportDateGroupLabel}`,
             columnName: REPORT_PERIOD_END_VARIABLE_LABEL,
             type: 'date' as const,
           },
@@ -3273,9 +3709,9 @@ export function AttributeSelector() {
       collaboratorContractDateMode === 'today'
         ? 'date du jour'
         : collaboratorContractDateMode === 'reportStart'
-        ? 'début du rapport'
+        ? (isReportInDayMode ? 'date du rapport' : 'Date de début du rapport')
         : collaboratorContractDateMode === 'reportEnd'
-        ? 'fin du rapport'
+        ? (isReportInDayMode ? 'date du rapport' : 'Date de fin du rapport')
         : (() => {
             const selectedDateColumn = reportDateColumnOptions.find((option) => option.id === selectedCollaboratorContractDateColumnId);
             return selectedDateColumn ? `colonne du rapport (${selectedDateColumn.label})` : 'colonne du rapport';
@@ -3290,10 +3726,10 @@ export function AttributeSelector() {
       clauses.push(`Collaborateur: ${selectedCollaboratorName}`);
     }
 
-    if (selectedManagerialRelationFilter === 'direct') {
-      clauses.push('Relation managériale: managés directs uniquement');
-    } else if (selectedManagerialRelationFilter === 'directAndIndirect') {
-      clauses.push('Relation managériale: managés directs et indirects');
+    if (selectedManagerCollaboratorName) {
+      clauses.push(
+        `Manager du collaborateur: ${selectedManagerCollaboratorName}${includeManagerDescendants ? ' (avec descendance managériale)' : ''}`
+      );
     }
 
     if (selectedContractTypeFilters.length > 0) {
@@ -3366,11 +3802,18 @@ export function AttributeSelector() {
     // Keep collaborator target, reset all other collaborator-context filters.
     setCollaboratorContractDateMode('reportEnd');
     setSelectedCollaboratorContractDateColumnId('');
-    setSelectedManagerialRelationFilter('all');
+    setSelectedManagerCollaboratorName('');
+    setIncludeManagerDescendants(false);
     setSelectedContractTypeFilters([]);
     setSelectedQualificationFilters([]);
     setSelectedDepartmentFilters([]);
     setSelectedEstablishmentFilters([]);
+  };
+
+  const handleManagerCollaboratorChange = (value: string) => {
+    setSelectedManagerCollaboratorName(value);
+    setIncludeManagerDescendants(false);
+    setSelectedCollaboratorName('');
   };
 
   const getSortableSelectedAttributes = () => {
@@ -3526,6 +3969,9 @@ export function AttributeSelector() {
     );
 
     const groups: Array<Omit<Stage2ObjectGroup, 'attributes'>> = [];
+    const mainObjectKey = `${mainObject.themeId}::${mainObject.objectId}`;
+    const mainObjectEntry = objectByKey.get(mainObjectKey as `${string}::${string}`);
+    const isMainObjectChooseOne = mainObjectEntry?.obj.defaultDateFiltering === 'chooseOne';
 
     const getRelationDisplayLabel = (relationLabel: string | undefined, objectName: string, currentObjectName: string) => {
       const trimmed = relationLabel?.trim();
@@ -3550,6 +3996,14 @@ export function AttributeSelector() {
       const currentKey = `${themeId}::${objectId}`;
       const found = objectByKey.get(currentKey as `${string}::${string}`);
       if (!found) return;
+
+      if (
+        isMainObjectChooseOne
+        && navigationPath.length > 0
+        && found.obj.defaultDateFiltering === 'choosePeriod'
+      ) {
+        return;
+      }
 
       const groupKey = navigationPath.length === 0 ? currentKey : `${currentKey}::${getNavigationPathKey(navigationPath)}`;
 
@@ -3852,6 +4306,37 @@ export function AttributeSelector() {
       return next;
     });
   }, [mainObjectStage2Groups]);
+  const applicableTileKeys = useMemo(() => {
+    const keys: string[] = [];
+
+    const collect = (nodes: ContractPosteTargetTileNode[], parentPath = '') => {
+      for (const node of nodes) {
+        const tileKey = parentPath ? `${parentPath}>${node.key}` : node.key;
+        keys.push(tileKey);
+        if (node.children.length > 0) {
+          collect(node.children, tileKey);
+        }
+      }
+    };
+
+    collect(contractPosteTargetTileNodes);
+    return keys;
+  }, [contractPosteTargetTileNodes]);
+  useEffect(() => {
+    setCollapsedApplicableTileKeys((prev) => {
+      const validKeySet = new Set(applicableTileKeys);
+      const nextKeySet = new Set(prev.filter((key) => validKeySet.has(key)));
+      let changed = nextKeySet.size !== prev.length;
+
+      for (const key of applicableTileKeys) {
+        if (nextKeySet.has(key)) continue;
+        nextKeySet.add(key);
+        changed = true;
+      }
+
+      return changed ? Array.from(nextKeySet) : prev;
+    });
+  }, [applicableTileKeys]);
   const orderedMainObjectStage2Groups = useMemo(() => {
     if (!mainObject) return mainObjectStage2Groups;
 
@@ -4004,11 +4489,122 @@ export function AttributeSelector() {
     if (!linkedMultiCardinalityDialogGroup) return [] as LinkedMultiCardinalityObject[];
     return getLinkedMultipleCardinalityObjects(linkedMultiCardinalityDialogGroup);
   }, [linkedMultiCardinalityDialogGroup]);
+  const renderContractPosteTargetTileNodes = (
+    nodes: ContractPosteTargetTileNode[],
+    parentPath = '',
+    parentLabels: string[] = []
+  ) => {
+    return nodes.map((node) => (
+      (() => {
+        const tileKey = parentPath ? `${parentPath}>${node.key}` : node.key;
+        const isCollapsed = collapsedApplicableTileKeys.includes(tileKey);
+        const collaboratorScopeLabel = selectedCollaboratorTarget
+          ? `Collaborateur (${selectedCollaboratorTarget})`
+          : 'Collaborateur';
+        const relationScopeParts = [...parentLabels].reverse();
+        relationScopeParts.push(collaboratorScopeLabel);
+        const relationScopeLabel = relationScopeParts.join(' < ');
+
+        return (
+      <div key={tileKey} className="space-y-2">
+        <div className="rounded-lg border border-indigo-200 bg-indigo-50/60 p-3 shadow-sm">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => toggleApplicableTileCollapsed(tileKey)}
+              className="flex items-center gap-1 rounded px-1 py-0.5 text-left text-sm font-semibold text-indigo-900 hover:bg-indigo-100"
+              title={isCollapsed ? 'Déplier cette tuile' : 'Replier cette tuile'}
+            >
+              <span className="text-[10px] text-indigo-600">{isCollapsed ? '>' : 'v'}</span>
+              <span className="flex flex-col">
+                <span>{node.label}</span>
+                <span className="text-[10px] font-normal text-indigo-700">({relationScopeLabel})</span>
+              </span>
+            </button>
+            <div className="flex items-center gap-2">
+              {node.attributes.length > 0 && (
+                <div className="flex items-center gap-1 text-[10px] text-indigo-700">
+                  <button
+                    type="button"
+                    onClick={() => applyContractPosteTargetTileSelection('smart', node.attributes)}
+                    className="rounded px-1.5 py-0.5 hover:bg-indigo-100"
+                  >
+                    par défaut
+                  </button>
+                  <span className="text-indigo-300">|</span>
+                  <button
+                    type="button"
+                    onClick={() => applyContractPosteTargetTileSelection('all', node.attributes)}
+                    className="rounded px-1.5 py-0.5 hover:bg-indigo-100"
+                  >
+                    tous
+                  </button>
+                  <span className="text-indigo-300">|</span>
+                  <button
+                    type="button"
+                    onClick={() => applyContractPosteTargetTileSelection('none', node.attributes)}
+                    className="rounded px-1.5 py-0.5 hover:bg-indigo-100"
+                  >
+                    aucun
+                  </button>
+                </div>
+              )}
+              {node.attributes.length > 0 && (
+                <span className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] text-indigo-700">
+                  date ciblée
+                </span>
+              )}
+            </div>
+          </div>
+
+          {!isCollapsed && (node.attributes.length > 0 ? (
+            <div className="space-y-2">
+              {node.attributes.map((attr) => {
+                const checked = isContractPosteTargetedAttributeSelected(attr);
+                return (
+                  <label
+                    key={`${node.key}-${attr.id}`}
+                    className="flex cursor-pointer items-center justify-between gap-2 rounded border border-indigo-100 bg-white px-3 py-2 text-sm hover:bg-indigo-50"
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(event) => toggleContractPosteTargetedAttribute(attr, event.target.checked)}
+                      />
+                      <span className="text-gray-800">{attr.rawName}</span>
+                      <InfoHint text={attr.tooltip ?? attr.description} />
+                    </div>
+                    {!!attr.magicSel && (
+                      <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700">
+                        par defaut
+                      </span>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-xs text-indigo-700">Aucun attribut disponible.</div>
+          ))}
+        </div>
+
+        {!isCollapsed && node.children.length > 0 && (
+          <div className="ml-4 space-y-2 border-l border-indigo-200 pl-3">
+            {renderContractPosteTargetTileNodes(node.children, tileKey, [...parentLabels, node.label])}
+          </div>
+        )}
+      </div>
+      );
+      })()
+    ));
+  };
   const renderAvailableStage2GroupCards = (groups: Stage2ObjectGroup[]) => {
     return groups.map((group) => {
       const isCollapsed = collapsedAvailableGroupKeys.includes(group.key);
       const childGroups = visibleMainObjectStage2GroupsByParentKey.get(group.key) ?? [];
       const linkedMultipleCardinalityObjects = getLinkedMultipleCardinalityObjects(group);
+      const isCollaboratorGroup = normalizeObjectToken(group.objectName) === 'collaborateur';
 
       return (
         <div key={group.key} className="space-y-2">
@@ -4022,12 +4618,12 @@ export function AttributeSelector() {
                     className="flex items-center gap-1 rounded px-1 py-0.5 text-left hover:bg-gray-100"
                     title={isCollapsed ? 'Déplier cet objet' : 'Replier cet objet'}
                   >
+                    <span className="text-[10px] text-gray-500">{isCollapsed ? '>' : 'v'}</span>
                     <span>
                       {group.label !== group.objectName
                         ? `${group.label} (${group.objectName})`
                         : group.label}
                     </span>
-                    <span className="text-[10px] text-gray-500">{isCollapsed ? '>' : 'v'}</span>
                   </button>
                   <InfoHint text={group.tooltip} />
                 </div>
@@ -4050,7 +4646,7 @@ export function AttributeSelector() {
                     autre cardinalités ({linkedMultipleCardinalityObjects.length})
                   </button>
                 )}
-                {!isCollapsed && group.isSelectable ? (
+                {group.isSelectable ? (
                   <div className="flex items-center gap-1 text-[10px] text-gray-400">
                     <button
                       onClick={() => applyMainObjectQuickSelection('smart', group.attributes)}
@@ -4145,6 +4741,12 @@ export function AttributeSelector() {
             ) : null}
           </div>
 
+          {!isCollapsed && isCollaboratorGroup && contractPosteTargetTileNodes.length > 0 && (
+            <div className="mt-3 ml-4 space-y-2 border-l border-indigo-200 pl-3">
+              {renderContractPosteTargetTileNodes(contractPosteTargetTileNodes)}
+            </div>
+          )}
+
           {!isCollapsed && childGroups.length > 0 && (
             <div className="ml-4 space-y-2 border-l border-gray-200 pl-3">
               {renderAvailableStage2GroupCards(childGroups)}
@@ -4201,33 +4803,53 @@ export function AttributeSelector() {
     selectedQualificationFilters.length === 0
       ? 'Qualif. toutes'
       : `${selectedQualificationFilters.length} Qualif.`;
-  const collaboratorContractDateSummary =
-    collaboratorContractDateMode === 'today'
-      ? 'Date: jour'
-      : collaboratorContractDateMode === 'reportStart'
-      ? 'Date: début'
-      : collaboratorContractDateMode === 'reportEnd'
-      ? 'Date: fin'
-      : (() => {
-          const selectedDateColumn = reportDateColumnOptions.find((option) => option.id === selectedCollaboratorContractDateColumnId);
-          return `Date: colonne${selectedDateColumn ? ` (${selectedDateColumn.label})` : ''}`;
-        })();
-  const collaboratorTargetSummary = selectedCollaboratorTarget || 'Collaborateur';
-  const collaboratorNameSummary = selectedCollaboratorName || 'Collab. tous';
-  const collaboratorManagerialRelationSummary =
-    selectedManagerialRelationFilter === 'direct'
-      ? 'Managés directs'
-      : selectedManagerialRelationFilter === 'directAndIndirect'
-      ? 'Managés directs+indirects'
-      : 'Relation managériale: tous';
-  const collaboratorOrgFilterSummaryLabel = `${collaboratorTargetSummary} - ${collaboratorNameSummary} - ${collaboratorContractDateSummary} - ${collaboratorManagerialRelationSummary} - ${collaboratorContractTypeSummary} - ${collaboratorQualificationSummary} - ${collaboratorDepartmentSummary} - ${collaboratorEstablishmentSummary}`;
-  const hasSpecificCollaboratorSelected = selectedCollaboratorName.trim().length > 0;
+  const collaboratorManagerHeaderSummary = selectedManagerCollaboratorName
+    ? `Manager du collaborateur: ${selectedManagerCollaboratorName}${includeManagerDescendants ? ' (avec descendance managériale)' : ''}`
+    : '';
   const hasActiveOrgFilters =
-    selectedManagerialRelationFilter !== 'all' ||
+    selectedManagerCollaboratorName.trim().length > 0 ||
     selectedContractTypeFilters.length > 0 ||
     selectedQualificationFilters.length > 0 ||
     selectedDepartmentFilters.length > 0 ||
     selectedEstablishmentFilters.length > 0;
+  const hasSpecificCollaboratorSelected = selectedCollaboratorName.trim().length > 0;
+  const hasAnyCollaboratorFiltersApplied = hasSpecificCollaboratorSelected || hasActiveOrgFilters;
+  const hasTargetedApplicableInsertions = selectedAttributes.some(
+    (attr) => attr.insertionType === 'applicable' && attr.lockedDateReferenceLabel === 'date ciblée'
+  );
+  const isContractPosteTargetSelectorEnabled = hasAnyCollaboratorFiltersApplied || hasTargetedApplicableInsertions;
+  const collaboratorHeaderSummary = [
+    ...(hasAnyCollaboratorFiltersApplied ? [`Collaborateur concerné: ${selectedCollaboratorTarget || 'non défini'}`] : []),
+    ...(selectedCollaboratorName ? [`Un collaborateur précis: ${selectedCollaboratorName}`] : []),
+    ...(collaboratorManagerHeaderSummary ? [collaboratorManagerHeaderSummary] : []),
+    ...(selectedContractTypeFilters.length > 0 ? [`Types contrat: ${selectedContractTypeFilters.length}`] : []),
+    ...(selectedQualificationFilters.length > 0 ? [`Qualifications: ${selectedQualificationFilters.length}`] : []),
+    ...(selectedDepartmentFilters.length > 0 ? [`Départements: ${selectedDepartmentFilters.length}`] : []),
+    ...(selectedEstablishmentFilters.length > 0 ? [`Etablissements: ${selectedEstablishmentFilters.length}`] : []),
+  ].join(' · ');
+  const collaboratorHeaderSummaryLabel = collaboratorHeaderSummary || 'Aucun filtre collaborateur appliqué';
+  const collaboratorContractDateLabel = getContractPosteLotDateLabel(
+    collaboratorContractDateMode,
+    selectedCollaboratorContractDateColumnId
+  );
+  const collaboratorTargetingLines = [
+    `Collaborateur concerné: ${selectedCollaboratorTarget || 'non défini'}`,
+    `Date cible contrats/postes: ${collaboratorContractDateLabel}`,
+    `Un collaborateur précis: ${selectedCollaboratorName || 'Tous les collaborateurs'}`,
+    `Manager du collaborateur: ${selectedManagerCollaboratorName
+      ? `${selectedManagerCollaboratorName}${includeManagerDescendants ? ' (avec descendance managériale)' : ''}`
+      : 'Tous les managers'}`,
+    `Type du contrat: ${selectedContractTypeFilters.length > 0 ? `${selectedContractTypeFilters.length} sélection(s)` : 'Tous'}`,
+    `Qualification du poste: ${selectedQualificationFilters.length > 0 ? `${selectedQualificationFilters.length} sélection(s)` : 'Toutes'}`,
+    `Département du poste: ${selectedDepartmentFilters.length > 0 ? `${selectedDepartmentFilters.length} sélection(s)` : 'Tous'}`,
+    `Etablissement du poste: ${selectedEstablishmentFilters.length > 0 ? `${selectedEstablishmentFilters.length} sélection(s)` : 'Tous'}`,
+  ];
+  const collaboratorTargetSummary = selectedCollaboratorTarget || 'Collaborateur';
+  const collaboratorNameSummary = selectedCollaboratorName || 'Collab. tous';
+  const collaboratorManagerSummary = selectedManagerCollaboratorName
+    ? `Manager: ${selectedManagerCollaboratorName}${includeManagerDescendants ? ' (+descendance)' : ''}`
+    : 'Manager: tous';
+  const collaboratorOrgFilterSummaryLabel = `${collaboratorTargetSummary} - ${collaboratorNameSummary} - ${collaboratorManagerSummary} - ${collaboratorContractTypeSummary} - ${collaboratorQualificationSummary} - ${collaboratorDepartmentSummary} - ${collaboratorEstablishmentSummary}`;
   const collaboratorStatusFilterLines = getCollaboratorStatusFilterLines();
   const collaboratorOrgFilterLine = getCollaboratorOrgFilterLine();
   const collaboratorGeneratedFilterLines = [
@@ -4296,7 +4918,8 @@ export function AttributeSelector() {
       selectedCollaboratorContractDateColumnId,
       collaboratorTargets: collaboratorTargetOptions.map((option) => option.label),
       collaboratorUniverse: collaboratorOptions,
-      selectedManagerialRelationFilter,
+      selectedManagerCollaboratorName,
+      includeManagerDescendants,
       selectedContractTypeFilters,
       selectedQualificationFilters,
       contractTypeUniverse: contractTypeEnumValues,
@@ -4410,29 +5033,11 @@ export function AttributeSelector() {
             columns={reportPreviewColumns}
             rows={reportPreviewRows}
             mainObjectLinkedToCollaborateur={mainObjectLinkedToCollaborateur}
-            includeDepartedCollaborators={includeDepartedCollaborators}
-            includePresentCollaborators={includePresentCollaborators}
-            includeFutureNewCollaborators={includeFutureNewCollaborators}
-            includeFutureReturnCollaborators={includeFutureReturnCollaborators}
-            selectedDepartmentFilters={selectedDepartmentFilters}
-            selectedEstablishmentFilters={selectedEstablishmentFilters}
-            departmentTree={departmentTree}
-            establishmentOptions={establishmentOptions}
-            onIncludeDepartedChange={setIncludeDepartedCollaborators}
-            onIncludePresentChange={setIncludePresentCollaborators}
-            onIncludeFutureNewChange={setIncludeFutureNewCollaborators}
-            onIncludeFutureReturnChange={setIncludeFutureReturnCollaborators}
-            onSelectedDepartmentsChange={setSelectedDepartmentFilters}
-            onSelectedEstablishmentsChange={setSelectedEstablishmentFilters}
+            collaboratorTargetingLines={
+              mainObjectLinkedToCollaborateur ? collaboratorTargetingLines : []
+            }
             globalFilterSummaryLines={getGlobalFilterGroupLines()}
-            collaboratorGeneratedFilterLines={
-              mainObjectLinkedToCollaborateur ? collaboratorGeneratedFilterLines : []
-            }
-            collaboratorStatusSummaryLabel={
-              mainObjectLinkedToCollaborateur
-                ? `${activeCollaboratorStatusSummary} · ${collaboratorOrgFilterSummaryLabel}`
-                : 'Non applicable'
-            }
+            collaboratorTargetingSummaryLabel={collaboratorHeaderSummaryLabel}
             onEditGlobalFilters={() => setGlobalFilterDialogOpen(true)}
           />
         ) : selectingMainObject ? (
@@ -4446,19 +5051,35 @@ export function AttributeSelector() {
         ) : (
           <>
             <div className="w-4/12">
-              <div className="h-full overflow-y-auto border-r bg-gray-50">
+              <div ref={availableDataListRef} className="h-full overflow-y-auto border-r bg-gray-50">
                 <div className="sticky top-0 z-10 border-b bg-gray-50 px-4 py-4">
                   <div className="flex items-center justify-between gap-2">
                     <h2 className="font-semibold text-gray-900">Données disponibles</h2>
-                    {showSelectAllButton && (
+                    <div className="flex items-center gap-1">
                       <button
-                        onClick={selectAllVisibleAttributes}
-                        title="[Debug] Sélectionner tous les attributs visibles"
-                        className="rounded border border-dashed border-gray-400 px-2 py-0.5 text-[11px] text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                        onClick={collapseAllAvailableObjects}
+                        title="Replier tous les objets affichés"
+                        className="rounded border border-gray-300 px-2 py-0.5 text-[11px] text-gray-600 hover:bg-gray-100 hover:text-gray-800"
                       >
-                        Tout sélectionner
+                        plier tout
                       </button>
-                    )}
+                      <button
+                        onClick={expandAllAvailableObjects}
+                        title="Déplier tous les objets affichés"
+                        className="rounded border border-gray-300 px-2 py-0.5 text-[11px] text-gray-600 hover:bg-gray-100 hover:text-gray-800"
+                      >
+                        déplier tout
+                      </button>
+                      {showSelectAllButton && (
+                        <button
+                          onClick={selectAllVisibleAttributes}
+                          title="[Debug] Sélectionner tous les attributs visibles"
+                          className="rounded border border-dashed border-gray-400 px-2 py-0.5 text-[11px] text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                        >
+                          Tout sélectionner
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="mt-3">
                     <div className="relative">
@@ -4540,24 +5161,6 @@ export function AttributeSelector() {
                 />
               </div>
 
-              {mainObjectLinkedToCollaborateur && collaboratorTargetOptions.length > 0 && (
-                <div className="border-t bg-gray-50 px-4 py-3">
-                  <div className="mb-2 text-[11px] font-medium text-gray-700">Insertion rapide contrat/poste</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {collaboratorTargetOptions.map((option) => (
-                      <button
-                        key={`add-contract-poste-${option.key}`}
-                        type="button"
-                        onClick={() => handleAddContractPosteLot(option.label)}
-                        className="rounded border border-indigo-300 bg-indigo-50 px-2 py-1 text-[11px] text-indigo-800 hover:bg-indigo-100"
-                        title={`Ajouter un lot contrat/poste pour ${option.label}`}
-                      >
-                        {`Ajouter contrat/poste du ${option.label}`}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
             <div className="flex w-5/12 flex-col border-l bg-gray-50">
@@ -4693,19 +5296,68 @@ export function AttributeSelector() {
                   )}
                   {mainObjectLinkedToCollaborateur && (
                     <div className="rounded border border-teal-200 bg-teal-50 p-2 text-xs text-teal-900">
-                      <button
-                        type="button"
-                        onClick={() => setCollaboratorContextExpanded((previous) => !previous)}
-                        className="mb-1 flex w-full items-center justify-between text-left text-[11px] font-medium leading-none text-teal-800"
-                        aria-expanded={collaboratorContextExpanded}
-                      >
-                        <span>Filtrer les collaborateurs</span>
-                        <span className="text-sm leading-none">{collaboratorContextExpanded ? '▾' : '▸'}</span>
-                      </button>
+                      <div className="mb-1 flex flex-wrap items-start gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setCollaboratorContextExpanded((previous) => !previous)}
+                          className="flex min-w-[220px] flex-1 flex-col rounded px-1 py-0.5 text-left text-[11px] font-medium leading-none text-teal-800 hover:bg-teal-100"
+                          aria-expanded={collaboratorContextExpanded}
+                          title={collaboratorContextExpanded ? 'Replier les filtres collaborateurs' : 'Déplier les filtres collaborateurs'}
+                        >
+                          <span>{collaboratorContextExpanded ? '▾ ' : '▸ '}Cibler des contrats et postes</span>
+                          <span className="mt-1 truncate text-[10px] font-normal text-teal-700">{collaboratorHeaderSummaryLabel}</span>
+                        </button>
+
+                        <div className="flex min-w-[260px] flex-1 flex-wrap items-center gap-2">
+                          <select
+                            value={collaboratorContractDateMode}
+                            onChange={(event) => setCollaboratorContractDateMode(event.target.value as CollaboratorContractDateMode)}
+                            disabled={!isContractPosteTargetSelectorEnabled}
+                            className="min-w-[210px] flex-1 rounded border border-teal-300 bg-white px-2 py-1.5 text-xs disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
+                            title={
+                              isContractPosteTargetSelectorEnabled
+                                ? 'Sélectionner la date cible pour contrat et poste'
+                                : "Activez d'abord un filtre collaborateur ou sélectionnez une instance applicable"
+                            }
+                          >
+                            <option value="today">date du jour</option>
+                            {isReportInDayMode ? (
+                              <option value="reportEnd">date du rapport</option>
+                            ) : (
+                              <>
+                                <option value="reportStart">Date de début du rapport</option>
+                                <option value="reportEnd">Date de fin du rapport</option>
+                                <option value="reportColumn">colonne du rapport</option>
+                              </>
+                            )}
+                          </select>
+
+                          {!isReportInDayMode && collaboratorContractDateMode === 'reportColumn' && (
+                            <select
+                              value={selectedCollaboratorContractDateColumnId}
+                              onChange={(event) => setSelectedCollaboratorContractDateColumnId(event.target.value)}
+                              disabled={!isContractPosteTargetSelectorEnabled}
+                              className="min-w-[210px] flex-1 rounded border border-teal-300 bg-white px-2 py-1.5 text-xs disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
+                            >
+                              {reportDateColumnOptions.length === 0 && (
+                                <option value="">Aucune colonne date disponible</option>
+                              )}
+                              {reportDateColumnOptionGroups.map((group) => (
+                                <optgroup key={group.label} label={group.label}>
+                                  {group.items.map((attr) => (
+                                    <option key={attr.id} value={attr.id}>{getSelectedAttributeOptionLabel(attr)}</option>
+                                  ))}
+                                </optgroup>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+
+                      </div>
 
                       {collaboratorContextExpanded && (
                         <>
-                          <div className="mb-2 grid gap-2 md:grid-cols-2">
+                          <div className="mb-2">
                             <div>
                               <div className="mb-1 text-[11px] text-teal-800">Collaborateur concerné</div>
                               <select
@@ -4720,14 +5372,15 @@ export function AttributeSelector() {
                                 ))}
                               </select>
                             </div>
+                          </div>
 
+                          <div className="mb-2 grid gap-2 md:grid-cols-2">
                             <div>
                               <div className="mb-1 text-[11px] text-teal-800">Un collaborateur précis</div>
                               <select
                                 value={selectedCollaboratorName}
                                 onChange={(event) => handleCollaboratorNameChange(event.target.value)}
-                                disabled={hasActiveOrgFilters}
-                                className={`w-full rounded border px-2 py-1.5 text-xs ${hasActiveOrgFilters ? 'cursor-not-allowed border-teal-200 bg-gray-100 text-gray-400' : 'border-teal-300 bg-white'}`}
+                                className="w-full rounded border border-teal-300 bg-white px-2 py-1.5 text-xs"
                               >
                                 <option value="">Tous les collaborateurs</option>
                                 {collaboratorOptions.map((collaborator) => (
@@ -4735,24 +5388,33 @@ export function AttributeSelector() {
                                 ))}
                               </select>
                             </div>
+
+                            <div>
+                              <div className="mb-1 text-[11px] text-teal-800">Manager du collaborateur</div>
+                              <select
+                                value={selectedManagerCollaboratorName}
+                                onChange={(event) => handleManagerCollaboratorChange(event.target.value)}
+                                className="w-full rounded border border-teal-300 bg-white px-2 py-1.5 text-xs"
+                              >
+                                <option value="">Tous les managers</option>
+                                {collaboratorOptions.map((collaborator) => (
+                                  <option key={`manager-${collaborator}`} value={collaborator}>{collaborator}</option>
+                                ))}
+                              </select>
+
+                              <label className="mt-2 inline-flex items-center gap-2 text-[11px] text-teal-800">
+                                <input
+                                  type="checkbox"
+                                  checked={includeManagerDescendants}
+                                  onChange={(event) => setIncludeManagerDescendants(event.target.checked)}
+                                />
+                                <span>avec descendance managériale</span>
+                              </label>
+                            </div>
                           </div>
 
-                          <div className={hasSpecificCollaboratorSelected ? 'pointer-events-none opacity-50' : ''}>
+                          <div>
                             <div className="mb-2 grid gap-2 md:grid-cols-2">
-                              <div>
-                                <div className="mb-1 text-[11px] text-teal-800">Relation managériale</div>
-                                <select
-                                  value={selectedManagerialRelationFilter}
-                                  disabled={hasSpecificCollaboratorSelected}
-                                  onChange={(event) => setSelectedManagerialRelationFilter(event.target.value as CollaboratorManagerialRelationMode)}
-                                  className="w-full rounded border border-teal-300 bg-white px-2 py-1.5 text-xs"
-                                >
-                                  <option value="all">Tous</option>
-                                  <option value="direct">Mes managés directs uniquement</option>
-                                  <option value="directAndIndirect">Mes managés directs et indirects</option>
-                                </select>
-                              </div>
-
                               {contractTypeEnumValues.length > 0 && (
                                 <div>
                                   <div className="mb-1 text-[11px] text-teal-800">Type du contrat</div>
@@ -4761,7 +5423,6 @@ export function AttributeSelector() {
                                       <label key={contractType} className="flex items-center gap-2 whitespace-nowrap font-light">
                                         <input
                                           type="checkbox"
-                                          disabled={hasSpecificCollaboratorSelected}
                                           checked={selectedContractTypeFilters.includes(contractType)}
                                           onChange={(event) => {
                                             const checked = event.target.checked;
@@ -4793,7 +5454,7 @@ export function AttributeSelector() {
                                           key={`qualification-${rootNode.name}`}
                                           node={rootNode}
                                           level={0}
-                                          disabled={!mainObjectLinkedToCollaborateur || hasSpecificCollaboratorSelected}
+                                          disabled={false}
                                           selectedValues={selectedQualificationFilters}
                                           onToggle={toggleQualificationBranch}
                                           path="qualification"
@@ -4818,7 +5479,7 @@ export function AttributeSelector() {
                                           key={rootNode.name}
                                           node={rootNode}
                                           level={0}
-                                          disabled={!mainObjectLinkedToCollaborateur || hasSpecificCollaboratorSelected}
+                                          disabled={false}
                                           selectedValues={selectedDepartmentFilters}
                                           onToggle={toggleDepartmentBranch}
                                         />
@@ -4835,7 +5496,6 @@ export function AttributeSelector() {
                                     <label key={establishment} className="flex items-center gap-2 whitespace-nowrap font-light">
                                       <input
                                         type="checkbox"
-                                        disabled={hasSpecificCollaboratorSelected}
                                         checked={selectedEstablishmentFilters.includes(establishment)}
                                         onChange={(event) => {
                                           const checked = event.target.checked;
@@ -4855,41 +5515,6 @@ export function AttributeSelector() {
                               </div>
                             </div>
 
-                            <div className="grid gap-2 md:grid-cols-2">
-                              <div>
-                                <div className="mb-1 text-[11px] text-teal-800">Contrat et poste ciblé</div>
-                                <select
-                                  value={collaboratorContractDateMode}
-                                  disabled={hasSpecificCollaboratorSelected}
-                                  onChange={(event) => setCollaboratorContractDateMode(event.target.value as CollaboratorContractDateMode)}
-                                  className="w-full rounded border border-teal-300 bg-white px-2 py-1.5 text-xs"
-                                >
-                                  <option value="today">date du jour</option>
-                                  <option value="reportStart">début du rapport</option>
-                                  <option value="reportEnd">fin du rapport</option>
-                                  <option value="reportColumn">colonne du rapport</option>
-                                </select>
-                              </div>
-
-                              {collaboratorContractDateMode === 'reportColumn' && (
-                                <div>
-                                  <div className="mb-1 text-[11px] text-teal-800">Colonne date du rapport</div>
-                                  <select
-                                    value={selectedCollaboratorContractDateColumnId}
-                                    disabled={hasSpecificCollaboratorSelected}
-                                    onChange={(event) => setSelectedCollaboratorContractDateColumnId(event.target.value)}
-                                    className="w-full rounded border border-teal-300 bg-white px-2 py-1.5 text-xs"
-                                  >
-                                    {reportDateColumnOptions.length === 0 && (
-                                      <option value="">Aucune colonne date disponible</option>
-                                    )}
-                                    {reportDateColumnOptions.map((option) => (
-                                      <option key={option.id} value={option.id}>{option.label}</option>
-                                    ))}
-                                  </select>
-                                </div>
-                              )}
-                            </div>
                           </div>
                         </>
                       )}
@@ -4897,7 +5522,7 @@ export function AttributeSelector() {
                   )}
 
                   <div className="rounded border border-gray-200 bg-white p-2 text-xs text-gray-800">
-                    <div className="mb-1 text-[11px] font-medium leading-none text-gray-700">Filtrer les données</div>
+                    <div className="mb-1 text-[11px] font-medium leading-none text-gray-700">Filtrer les colonnes du rapport</div>
                     <button
                       onClick={() => setGlobalFilterDialogOpen(true)}
                       className="w-full rounded border border-orange-200 bg-orange-50 p-2 text-left text-xs text-orange-800 hover:bg-orange-100"
@@ -5115,7 +5740,7 @@ export function AttributeSelector() {
                   <div className="mb-2 text-sm font-medium text-gray-900">{section.label}</div>
                   <div className="space-y-1 text-sm text-gray-800">
                     {section.attributes.map((attr) => {
-                      const attributeKey = getContractPosteLotAttributeKey(attr.sourceThemeId, attr.sourceObjectId, attr.id);
+                      const attributeKey = getContractPosteLotAttributeKey(attr.sourceThemeId, attr.sourceObjectId, attr.id, attr.lotBaseNavigationPath);
                       const checked = draftLotAttributeKeys.includes(attributeKey);
                       return (
                         <label key={attributeKey} className="flex items-start gap-2 rounded px-2 py-1 hover:bg-gray-50">
@@ -5230,8 +5855,12 @@ export function AttributeSelector() {
                   className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
                 >
                   {reportDateColumnOptions.length === 0 && <option value="">Aucune colonne date disponible</option>}
-                  {reportDateColumnOptions.map((option) => (
-                    <option key={option.id} value={option.id}>{option.label}</option>
+                  {reportDateColumnOptionGroups.map((group) => (
+                    <optgroup key={group.label} label={group.label}>
+                      {group.items.map((attr) => (
+                        <option key={attr.id} value={attr.id}>{getSelectedAttributeOptionLabel(attr)}</option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
               )}
@@ -5413,7 +6042,8 @@ export function AttributeSelector() {
                           includeFutureNewCollaborators,
                           includeFutureReturnCollaborators,
                           selectedCollaboratorName,
-                          selectedManagerialRelationFilter,
+                          selectedManagerCollaboratorName,
+                          includeManagerDescendants,
                           selectedContractTypeFilters,
                           selectedQualificationFilters,
                           selectedDepartmentFilters,
