@@ -1,3 +1,4 @@
+import { X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { dataStructure } from '../data/dataStructure';
 import { InfoHint } from './InfoHint';
@@ -9,15 +10,32 @@ type Props = {
     objectId: string,
     objectName: string
   ) => void;
+  preferredExpandedDomain?: string;
 };
 
-export function MainObjectPicker({ onSelect }: Props) {
+export function MainObjectPicker({ onSelect, preferredExpandedDomain }: Props) {
   const [search, setSearch] = useState('');
-  const [expandedDomains, setExpandedDomains] = useState<Record<string, boolean>>({});
+  const normalizeToken = (value: string) => value.trim().toLowerCase();
+  const normalizedPreferredDomain = preferredExpandedDomain ? normalizeToken(preferredExpandedDomain) : '';
+  const initialExpandedDomains = normalizedPreferredDomain
+    ? Object.fromEntries(
+        dataStructure
+          .filter((theme) => {
+            const normalizedThemeId = normalizeToken(theme.id);
+            const normalizedThemeName = normalizeToken(theme.name);
+
+            if (normalizedThemeName === normalizedPreferredDomain) return true;
+            if (normalizedThemeName === `les ${normalizedPreferredDomain}`) return true;
+            if (normalizedThemeId === normalizedPreferredDomain) return true;
+            if (normalizedThemeId === `les-${normalizedPreferredDomain.replace(/\s+/g, '-')}`) return true;
+            return false;
+          })
+          .map((theme) => [theme.id, true])
+      )
+    : {};
+  const [expandedDomains, setExpandedDomains] = useState<Record<string, boolean>>(initialExpandedDomains);
 
   const lower = search.trim().toLowerCase();
-
-  const normalizeToken = (value: string) => value.trim().toLowerCase();
 
   const isCollaboratorsTheme = (theme: (typeof dataStructure)[number]) =>
     normalizeToken(theme.id) === 'les-collaborateurs' || normalizeToken(theme.name) === 'les collaborateurs';
@@ -86,13 +104,24 @@ export function MainObjectPicker({ onSelect }: Props) {
 
   return (
     <div className="p-6">
-      <div className="mb-4">
+      <div className="mb-4 relative w-72">
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Recherche une donnée..."
-          className="w-72 rounded border px-3 py-2"
+          className="w-full rounded border px-3 py-2 pr-10"
         />
+        {search && (
+          <button
+            type="button"
+            onClick={() => setSearch('')}
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+            title="Effacer la recherche"
+            aria-label="Effacer la recherche"
+          >
+            <X className="size-4" />
+          </button>
+        )}
       </div>
 
       <div className="space-y-3">

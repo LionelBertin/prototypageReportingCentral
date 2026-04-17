@@ -39,6 +39,7 @@ interface ObjectInsertionDialogProps {
   }>;
   smartObjects?: SmartObjectDefinition[];
   availableDateAttributes: Array<{ id: string; name: string }>;
+  isCollaboratorMultiTile?: boolean;
   initialMode: ObjectInsertionMode;
   initialConfig?: Partial<ObjectInsertionConfig>;
   onConfirm: (config: ObjectInsertionConfig) => void;
@@ -86,6 +87,7 @@ export function ObjectInsertionDialog({
   availableAttributes,
   smartObjects = [],
   availableDateAttributes,
+  isCollaboratorMultiTile = false,
   initialMode,
   initialConfig,
   onConfirm,
@@ -112,10 +114,15 @@ export function ObjectInsertionDialog({
   const [smartFilterGroups, setSmartFilterGroups] = useState<FilterGroup[] | undefined>(undefined);
   const [applyApplicableToday, setApplyApplicableToday] = useState<boolean>(false);
 
+  const scopedAvailableAttributes = useMemo(() => {
+    if (!isCollaboratorMultiTile) return availableAttributes;
+    return availableAttributes.filter((attr) => (attr.relativeNavigationPath?.length ?? 0) === 0);
+  }, [availableAttributes, isCollaboratorMultiTile]);
+
   useEffect(() => {
     if (!isOpen) return;
 
-    const defaultSelected = availableAttributes.filter((attr) => !!attr.smartSel).map((attr) => attr.id);
+    const defaultSelected = scopedAvailableAttributes.filter((attr) => !!attr.smartSel).map((attr) => attr.id);
     setSelectedAttributeIds(initialConfig?.selectedAttributeIds ?? defaultSelected);
     setAggregationAttributeId(initialConfig?.aggregationAttributeId ?? '');
     setAggregationType(initialConfig?.aggregationType ?? 'COUNT');
@@ -141,7 +148,7 @@ export function ObjectInsertionDialog({
     setAttributeSearchTerm('');
     setSmartFilterGroups(initialConfig?.smartFilterGroups);
     setApplyApplicableToday(initialConfig?.applyApplicableToday ?? shouldForceApplicableDate);
-  }, [isOpen]);
+  }, [isOpen, scopedAvailableAttributes]);
 
   const normalize = (value: string) =>
     value
@@ -175,8 +182,8 @@ export function ObjectInsertionDialog({
   const hasMultipleCardinality = cardinality.includes('n');
 
   const selectedAggregationAttribute = useMemo(
-    () => availableAttributes.find((attr) => attr.id === aggregationAttributeId),
-    [aggregationAttributeId, availableAttributes]
+    () => scopedAvailableAttributes.find((attr) => attr.id === aggregationAttributeId),
+    [aggregationAttributeId, scopedAvailableAttributes]
   );
 
   const availableAggregationTypes = useMemo(() => {
@@ -196,7 +203,7 @@ export function ObjectInsertionDialog({
   }, [selectedAggregationAttribute]);
 
   const normalizedAttributes = useMemo<GroupedAttribute[]>(() => {
-    return availableAttributes.map((attr) => {
+    return scopedAvailableAttributes.map((attr) => {
       const navTokens = (attr.relativeNavigationPath ?? [])
         .map((step) => step.objectName?.trim())
         .filter((value): value is string => !!value);
@@ -216,7 +223,7 @@ export function ObjectInsertionDialog({
         groupPathTokens: pathTokens,
       };
     });
-  }, [availableAttributes, objectName]);
+  }, [scopedAvailableAttributes, objectName]);
 
   const groupedAttributesByKey = useMemo(() => {
     const groups = new Map<string, AttributeGroup>();
@@ -332,7 +339,7 @@ export function ObjectInsertionDialog({
     const selectedIds: string[] = [];
 
     for (const column of smartObject.columns) {
-      const matched = availableAttributes.find((attribute) => matchSmartPathToAttribute(attribute, column));
+      const matched = scopedAvailableAttributes.find((attribute) => matchSmartPathToAttribute(attribute, column));
       if (matched) {
         selectedIds.push(matched.id);
       }
@@ -348,7 +355,7 @@ export function ObjectInsertionDialog({
 
     const conditions = smartObject.filters.conditions
       .map((condition) => {
-        const matched = availableAttributes.find((attribute) => matchSmartPathToAttribute(attribute, condition.attributePath));
+        const matched = scopedAvailableAttributes.find((attribute) => matchSmartPathToAttribute(attribute, condition.attributePath));
         if (!matched) {
           return null;
         }
@@ -569,7 +576,17 @@ export function ObjectInsertionDialog({
     onClose();
   };
 
-  const renderGroupedAttributesList = (tone: 'blue' | 'indigo' | 'yellow') => {
+  const renderGroupedAttributesList = (
+    tone: 'blue' | 'indigo' | 'yellow',
+    options?: {
+      showSearch?: boolean;
+      showSmartObjects?: boolean;
+      quickActionsMode?: 'full' | 'default-all-none';
+    }
+  ) => {
+    const showSearch = options?.showSearch ?? true;
+    const showSmartObjects = options?.showSmartObjects ?? true;
+    const quickActionsMode = options?.quickActionsMode ?? 'full';
     const textClass =
       tone === 'blue' ? 'text-blue-700' : tone === 'indigo' ? 'text-indigo-700' : 'text-amber-700';
     const borderClass =
@@ -590,7 +607,7 @@ export function ObjectInsertionDialog({
             Attributs à insérer dans le rapport
           </label>
         </div>
-        {smartObjects.length > 0 && (
+        {showSmartObjects && smartObjects.length > 0 && (
           <div className="mb-2">
             <div className="mb-1.5 flex flex-wrap gap-2">
               {smartObjects.map((smartObject) => (
@@ -609,13 +626,28 @@ export function ObjectInsertionDialog({
             </p>
           </div>
         )}
-        <input
-          type="text"
-          value={attributeSearchTerm}
-          onChange={(e) => setAttributeSearchTerm(e.target.value)}
-          placeholder="Rechercher un attribut..."
-          className={`mb-2 w-full rounded bg-white px-3 py-2 text-sm ${inputClass}`}
-        />
+        {showSearch && (
+          <div className="relative mb-2">
+            <input
+              type="text"
+              value={attributeSearchTerm}
+              onChange={(e) => setAttributeSearchTerm(e.target.value)}
+              placeholder="Rechercher un attribut..."
+              className={`w-full rounded bg-white px-3 py-2 pr-10 text-sm ${inputClass}`}
+            />
+            {attributeSearchTerm && (
+              <button
+                type="button"
+                onClick={() => setAttributeSearchTerm('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                title="Effacer la recherche"
+                aria-label="Effacer la recherche"
+              >
+                <X className="size-4" />
+              </button>
+            )}
+          </div>
+        )}
         <div className={`max-h-[58vh] space-y-2 overflow-auto rounded border bg-white p-2 ${borderClass}`}>
           {groupedFilteredAttributes.length === 0 ? (
             <p className="px-1 py-2 text-sm text-gray-500">Aucun attribut ne correspond à la recherche.</p>
@@ -625,29 +657,57 @@ export function ObjectInsertionDialog({
                 <div className="mb-1 flex items-center justify-between gap-2">
                   <span className="text-xs font-semibold uppercase tracking-wide text-gray-600">{group.name}</span>
                   <div className="flex items-center gap-3 text-xs">
-                    {group.attributes.some((attr) => !!attr.magicSel) && (
-                      <button
-                        type="button"
-                        onClick={() => selectGroupSmartAttributesRecursively(group.key)}
-                        className={`${textClass} hover:underline`}
-                      >
-                        Sélection intelligente
-                      </button>
+                    {quickActionsMode === 'full' ? (
+                      <>
+                        {group.attributes.some((attr) => !!attr.magicSel) && (
+                          <button
+                            type="button"
+                            onClick={() => selectGroupSmartAttributesRecursively(group.key)}
+                            className={`${textClass} hover:underline`}
+                          >
+                            Sélection intelligente
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => selectGroupAllAttributes(group.key)}
+                          className={`${textClass} hover:underline`}
+                        >
+                          Sélectionner tout
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => clearGroupAttributes(group.key)}
+                          className={`${textClass} hover:underline`}
+                        >
+                          Désélectionner tout
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => selectGroupSmartAttributesRecursively(group.key)}
+                          className={`${textClass} hover:underline`}
+                        >
+                          par défaut
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => selectGroupAllAttributes(group.key)}
+                          className={`${textClass} hover:underline`}
+                        >
+                          tous
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => clearGroupAttributes(group.key)}
+                          className={`${textClass} hover:underline`}
+                        >
+                          aucun
+                        </button>
+                      </>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => selectGroupAllAttributes(group.key)}
-                      className={`${textClass} hover:underline`}
-                    >
-                      Sélectionner tout
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => clearGroupAttributes(group.key)}
-                      className={`${textClass} hover:underline`}
-                    >
-                      Désélectionner tout
-                    </button>
                   </div>
                 </div>
                 <div className="space-y-1">
@@ -739,7 +799,7 @@ export function ObjectInsertionDialog({
                     className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
                   >
                     <option value="">Sélectionner un attribut</option>
-                    {availableAttributes.map((attr) => (
+                    {scopedAvailableAttributes.map((attr) => (
                       <option key={attr.id} value={attr.id}>
                         {attr.name}
                       </option>
@@ -758,7 +818,7 @@ export function ObjectInsertionDialog({
                         const nextOp = e.target.value as AggregationType;
                         setAggregationType(nextOp);
                         if (aggregationAttributeId) {
-                          const currentAttr = availableAttributes.find((a) => a.id === aggregationAttributeId);
+                          const currentAttr = scopedAvailableAttributes.find((a) => a.id === aggregationAttributeId);
                           const allowed = currentAttr?.type === 'number'
                             ? ['COUNT', 'CONCAT', 'SUM', 'MIN', 'MAX', 'AVG']
                             : currentAttr?.type === 'date'
@@ -785,7 +845,7 @@ export function ObjectInsertionDialog({
                       className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
                     >
                       <option value="">Sélectionner un attribut</option>
-                      {availableAttributes
+                      {scopedAvailableAttributes
                         .filter((attr) => {
                           if (aggregationType === 'SUM' || aggregationType === 'AVG') return attr.type === 'number';
                           if (aggregationType === 'MIN' || aggregationType === 'MAX') return attr.type === 'number' || attr.type === 'date';
@@ -811,7 +871,7 @@ export function ObjectInsertionDialog({
                           className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
                         >
                           <option value="">Sélectionner un attribut</option>
-                          {availableAttributes.map((attr) => (
+                          {scopedAvailableAttributes.map((attr) => (
                             <option key={attr.id} value={attr.id}>
                               {attr.name}
                             </option>
@@ -852,7 +912,7 @@ export function ObjectInsertionDialog({
                     setAggregationType(nextOp);
                     // Réinitialise l'attribut si incompatible avec la nouvelle opération
                     if (aggregationAttributeId) {
-                      const currentAttr = availableAttributes.find((a) => a.id === aggregationAttributeId);
+                      const currentAttr = scopedAvailableAttributes.find((a) => a.id === aggregationAttributeId);
                       const allowed = currentAttr?.type === 'number'
                         ? ['COUNT', 'CONCAT', 'SUM', 'MIN', 'MAX', 'AVG']
                         : currentAttr?.type === 'date'
@@ -879,7 +939,7 @@ export function ObjectInsertionDialog({
                   className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
                 >
                   <option value="">Sélectionner un attribut</option>
-                  {availableAttributes
+                  {scopedAvailableAttributes
                     .filter((attr) => {
                       if (aggregationType === 'SUM' || aggregationType === 'AVG') return attr.type === 'number';
                       if (aggregationType === 'MIN' || aggregationType === 'MAX') return attr.type === 'number' || attr.type === 'date';
@@ -905,7 +965,7 @@ export function ObjectInsertionDialog({
                       className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
                     >
                       <option value="">Sélectionner un attribut</option>
-                      {availableAttributes.map((attr) => (
+                      {scopedAvailableAttributes.map((attr) => (
                         <option key={attr.id} value={attr.id}>
                           {attr.name}
                         </option>
@@ -961,7 +1021,7 @@ export function ObjectInsertionDialog({
                   </>
                 )}
 
-                {objectSupportsApplicable && (
+                {objectSupportsApplicable && !isCollaboratorMultiTile && (
                   <label className="flex items-center gap-2 text-sm text-gray-700">
                     <input
                       type="radio"
@@ -985,7 +1045,7 @@ export function ObjectInsertionDialog({
                     className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
                   >
                     <option value="">Sélectionner un attribut</option>
-                    {availableAttributes.map((attr) => (
+                    {scopedAvailableAttributes.map((attr) => (
                       <option key={attr.id} value={attr.id}>
                         {attr.name}
                       </option>
@@ -994,7 +1054,7 @@ export function ObjectInsertionDialog({
                 </div>
               )}
 
-              {specialType === 'applicable' && objectSupportsApplicable && (
+              {specialType === 'applicable' && objectSupportsApplicable && !isCollaboratorMultiTile && (
                 <div className="space-y-2">
                   <label className="mb-1 block text-sm font-medium text-gray-700">Date cible</label>
                   {shouldForceReportValueDateOnly ? (
@@ -1073,7 +1133,11 @@ export function ObjectInsertionDialog({
               )}
 
               <div>
-                {renderGroupedAttributesList('indigo')}
+                {renderGroupedAttributesList('indigo', {
+                  showSearch: !isCollaboratorMultiTile,
+                  showSmartObjects: !isCollaboratorMultiTile,
+                  quickActionsMode: isCollaboratorMultiTile ? 'default-all-none' : 'full',
+                })}
               </div>
             </div>
           )}

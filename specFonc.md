@@ -151,7 +151,7 @@ Priorité d'affichage:
 4. Sinon, nom construit:
    - si relationLabel disponible dans navigationPath: attribut (relation1 > relation2 ...)
    - sinon fallback objet: attribut (objet1 > objet2 ...)
-   - sinon fallback simple: attribut (objet courant)
+   - sinon fallback simple: attribut (Date de rapport)
 
 Exemple de provenance:
 - prénom (Collaborateur de l'absence)

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { SelectionPanel } from './SelectionPanel';
 import MainObjectPicker from './MainObjectPicker';
 import { ObjectInsertionDialog, ObjectInsertionConfig } from './ObjectInsertionDialog';
@@ -41,6 +41,7 @@ type PendingObjectInsertion = {
   linkedPeriodFilter?: { attrDate1: string; attrDate2: string };
   linkedDateFilterMode?: 'day' | 'period';
   initialConfig?: Partial<ObjectInsertionConfig>;
+  collaboratorMultiTile?: boolean;
 };
 
 type AvailableObjectAttribute = {
@@ -460,9 +461,39 @@ function DepartmentTreeItem({
   );
 }
 
-export function AttributeSelector() {
+type AttributeSelectorProps = {
+  canEditReport?: boolean;
+  canShareReport?: boolean;
+  canSendReport?: boolean;
+  canSaveModel?: boolean;
+  startInConsultation?: boolean;
+  consultationReportTitle?: string;
+  consultationIsFavorite?: boolean;
+  onToggleConsultationFavorite?: (reportTitle: string) => void;
+  onReportDisplayNameChange?: (reportTitle: string) => void;
+  onReportGenerated?: (payload: { title: string; domain?: string; mainObjectName: string }) => void;
+  topRightActions?: ReactNode;
+  bottomLeftActions?: ReactNode;
+  preferredMainObjectDomain?: string;
+};
+
+export function AttributeSelector({
+  canEditReport = true,
+  canShareReport = true,
+  canSendReport = true,
+  canSaveModel = true,
+  startInConsultation = false,
+  consultationReportTitle,
+  consultationIsFavorite,
+  onToggleConsultationFavorite,
+  onReportDisplayNameChange,
+  onReportGenerated,
+  topRightActions,
+  bottomLeftActions,
+  preferredMainObjectDomain,
+}: AttributeSelectorProps = {}) {
   const [selectedAttributes, setSelectedAttributes] = useState<SelectedAttribute[]>([]);
-  const [selectingMainObject, setSelectingMainObject] = useState(true);
+  const [selectingMainObject, setSelectingMainObject] = useState(!startInConsultation);
   const [mainObject, setMainObject] = useState<Omit<MainObjectSelection, 'cardinality' | 'isApplicable'> | null>(null);
   const [mainObjectConfig, setMainObjectConfig] = useState<ObjectInsertionConfig | null>(null);
   const [pendingMainObject, setPendingMainObject] = useState<MainObjectSelection | null>(null);
@@ -525,7 +556,7 @@ export function AttributeSelector() {
   const [collaboratorOptions, setCollaboratorOptions] = useState<string[]>([]);
   const [collaboratorStatusFilterExpanded, setCollaboratorStatusFilterExpanded] = useState(false);
   const [prototypeConfigOpen, setPrototypeConfigOpen] = useState(false);
-  const [reportResultOpen, setReportResultOpen] = useState(false);
+  const [reportResultOpen, setReportResultOpen] = useState(startInConsultation);
   const [reportPreviewColumns, setReportPreviewColumns] = useState<Array<{ id: string; label: string }>>([]);
   const [reportPreviewRows, setReportPreviewRows] = useState<ReportPreviewRow[]>([]);
   const [reportPreviewLastUpdatedAt, setReportPreviewLastUpdatedAt] = useState<string>('');
@@ -542,6 +573,7 @@ export function AttributeSelector() {
   const [availableAttributeSearchTerm, setAvailableAttributeSearchTerm] = useState('');
   const [collapsedAvailableGroupKeys, setCollapsedAvailableGroupKeys] = useState<string[]>([]);
   const [collapsedApplicableTileKeys, setCollapsedApplicableTileKeys] = useState<string[]>([]);
+  const [pendingInitialAvailableGroupsCollapse, setPendingInitialAvailableGroupsCollapse] = useState(false);
   const availableDataListRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -1454,7 +1486,7 @@ export function AttributeSelector() {
 
         const isFromRoot = relationPath.length === 0;
         const nextShouldAutoSelect = isFromRoot
-          ? (!!relation.magicSel || !!relation.recursiveMagicSel)
+          ? (!!relation.magicSelToTarget || !!relation.recursiveMagicSel)
           : (recursiveAutoEnabled && !!relation.recursiveMagicSel);
         const nextRecursiveAutoEnabled = isFromRoot
           ? !!relation.recursiveMagicSel
@@ -1498,7 +1530,7 @@ export function AttributeSelector() {
 
           const isFromRoot = relationPath.length === 0;
           const nextShouldAutoSelect = isFromRoot
-            ? (!!inboundRelation.magicSel || !!inboundRelation.recursiveMagicSel)
+            ? (!!inboundRelation.magicSelFromTarget || !!inboundRelation.recursiveMagicSel)
             : (recursiveAutoEnabled && !!inboundRelation.recursiveMagicSel);
           const nextRecursiveAutoEnabled = isFromRoot
             ? !!inboundRelation.recursiveMagicSel
@@ -2052,6 +2084,7 @@ export function AttributeSelector() {
     setPendingObjectInsertion(null);
     setObjectInsertionDialogOpen(false);
     setSelectedAttributes(autoInserted);
+    setPendingInitialAvailableGroupsCollapse(true);
 
     // Initialise les dates choisies par défaut (sans prompt)
     const defaultChosenDate = nextTemporalContext.periodEndDate ?? nextTemporalContext.reportDate;
@@ -2621,6 +2654,37 @@ export function AttributeSelector() {
   const handleObjectInsertionConfirm = (config: ObjectInsertionConfig) => {
     if (!pendingObjectInsertion) return;
 
+    const getOperationColumnName = (
+      insertionType: InsertionType,
+      attributeName: string,
+      sourceObjectName: string,
+      aggregationType?: AggregationType
+    ) => {
+      const trimmedSourceObjectName = sourceObjectName.trim();
+      if (insertionType === 'aggregation') {
+        const aggregationLabel: Record<AggregationType, string> = {
+          COUNT: 'Nombre',
+          CONCAT: 'Concaténation',
+          SUM: 'Somme',
+          MIN: 'Minimum',
+          MAX: 'Maximum',
+          AVG: 'Moyenne',
+        };
+        const prefix = aggregationType ? aggregationLabel[aggregationType] : 'Agrégation';
+        return `${prefix} de ${attributeName} — ${trimmedSourceObjectName}`;
+      }
+
+      if (insertionType === 'first') {
+        return `Première instance de ${attributeName} — ${trimmedSourceObjectName}`;
+      }
+
+      if (insertionType === 'last') {
+        return `Dernière instance de ${attributeName} — ${trimmedSourceObjectName}`;
+      }
+
+      return '';
+    };
+
     if (editingAggregationAttributeId) {
       const objectAttributes = getInsertionAvailableAttributes(pendingObjectInsertion);
       const edited = selectedAttributes.find((attr) => attr.id === editingAggregationAttributeId);
@@ -2648,6 +2712,13 @@ export function AttributeSelector() {
           ownObjectOnly: pendingObjectInsertion.ownObjectOnly,
         });
 
+        newAttr.columnName = getOperationColumnName(
+          'aggregation',
+          aggregatedAttr.rawName,
+          pendingObjectInsertion.objectName,
+          config.aggregationType
+        );
+
         if (config.sortDirection) {
           newAttr.sortDirection = config.sortDirection;
         }
@@ -2672,6 +2743,12 @@ export function AttributeSelector() {
               sortAttributeId: config.sortAttributeId,
               sortDirection: undefined,
               aggregationType: undefined,
+              columnName: getOperationColumnName(
+                config.insertionType,
+                attr.attributeName,
+                pendingObjectInsertion.objectName,
+                undefined
+              ) || undefined,
             };
           })
         );
@@ -2709,6 +2786,13 @@ export function AttributeSelector() {
         ],
         ownObjectOnly: pendingObjectInsertion.ownObjectOnly,
       });
+
+      newAttr.columnName = getOperationColumnName(
+        'aggregation',
+        aggregatedAttr.rawName,
+        pendingObjectInsertion.objectName,
+        config.aggregationType
+      );
 
       if (config.sortDirection) {
         newAttr.sortDirection = config.sortDirection;
@@ -2801,9 +2885,21 @@ export function AttributeSelector() {
               ...attr.relativeNavigationPath,
             ],
             ownObjectOnly: pendingObjectInsertion.ownObjectOnly,
+            lockedDateReferenceLabel: undefined,
           });
         }
       );
+
+    newAttributes.forEach((attribute) => {
+      if (attribute.insertionType === 'aggregation' || attribute.insertionType === 'first' || attribute.insertionType === 'last') {
+        attribute.columnName = getOperationColumnName(
+          attribute.insertionType,
+          attribute.attributeName,
+          pendingObjectInsertion.objectName,
+          attribute.aggregationType
+        ) || undefined;
+      }
+    });
 
     if (newAttributes.length > 0) {
       if (isMainObjectSelection && pendingMainObject) {
@@ -3214,6 +3310,7 @@ export function AttributeSelector() {
     setSelectedDepartmentFilters([]);
     setSelectedEstablishmentFilters([]);
     setCollaboratorStatusFilterExpanded(false);
+    setPendingInitialAvailableGroupsCollapse(false);
   };
 
   const handleResetSelections = () => {
@@ -4031,7 +4128,6 @@ export function AttributeSelector() {
       nextVisited.add(currentKey);
 
       for (const relation of found.obj.relations ?? []) {
-        if (!isSingleRelationCardinality(relation.cardinality)) continue;
 
         const relationTargetKey = `${relation.targetThemeId}::${relation.targetObjectId}`;
         if (nextVisited.has(relationTargetKey)) continue;
@@ -4055,7 +4151,7 @@ export function AttributeSelector() {
           getRelationDisplayLabel(relation.label, relation.targetObjectName, found.obj.name),
           childPath,
           relation.cardinalityFrom ?? relation.cardinality,
-          true,
+          isSingleRelationCardinality(relation.cardinality),
           groupKey,
           depth + 1,
           nextVisited
@@ -4069,7 +4165,6 @@ export function AttributeSelector() {
           (relation) =>
             relation.targetThemeId === themeId
             && relation.targetObjectId === objectId
-            && isSingleRelationCardinality(relation.cardinalityFrom)
         );
 
         if (!inboundRelation) continue;
@@ -4078,7 +4173,7 @@ export function AttributeSelector() {
           ...navigationPath,
           {
             objectName: sourceEntry.obj.name,
-            cardinalityName: inboundRelation.cardinality,
+            cardinalityName: inboundRelation.cardinalityFrom ?? inboundRelation.cardinality,
             relationLabel: inboundRelation.label,
             sourceObjectName: found.obj.name,
           },
@@ -4090,7 +4185,7 @@ export function AttributeSelector() {
           getRelationDisplayLabel(inboundRelation.label, sourceEntry.obj.name, found.obj.name),
           childPath,
           inboundRelation.cardinalityFrom ?? '1',
-          true,
+          isSingleRelationCardinality(inboundRelation.cardinalityFrom),
           groupKey,
           depth + 1,
           nextVisited
@@ -4255,7 +4350,8 @@ export function AttributeSelector() {
 
   const openStage2MultiObjectDialog = (
     group: Stage2ObjectGroup,
-    preset: 'aggregation' | 'first' | 'last' | 'applicable'
+    preset: 'aggregation' | 'first' | 'last' | 'applicable' | 'selection',
+    options?: { collaboratorMultiTile?: boolean }
   ) => {
     const theme = dataStructure.find((candidate) => candidate.id === group.themeId);
     const obj = theme?.objects.find((candidate) => candidate.id === group.objectId);
@@ -4263,6 +4359,10 @@ export function AttributeSelector() {
 
     const initialConfig = preset === 'aggregation'
       ? undefined
+      : preset === 'selection'
+      ? {
+          insertionType: 'last' as const,
+        }
       : preset === 'applicable'
       ? {
           insertionType: 'applicable' as const,
@@ -4278,13 +4378,15 @@ export function AttributeSelector() {
       objectId: group.objectId,
       objectName: group.objectName,
       cardinality: group.cardinality,
-      mode: preset === 'aggregation' ? 'aggregation' : preset === 'applicable' ? 'special' : 'operation',
+      mode: preset === 'aggregation' ? 'aggregation' : (preset === 'applicable' || preset === 'selection') ? 'special' : 'operation',
       isApplicable: group.objectSupportsApplicable,
       applicationDateMandatory: group.objectApplicationDateMandatory,
       applicationDateRequirementMode: group.objectApplicationDateRequirementMode ?? 'day',
       smartObjects: obj.smartObjects,
       navigationPath: group.navigationPath,
       initialConfig,
+      collaboratorMultiTile: !!options?.collaboratorMultiTile,
+      ownObjectOnly: true,
     });
     setObjectInsertionDialogOpen(true);
   };
@@ -4366,6 +4468,22 @@ export function AttributeSelector() {
       return left.objectName.localeCompare(right.objectName, 'fr', { sensitivity: 'base' });
     });
   }, [mainObject, mainObjectStage2Groups]);
+  useEffect(() => {
+    if (!pendingInitialAvailableGroupsCollapse) return;
+
+    const firstGroup = orderedMainObjectStage2Groups[0];
+    if (!firstGroup) {
+      setPendingInitialAvailableGroupsCollapse(false);
+      return;
+    }
+
+    setCollapsedAvailableGroupKeys(
+      orderedMainObjectStage2Groups
+        .filter((group) => group.key !== firstGroup.key)
+        .map((group) => group.key)
+    );
+    setPendingInitialAvailableGroupsCollapse(false);
+  }, [orderedMainObjectStage2Groups, pendingInitialAvailableGroupsCollapse]);
   const mainObjectSelectedAttributeIds = selectingMainObject
     ? new Set<string>()
     : getMainObjectSelectedAttributeIds(mainObjectAvailableAttributes);
@@ -4605,6 +4723,28 @@ export function AttributeSelector() {
       const childGroups = visibleMainObjectStage2GroupsByParentKey.get(group.key) ?? [];
       const linkedMultipleCardinalityObjects = getLinkedMultipleCardinalityObjects(group);
       const isCollaboratorGroup = normalizeObjectToken(group.objectName) === 'collaborateur';
+      const normalizedGroupObjectName = normalizeObjectToken(group.objectName);
+      const isContractOrPosteGroup = normalizedGroupObjectName === 'contrats'
+        || normalizedGroupObjectName === 'contrat'
+        || normalizedGroupObjectName === 'postes'
+        || normalizedGroupObjectName === 'poste';
+      const normalizedThemeName = normalizeObjectToken(group.themeName);
+      const normalizedThemeId = normalizeObjectToken(group.themeId);
+      const isCollaboratorDomainGroup = normalizedThemeName === 'les collaborateurs'
+        || normalizedThemeId === 'les-collaborateurs';
+      const groupDefinition = dataStructure
+        .find((theme) => theme.id === group.themeId)
+        ?.objects.find((obj) => obj.id === group.objectId);
+      const hasManyToOneRelationToCollaborator = !!(groupDefinition?.relations ?? []).some(
+        (relation) =>
+          normalizeObjectToken(relation.targetObjectName) === 'collaborateur'
+          && !!relation.cardinalityFrom?.includes('n')
+          && !relation.cardinality.includes('n')
+      );
+      const isCollaboratorMultipleCardinalitySpecialTile = !group.isSelectable
+        && isCollaboratorDomainGroup
+        && !isContractOrPosteGroup
+        && hasManyToOneRelationToCollaborator;
 
       return (
         <div key={group.key} className="space-y-2">
@@ -4703,39 +4843,25 @@ export function AttributeSelector() {
                 })}
               </div>
             ) : !isCollapsed ? (
-              <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              <div className="rounded border border-cyan-300 bg-cyan-50 p-3 text-sm text-cyan-900">
                 <div className="mb-2">
-                  {group.objectSupportsApplicable && group.objectApplicationDateMandatory
-                    ? 'Cet objet est multi-instance. Une date est obligatoire, le choix par défaut est Applicable à la Date de valeur du rapport.'
-                    : 'Cet objet est multi-instance. Choisissez un mode pour retomber sur une instance exploitable.'}
+                  {isCollaboratorMultipleCardinalitySpecialTile
+                    ? 'Objet multi-instance lié à Collaborateur.'
+                    : 'Objet multi-instance.'}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button
+                    onClick={() => openStage2MultiObjectDialog(group, 'selection')}
+                    className="rounded border border-cyan-300 bg-white px-3 py-1.5 text-sm text-cyan-800 hover:bg-cyan-100"
+                  >
+                    Sélection d'une instance
+                  </button>
+                  <button
                     onClick={() => openStage2MultiObjectDialog(group, 'aggregation')}
-                    className="rounded border border-amber-300 bg-white px-3 py-1.5 text-sm text-amber-800 hover:bg-amber-100"
+                    className="rounded border border-cyan-300 bg-cyan-100 px-3 py-1.5 text-sm text-cyan-900 hover:bg-cyan-200"
                   >
-                    Opération
+                    Opération sur les instances
                   </button>
-                  <button
-                    onClick={() => openStage2MultiObjectDialog(group, 'first')}
-                    className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
-                  >
-                    Première
-                  </button>
-                  <button
-                    onClick={() => openStage2MultiObjectDialog(group, 'last')}
-                    className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
-                  >
-                    Dernière
-                  </button>
-                  {group.objectSupportsApplicable && (
-                    <button
-                      onClick={() => openStage2MultiObjectDialog(group, 'applicable')}
-                      className="rounded border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm text-indigo-800 hover:bg-indigo-100"
-                    >
-                      Applicable (Date de valeur du rapport)
-                    </button>
-                  )}
                 </div>
               </div>
             ) : null}
@@ -4950,40 +5076,42 @@ export function AttributeSelector() {
     return true;
   };
 
+  const reportDisplayName = mainObject?.objectName ?? consultationReportTitle ?? 'Rapport';
+
+  useEffect(() => {
+    if (!reportResultOpen || !onReportDisplayNameChange) return;
+    onReportDisplayNameChange(reportDisplayName);
+  }, [onReportDisplayNameChange, reportDisplayName, reportResultOpen]);
+
   return (
     <div className="flex h-screen flex-col">
       {/* Header */}
       <div className="border-b bg-white px-6 py-4">
         <div className="flex items-center justify-between gap-4">
           {!selectingMainObject && reportResultOpen ? (
-            <>
-              <div className="flex items-center gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <h1 className="truncate text-xl font-semibold text-gray-900">
+                {`Rapport : ${reportDisplayName}`}
+              </h1>
+              {typeof consultationIsFavorite === 'boolean' && onToggleConsultationFavorite && (
                 <button
-                  onClick={() => setReportResultOpen(false)}
-                  title="Retour configuration"
-                  aria-label="Retour configuration"
-                  className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-100"
+                  type="button"
+                  onClick={() => onToggleConsultationFavorite(reportDisplayName)}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded hover:bg-gray-100"
+                  title={consultationIsFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+                  aria-label={consultationIsFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}
                 >
-                  &lt;
+                  <span
+                    className={`text-lg leading-none ${consultationIsFavorite ? 'text-yellow-400' : 'text-white'}`}
+                    style={consultationIsFavorite ? undefined : { WebkitTextStroke: '1px #ca8a04' }}
+                  >
+                    ★
+                  </span>
                 </button>
-                <h1 className="text-xl font-semibold text-gray-900">
-                  {mainObject ? `Rapport : ${mainObject.objectName}` : 'Rapport'}
-                </h1>
-              </div>
-              <div className="flex items-center gap-3">
-                {reportPreviewLastUpdatedAt && (
-                  <div className="text-xs text-gray-500">{reportPreviewLastUpdatedAt}</div>
-                )}
-                <button
-                  onClick={refreshReportPreview}
-                  className="rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-sm text-blue-700 hover:bg-blue-100"
-                >
-                  Actualiser
-                </button>
-              </div>
-            </>
+              )}
+            </div>
           ) : !selectingMainObject ? (
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 items-center gap-3">
               <button
                 onClick={handleChangeReportType}
                 title="Changer le type de rapport"
@@ -4992,15 +5120,19 @@ export function AttributeSelector() {
               >
                 &lt;
               </button>
-              <h1 className="text-xl font-semibold text-gray-900">
-                {mainObject ? `Rapport : ${mainObject.objectName}` : 'Rapport'}
+              <h1 className="truncate text-xl font-semibold text-gray-900">
+                {`Rapport : ${reportDisplayName}`}
               </h1>
             </div>
           ) : (
-            <h1 className="text-xl font-semibold text-gray-900">
+            <h1 className="truncate text-xl font-semibold text-gray-900">
               Quelle est la donnée principale du rapport ?
             </h1>
           )}
+
+          <div className="flex shrink-0 items-center gap-3">
+            {topRightActions}
+          </div>
         </div>
       </div>
 
@@ -5029,15 +5161,22 @@ export function AttributeSelector() {
         {reportResultOpen ? (
           <ReportResultDrawer
             onBackToConfiguration={handleBackToConfiguration}
-            mainObjectName={mainObject?.objectName ?? 'Rapport'}
+            mainObjectName={reportDisplayName}
             columns={reportPreviewColumns}
             rows={reportPreviewRows}
+            reportLastUpdatedAt={reportPreviewLastUpdatedAt || undefined}
+            onRefreshReport={refreshReportPreview}
             mainObjectLinkedToCollaborateur={mainObjectLinkedToCollaborateur}
             collaboratorTargetingLines={
               mainObjectLinkedToCollaborateur ? collaboratorTargetingLines : []
             }
             globalFilterSummaryLines={getGlobalFilterGroupLines()}
             collaboratorTargetingSummaryLabel={collaboratorHeaderSummaryLabel}
+            canEditReport={canEditReport}
+            canShareReport={canShareReport}
+            canSendReport={canSendReport}
+            canSaveModel={canSaveModel}
+            collaboratorOptions={collaboratorOptions}
             onEditGlobalFilters={() => setGlobalFilterDialogOpen(true)}
           />
         ) : selectingMainObject ? (
@@ -5045,6 +5184,7 @@ export function AttributeSelector() {
             <div className="w-full max-w-[1200px]">
               <MainObjectPicker
                 onSelect={handleMainObjectSelect}
+                preferredExpandedDomain={preferredMainObjectDomain}
               />
             </div>
           </div>
@@ -5697,6 +5837,7 @@ export function AttributeSelector() {
             id: attr.id,
             name: attr.columnName || `${attr.attributeName} (${attr.objectName})`,
           }))}
+          isCollaboratorMultiTile={!!pendingObjectInsertion.collaboratorMultiTile}
           initialMode={pendingObjectInsertion.mode}
           initialConfig={
             editingAggregationAttributeId
@@ -5979,12 +6120,15 @@ export function AttributeSelector() {
         <div className="border-t bg-white">
           <div className="flex">
             <div className="w-1/2 px-4 py-4">
-              <button
-                onClick={openPrototypeConfig}
-                className="rounded border border-dashed border-gray-400 px-2 py-0.5 text-[11px] text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-              >
-                conf proto
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={openPrototypeConfig}
+                  className="rounded border border-dashed border-gray-400 px-2 py-0.5 text-[11px] text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                >
+                  conf proto
+                </button>
+                {bottomLeftActions}
+              </div>
             </div>
             <div className="w-1/2 px-4 py-4">
               <div className="flex items-center justify-between">
@@ -6019,6 +6163,11 @@ export function AttributeSelector() {
                       if (!refreshed) {
                         return;
                       }
+                      onReportGenerated?.({
+                        title: `Rapport ${reportDisplayName}`,
+                        domain: mainObject?.themeName,
+                        mainObjectName: reportDisplayName,
+                      });
                       setReportResultOpen(true);
                       console.log('Report payload:', {
                         selectedAttributes,

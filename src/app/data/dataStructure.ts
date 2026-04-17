@@ -21,6 +21,8 @@ export interface ObjectRelation {
   cardinalityFrom?: string;
   label: string;
   magicSel?: boolean;
+  magicSelFromTarget?: boolean;
+  magicSelToTarget?: boolean;
   recursiveMagicSel?: boolean;
   isMainCollaborator?: boolean;
   description?: string;
@@ -119,6 +121,8 @@ type ManifestRelation = {
   cardinalityTo?: string;
   recursiveMagicSel?: boolean;
   magicSel?: boolean;
+  magicSelFromTarget?: boolean;
+  magicSelToTarget?: boolean;
   isMainCollaborator?: boolean;
   description?: string;
 };
@@ -710,6 +714,8 @@ const buildDataStructure = (): Theme[] => {
           cardinality: normalizeCardinality(relation.cardinalityTo || relation.cardinalityFrom),
           cardinalityFrom: normalizeCardinality(relation.cardinalityFrom || relation.cardinalityTo),
           magicSel: !!relation.magicSel,
+          magicSelFromTarget: relation.magicSelFromTarget ?? relation.magicSel ?? false,
+          magicSelToTarget: relation.magicSelToTarget ?? relation.magicSel ?? false,
           recursiveMagicSel: !!relation.recursiveMagicSel,
           isMainCollaborator: !!relation.isMainCollaborator,
           description: relation.description,

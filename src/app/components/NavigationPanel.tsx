@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import type { ReactElement } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, X } from 'lucide-react';
 import { dataStructure } from '../data/dataStructure';
 import type { SelectedAttribute } from '../types/selection';
 import { InfoHint } from './InfoHint';
@@ -920,14 +920,25 @@ export function NavigationPanel({
     <div className="h-full overflow-y-auto border-r bg-gray-50 p-4">
       <h2 className="mb-2 font-semibold text-gray-900">Données disponibles</h2>
 
-      <div className="mb-3">
+      <div className="mb-3 relative">
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Rechercher un objet ou un attribut"
-          className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm placeholder-gray-400 focus:border-blue-500 focus:outline-none"
+          className="w-full rounded border border-gray-300 bg-white px-3 py-2 pr-10 text-sm placeholder-gray-400 focus:border-blue-500 focus:outline-none"
         />
+        {search && (
+          <button
+            type="button"
+            onClick={() => setSearch('')}
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+            title="Effacer la recherche"
+            aria-label="Effacer la recherche"
+          >
+            <X className="size-4" />
+          </button>
+        )}
       </div>
 
       {mainObject && !showOnlyObjects ? (

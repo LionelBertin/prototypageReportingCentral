@@ -28,25 +28,42 @@ type ReportResultDrawerProps = {
   mainObjectName: string;
   columns: ReportPreviewColumn[];
   rows: ReportPreviewRow[];
+  reportLastUpdatedAt?: string;
+  onRefreshReport?: () => void;
   mainObjectLinkedToCollaborateur: boolean;
   collaboratorTargetingLines: string[];
   globalFilterSummaryLines: string[];
   collaboratorTargetingSummaryLabel: string;
+  canEditReport?: boolean;
+  canShareReport?: boolean;
+  canSendReport?: boolean;
+  canSaveModel?: boolean;
+  collaboratorOptions?: string[];
   onEditGlobalFilters: () => void;
 };
 
 export function ReportResultDrawer({
+  onBackToConfiguration,
   mainObjectName,
   columns,
   rows,
+  reportLastUpdatedAt,
+  onRefreshReport,
   mainObjectLinkedToCollaborateur,
   collaboratorTargetingLines,
   globalFilterSummaryLines,
   collaboratorTargetingSummaryLabel,
+  canEditReport = true,
+  canShareReport = true,
+  canSendReport = true,
+  canSaveModel = true,
+  collaboratorOptions = [],
   onEditGlobalFilters,
 }: ReportResultDrawerProps) {
   const [collaboratorTargetingExpanded, setCollaboratorTargetingExpanded] = useState(false);
   const [saveDialogMode, setSaveDialogMode] = useState<'model' | 'report' | null>(null);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [selectedShareCollaborators, setSelectedShareCollaborators] = useState<string[]>([]);
   const [saveName, setSaveName] = useState('');
 
   const normalizedMainObjectName = (mainObjectName || 'Rapport').trim();
@@ -66,6 +83,18 @@ export function ReportResultDrawer({
 
   const saveDialogTitle = saveDialogMode === 'model' ? 'Enregistrer le modèle' : 'Enregistrer ce rapport';
   const saveDialogLabel = saveDialogMode === 'model' ? 'Nom du modèle' : 'Nom du rapport';
+
+  const toggleShareCollaborator = (name: string, shouldSelect: boolean) => {
+    setSelectedShareCollaborators((prev) => {
+      const next = new Set(prev);
+      if (shouldSelect) {
+        next.add(name);
+      } else {
+        next.delete(name);
+      }
+      return Array.from(next).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+    });
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
@@ -183,23 +212,102 @@ export function ReportResultDrawer({
       </div>
 
       <div className="shrink-0 border-t bg-white px-4 py-3">
-        <div className="flex flex-wrap justify-end gap-2">
-          <button
-            type="button"
-            onClick={() => openSaveDialog('model')}
-            className="rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-sm text-blue-700 hover:bg-blue-100"
-          >
-            Enregistrer le modèle
-          </button>
-          <button
-            type="button"
-            onClick={() => openSaveDialog('report')}
-            className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
-          >
-            Enregistrer ce rapport
-          </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {onRefreshReport && (
+            <button
+              type="button"
+              onClick={onRefreshReport}
+              className="rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-sm text-blue-700 hover:bg-blue-100"
+            >
+              Actualiser
+            </button>
+          )}
+          {reportLastUpdatedAt && (
+            <div className="text-xs text-gray-500">{reportLastUpdatedAt}</div>
+          )}
+          {canEditReport && (
+            <button
+              type="button"
+              onClick={onBackToConfiguration}
+              className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+            >
+              Éditer la configuration
+            </button>
+          )}
+            {canShareReport && (
+              <button
+                type="button"
+                onClick={() => setShareDialogOpen(true)}
+                className="rounded border border-purple-300 bg-purple-50 px-3 py-1.5 text-sm text-purple-700 hover:bg-purple-100"
+              >
+                Partager
+              </button>
+            )}
+            {canSaveModel && (
+              <button
+                type="button"
+                onClick={() => openSaveDialog('model')}
+                className="rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-sm text-blue-700 hover:bg-blue-100"
+              >
+                Enregistrer le modèle
+              </button>
+            )}
+            {canSendReport && (
+              <button
+                type="button"
+                onClick={() => openSaveDialog('report')}
+                className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                Enregistrer ce rapport
+              </button>
+            )}
         </div>
       </div>
+
+      <Dialog open={shareDialogOpen} onOpenChange={(open) => setShareDialogOpen(open)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Partager le rapport</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <div className="text-sm text-gray-700">Sélectionnez un ou plusieurs collaborateurs :</div>
+            <div className="max-h-48 overflow-y-auto rounded border border-gray-200 p-2 text-sm">
+              {collaboratorOptions.length === 0 ? (
+                <div className="text-gray-500">Aucun collaborateur disponible.</div>
+              ) : (
+                collaboratorOptions.map((collaborator) => (
+                  <label key={collaborator} className="flex items-center gap-2 py-0.5">
+                    <input
+                      type="checkbox"
+                      checked={selectedShareCollaborators.includes(collaborator)}
+                      onChange={(event) => toggleShareCollaborator(collaborator, event.target.checked)}
+                    />
+                    <span>{collaborator}</span>
+                  </label>
+                ))
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setShareDialogOpen(false)}
+              className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              onClick={() => setShareDialogOpen(false)}
+              className="rounded border border-purple-300 bg-purple-50 px-3 py-1.5 text-sm text-purple-700 hover:bg-purple-100"
+            >
+              Partager
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={saveDialogMode !== null} onOpenChange={(open) => { if (!open) closeSaveDialog(); }}>
         <DialogContent>

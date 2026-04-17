@@ -180,6 +180,27 @@ export function SelectionPanel({
     return getAggregationDetailLabel(attr);
   };
 
+  const getOperationTagLabel = (attr: SelectedAttribute): string => {
+    if (attr.insertionType === 'aggregation') {
+      if (attr.aggregationType === 'CONCAT') {
+        const sortAttributeName = getAttributeNameFromId(attr.sortAttributeId);
+        const sortDirectionLabel = attr.sortDirection === 'desc' ? 'décroissante' : 'croissante';
+        return sortAttributeName
+          ? `opération concaténation triée par ${sortAttributeName} ${sortDirectionLabel}`
+          : 'opération concaténation';
+      }
+      return 'opération';
+    }
+
+    if (attr.insertionType === 'first' || attr.insertionType === 'last') {
+      const instanceLabel = attr.insertionType === 'first' ? 'première instance' : 'dernière instance';
+      const sortAttributeName = getAttributeNameFromId(attr.sortAttributeId);
+      return sortAttributeName ? `${instanceLabel} par ${sortAttributeName}` : instanceLabel;
+    }
+
+    return 'opération';
+  };
+
   const getAttributeTypeLabel = (attr: SelectedAttribute) => {
     switch (attr.attributeType) {
       case 'string':
@@ -227,6 +248,9 @@ export function SelectionPanel({
         return 'Non défini';
     }
   };
+
+  const shouldDisplayDateReferenceTag = (attr: SelectedAttribute) =>
+    getDateReferenceLabel(attr) !== 'Date de valeur du rapport';
 
   const getOperatorLabel = (operator: string) => {
     const operatorLabels: Record<string, string> = {
@@ -412,6 +436,8 @@ export function SelectionPanel({
                                 {attr.insertionType !== 'normal'
                                   && attr.insertionType !== 'applicable'
                                   && attr.insertionType !== 'aggregation'
+                                  && attr.insertionType !== 'first'
+                                  && attr.insertionType !== 'last'
                                   && !(attr.insertionType === 'conditional' && !showConditionalColumns)
                                   && !(attr.insertionType === 'calculated' && !showCalculatedColumns) && (
                                   <span className={`rounded px-2 py-0.5 text-xs ${
@@ -441,23 +467,13 @@ export function SelectionPanel({
                                   <button
                                     onClick={() => onEditAggregation(attr.id)}
                                     className="flex items-center gap-1 rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-700 hover:bg-amber-200"
-                                    title="Modifier la configuration de l'opération"
+                                    title={getOperationDetailLabel(attr)}
                                   >
-                                    {getOperationDetailLabel(attr)}
+                                    {getOperationTagLabel(attr)}
                                   </button>
                                 )}
 
-                                {attr.insertionType === 'applicable' && attr.applicationDateConfig?.requirementMode === 'period' && (
-                                  <span
-                                    className="flex items-center gap-1 rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-700"
-                                    title="Date de valeur du rapport"
-                                  >
-                                    <Calendar className="size-3" />
-                                    <span>Date de valeur du rapport</span>
-                                  </span>
-                                )}
-
-                                {attr.insertionType === 'applicable' && (attr.lockedDateReferenceLabel || attr.insertionLotId) && (
+                                {attr.insertionType === 'applicable' && (attr.lockedDateReferenceLabel || attr.insertionLotId) && shouldDisplayDateReferenceTag(attr) && (
                                   <span
                                     className="flex items-center gap-1 rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600"
                                     title={getDateReferenceLabel(attr)}
@@ -467,7 +483,7 @@ export function SelectionPanel({
                                   </span>
                                 )}
 
-                                {attr.insertionType === 'applicable' && !attr.lockedDateReferenceLabel && !attr.insertionLotId && attr.applicationDateConfig?.requirementMode !== 'period' && (
+                                {attr.insertionType === 'applicable' && !attr.lockedDateReferenceLabel && !attr.insertionLotId && attr.applicationDateConfig?.requirementMode !== 'period' && shouldDisplayDateReferenceTag(attr) && (
                                   <button
                                     onClick={() => onEditDateReference(attr.id)}
                                     className="flex items-center gap-1 rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-700 hover:bg-purple-200"

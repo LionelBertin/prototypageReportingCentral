@@ -67,7 +67,8 @@
               "cardinalityFrom": "one",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": true
+              "magicSelFromTarget": false,
+              "magicSelToTarget": true
             }
           ],
           "defaultDateFiltering" :"none",
@@ -103,7 +104,8 @@
               "cardinalityFrom": "one",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": true
+              "magicSelFromTarget": false,
+              "magicSelToTarget": true
             }
           ],
           "defaultDateFiltering" :"none",
@@ -150,7 +152,8 @@
               "cardinalityFrom": "one",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": true
+              "magicSelFromTarget": false,
+              "magicSelToTarget": true
             }
           ],
           "defaultDateFiltering" :"none",
@@ -179,7 +182,8 @@
               "cardinalityFrom": "one",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": true
+              "magicSelFromTarget": false,
+              "magicSelToTarget": true
             }
           ],
           "defaultDateFiltering" :"none",
@@ -214,7 +218,8 @@
               "cardinalityFrom": "many",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": true
+              "magicSelFromTarget": false,
+              "magicSelToTarget": true
             }
           ],
           "defaultDateFiltering" :"chooseOne",
@@ -255,7 +260,8 @@
               "cardinalityFrom": "many",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": true
+              "magicSelFromTarget": false,
+              "magicSelToTarget": true
             }
           ],
           "defaultDateFiltering" :"chooseOne",
@@ -287,6 +293,42 @@
           ]
         },
         {
+          "id": "justificatif-mens-transport",
+          "name": "Justificatif mensuel de transport",
+          "relations": [
+            {
+              "targetObject": "Collaborateur",
+              "relationName": "Collaborateur",
+              "cardinalityFrom": "many",
+              "cardinalityTo": "one",
+              "recursiveMagicSel": false,
+              "magicSelFromTarget": false,
+              "magicSelToTarget": true
+            }
+          ],
+          "defaultDateFiltering" :"chooseOne",
+          "attributes": [
+            {
+              "id": "date-justificatif",
+              "name": "Date du justificatif",
+              "magicSel": true,
+              "dataType": "date"
+            },
+            {
+              "id": "type-justif",
+              "name": "Type de justificatif",
+              "magicSel": true,
+              "dataType": "string"
+            },
+            {
+              "id": "fichier-justif",
+              "name": "Fichier justificatif",
+              "magicSel": true,
+              "dataType": "file"
+            }
+          ]
+        },
+        {
           "id": "taille-goodies",
           "name": "Taille goodies",
           "relations": [
@@ -296,7 +338,8 @@
               "cardinalityFrom": "one",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": false
+              "magicSelFromTarget": false,
+              "magicSelToTarget": false
             }
           ],
           "defaultDateFiltering" :"none",
@@ -325,7 +368,8 @@
               "cardinalityFrom": "one",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": false
+              "magicSelFromTarget": false,
+              "magicSelToTarget": false
             }
           ],
           "defaultDateFiltering" :"none",
@@ -366,7 +410,8 @@
               "cardinalityFrom": "one",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": false
+              "magicSelFromTarget": false,
+              "magicSelToTarget": false
             }
           ],
           "defaultDateFiltering" :"none",
@@ -401,7 +446,8 @@
               "cardinalityFrom": "one",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": false
+              "magicSelFromTarget": false,
+              "magicSelToTarget": false
             }
           ],
           "defaultDateFiltering" :"none",
@@ -442,7 +488,8 @@
               "cardinalityFrom": "many",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": true
+              "magicSelFromTarget": false,
+              "magicSelToTarget": true
             }
           ],
           "defaultDateFiltering" :"chooseOne",
@@ -477,7 +524,8 @@
               "cardinalityFrom": "one",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": false
+              "magicSelFromTarget": false,
+              "magicSelToTarget": false
             }
           ],
           "defaultDateFiltering" :"none",
@@ -513,7 +561,8 @@
               "cardinalityFrom": "one",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": false
+              "magicSelFromTarget": false,
+              "magicSelToTarget": false
             }
           ],
           "defaultDateFiltering" :"none",
@@ -542,7 +591,8 @@
               "cardinalityFrom": "one",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": false
+              "magicSelFromTarget": false,
+              "magicSelToTarget": false
             }
           ],
           "defaultDateFiltering" :"none",
@@ -571,7 +621,8 @@
               "cardinalityFrom": "one",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": false
+              "magicSelFromTarget": false,
+              "magicSelToTarget": false
             }
           ],
           "defaultDateFiltering" :"none",
@@ -678,7 +729,8 @@
               "cardinalityFrom": "one",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": false
+              "magicSelFromTarget": false,
+              "magicSelToTarget": false
             }
           ],
           "defaultDateFiltering" :"none",
@@ -713,7 +765,8 @@
               "cardinalityFrom": "one",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": true
+              "magicSelFromTarget": false,
+              "magicSelToTarget": true
             }
           ],
           "defaultDateFiltering" :"none",
@@ -742,7 +795,8 @@
               "cardinalityFrom": "one",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": false
+              "magicSelFromTarget": false,
+              "magicSelToTarget": false
             }
           ],
           "defaultDateFiltering" :"none",
@@ -771,7 +825,8 @@
               "cardinalityFrom": "one",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": false
+              "magicSelFromTarget": false,
+              "magicSelToTarget": false
             }
           ],
           "defaultDateFiltering" :"none",
@@ -2296,7 +2351,8 @@
               "cardinalityFrom": "many",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": false
+              "magicSelFromTarget": false,
+              "magicSelToTarget": false
             },
             {
               "targetObject": "Compte Absence",
@@ -2304,7 +2360,8 @@
               "cardinalityFrom": "many",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": true
+              "magicSelFromTarget": false,
+              "magicSelToTarget": true
             },
             {
               "targetObject": "Collaborateur",
@@ -2313,7 +2370,8 @@
               "cardinalityFrom": "many",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": true
+              "magicSelFromTarget": false,
+              "magicSelToTarget": true
             },
             {
               "targetObject": "Collaborateur",
@@ -2321,7 +2379,8 @@
               "cardinalityFrom": "many",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": false
+              "magicSelFromTarget": false,
+              "magicSelToTarget": false
             },
             {
               "targetObject": "Collaborateur",
@@ -2329,7 +2388,8 @@
               "cardinalityFrom": "many",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": false
+              "magicSelFromTarget": false,
+              "magicSelToTarget": false
             }
           ],
           "defaultDateFiltering" :{
@@ -2512,7 +2572,8 @@
               "cardinalityFrom": "many",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": true
+              "magicSelFromTarget": false,
+              "magicSelToTarget": true
             }
           ],
           "defaultDateFiltering" :"choosePeriod",
@@ -2564,7 +2625,8 @@
               "cardinalityFrom": "one",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": true
+              "magicSelFromTarget": false,
+              "magicSelToTarget": false
             }
           ],
           "defaultDateFiltering" :"choosePeriod",
@@ -2642,7 +2704,8 @@
               "cardinalityFrom": "one",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": true
+              "magicSelFromTarget": false,
+              "magicSelToTarget": true
             }
           ],
           "defaultDateFiltering" :"choosePeriod",
@@ -3214,7 +3277,8 @@
               "cardinalityFrom": "many",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": false
+              "magicSelFromTarget": false,
+              "magicSelToTarget": false
             }
           ],
           "defaultDateFiltering" :{
@@ -3276,7 +3340,8 @@
               "cardinalityFrom": "many",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": true
+              "magicSelFromTarget": false,
+              "magicSelToTarget": true
             }
           ],
           "defaultDateFiltering" :{
@@ -3352,7 +3417,8 @@
               "cardinalityFrom": "many",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": false
+              "magicSelFromTarget": false,
+              "magicSelToTarget": false
             }
           ],
           "defaultDateFiltering" :{
@@ -3446,7 +3512,8 @@
               "cardinalityTo": "one",
               "isMainCollaborator":true,
               "recursiveMagicSel": false,
-              "magicSel": true
+              "magicSelFromTarget": false,
+              "magicSelToTarget": true
             },
             {
               "targetObject": "Collaborateur",
@@ -3454,7 +3521,8 @@
               "cardinalityFrom": "many",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": false
+              "magicSelFromTarget": false,
+              "magicSelToTarget": false
             },
             {
               "targetObject": "Collaborateur",
@@ -3462,7 +3530,8 @@
               "cardinalityFrom": "many",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": false
+              "magicSelFromTarget": false,
+              "magicSelToTarget": false
             },
             {
               "targetObject": "Collaborateur",
@@ -3470,7 +3539,8 @@
               "cardinalityFrom": "many",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": false
+              "magicSelFromTarget": false,
+              "magicSelToTarget": false
             }
           ],
           "defaultDateFiltering" :{
@@ -3814,10 +3884,35 @@
               "dataType": "file"
             },
             {
-              "id": "nom-du-document",
-              "name": "Nom du document",
-              "magicSel": true,
-              "dataType": "string"
+                "id": "titreDoc",
+                "name": "Titre",
+                "magicSel": true,
+                "dataType": "string"
+            },
+            {
+                "id": "catégorieDoc",
+                "name": "Catégorie",
+                "magicSel": true,
+                "enum": ["Français 🇫🇷 🇨🇭","English 🇬🇧","Español 🇪🇸","Deutschland","Schweiz","Autres / Others / Otros"],
+                "dataType": "string"
+            },
+            {
+                "id": "établissementsDoc",
+                "name": "Établissements",
+                "magicSel": true,
+                "dataType": "string"
+            },
+            {
+                "id": "départementsDoc",
+                "name": "Départements",
+                "magicSel": true,
+                "dataType": "string"
+            },
+            {
+                "id": "cspDoc",
+                "name": "CSP",
+                "magicSel": true,
+                "dataType": "string"
             }
           ]
         }
@@ -4016,7 +4111,8 @@
               "cardinalityFrom": "one",
               "cardinalityTo": "many",
               "recursiveMagicSel": false,
-              "magicSel": false
+              "magicSelFromTarget": false,
+              "magicSelToTarget": false
             }
           ],
           "defaultDateFiltering" :"none",
@@ -4077,7 +4173,8 @@
               "cardinalityFrom": "many",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": false
+              "magicSelFromTarget": false,
+              "magicSelToTarget": false
             }
           ],
           "defaultDateFiltering" :{
@@ -4152,7 +4249,8 @@
               "cardinalityFrom": "many",
               "cardinalityTo": "one",
               "recursiveMagicSel": false,
-              "magicSel": false
+              "magicSelFromTarget": false,
+              "magicSelToTarget": false
             }
           ],
           "defaultDateFiltering" :"none",
