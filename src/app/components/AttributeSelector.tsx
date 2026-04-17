@@ -4150,7 +4150,7 @@ export function AttributeSelector({
           relation.targetObjectId,
           getRelationDisplayLabel(relation.label, relation.targetObjectName, found.obj.name),
           childPath,
-          relation.cardinalityFrom ?? relation.cardinality,
+          relation.cardinality ?? relation.cardinalityFrom,
           isSingleRelationCardinality(relation.cardinality),
           groupKey,
           depth + 1,
